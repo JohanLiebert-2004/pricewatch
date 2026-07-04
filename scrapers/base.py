@@ -36,6 +36,17 @@ class Blocked(Exception):
     """Raised when the retailer's bot protection blocks us (403/503)."""
 
 
+# Akamai sometimes returns this interstitial with HTTP 200 instead of a 4xx -
+# a "behavioral" JS challenge page with no product data at all. Left
+# undetected, it looks like an ordinary page with no Product block, so the
+# parser silently returns None for every URL instead of surfacing a block.
+_CHALLENGE_MARKERS = ("sec-if-cpt-container", "Powered and protected by")
+
+
+def _is_challenge_page(text: str) -> bool:
+    return any(m in text for m in _CHALLENGE_MARKERS)
+
+
 class BaseScraper:
     name = "base"
     sitemap_index = None            # sitemap index or product sitemap URL
@@ -72,7 +83,8 @@ class BaseScraper:
                 pass
         time.sleep(self.delay + random.uniform(0, 0.5))
         status, text = self._request(url)
-        if status in (403, 429, 503) and self._cffi:
+        blocked = status in (403, 429, 503) or _is_challenge_page(text)
+        if blocked and self._cffi:
             # Akamai blocks are often session-scoped: retry once fresh
             from curl_cffi import requests as _cr
             time.sleep(5 + self.delay)
@@ -84,7 +96,8 @@ class BaseScraper:
                 except Exception:
                     pass
             status, text = self._request(url)
-        if status in (403, 429, 503):
+            blocked = status in (403, 429, 503) or _is_challenge_page(text)
+        if blocked:
             hint = "" if (self._cffi or not self.needs_impersonation) else \
                 " Install curl_cffi (`pip install curl_cffi`) and retry."
             raise Blocked(f"{self.name}: HTTP {status} for {url} - bot protection."
