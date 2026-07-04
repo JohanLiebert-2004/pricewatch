@@ -184,6 +184,7 @@ def cmd_refresh(args):
         except Exception as e:
             print(f"  refresh error after {seen} listings: "
                   f"{type(e).__name__}: {e}")
+            conn.rollback()   # a failed transaction would poison the flush
         snaps += db.bulk_upsert(conn, batch)
         print(f"  -> {seen} listings seen, {kept} kept (>= ${MIN_KEEP_PRICE:.0f} "
               f"or already tracked), {snaps} snapshots written\n")
