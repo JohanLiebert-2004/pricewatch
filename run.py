@@ -57,7 +57,7 @@ def cmd_index(args):
         except Blocked as e:
             print(f"  BLOCKED: {e}")
         total = conn.execute(
-            "SELECT COUNT(*) FROM crawl_queue WHERE retailer=?", (name,)).fetchone()[0]
+            "SELECT COUNT(*) AS n FROM crawl_queue WHERE retailer=?", (name,)).fetchone()["n"]
         print(f"  -> {total} URLs in queue for {name}\n")
 
 
