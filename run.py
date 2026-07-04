@@ -1,0 +1,167 @@
+"""CLI entry point.
+
+  python run.py scrape officeworks --limit 20   scrape one retailer
+  python run.py scrape all --limit 20           scrape every retailer
+  python run.py url <product-url>               ingest one specific product page
+  python run.py detect                          run anomaly engine
+  python run.py deals                           show current deals
+"""
+import argparse
+
+import db
+from anomaly import run as detect
+from scrapers import REGISTRY
+from scrapers.base import Blocked
+
+
+def cmd_scrape(args):
+    conn = db.connect()
+    names = list(REGISTRY) if args.retailer == "all" else [args.retailer]
+    for name in names:
+        scraper = REGISTRY[name]()
+        print(f"== {name}: discovering up to {args.limit} products ==")
+        n = 0
+        try:
+            for rec in scraper.scrape(limit=args.limit):
+                db.upsert(conn, rec)
+                n += 1
+                rrp = f" (rrp ${rec.rrp:.2f})" if rec.rrp else ""
+                mp = " [marketplace]" if rec.is_marketplace else ""
+                print(f"  ${rec.price:>8.2f}{rrp}{mp}  {rec.title[:60]}")
+        except Blocked as e:
+            print(f"  BLOCKED: {e}")
+        print(f"  -> stored {n} records\n")
+
+
+def cmd_index(args):
+    """Load the retailer's FULL product catalogue URLs into the crawl queue."""
+    conn = db.connect()
+    names = list(REGISTRY) if args.retailer == "all" else [args.retailer]
+    for name in names:
+        scraper = REGISTRY[name]()
+        print(f"== {name}: indexing full catalogue ==")
+        n = 0
+        try:
+            batch = []
+            for url in scraper.discover_all():
+                batch.append((name, url))
+                if len(batch) >= 1000:
+                    conn.executemany(
+                        "INSERT OR IGNORE INTO crawl_queue (retailer, url) VALUES (?,?)", batch)
+                    conn.commit(); n += len(batch); batch = []
+                    print(f"  ...{n} URLs indexed")
+            if batch:
+                conn.executemany(
+                    "INSERT OR IGNORE INTO crawl_queue (retailer, url) VALUES (?,?)", batch)
+                conn.commit(); n += len(batch)
+        except Blocked as e:
+            print(f"  BLOCKED: {e}")
+        total = conn.execute(
+            "SELECT COUNT(*) FROM crawl_queue WHERE retailer=?", (name,)).fetchone()[0]
+        print(f"  -> {total} URLs in queue for {name}\n")
+
+
+def cmd_crawl(args):
+    """Work through the crawl queue: oldest/never-scraped first. Resumable -
+    run it on a schedule and the whole catalogue gets covered in rolling passes."""
+    from datetime import datetime, timezone
+    conn = db.connect()
+    scraper = REGISTRY[args.retailer]()
+    rows = conn.execute(
+        """SELECT url FROM crawl_queue WHERE retailer=? AND fails < 3
+           ORDER BY last_scraped IS NOT NULL, last_scraped LIMIT ?""",
+        (args.retailer, args.batch)).fetchall()
+    if not rows:
+        print(f"queue empty - run: python run.py index {args.retailer}")
+        return
+    ok = 0
+    for r in rows:
+        url = r["url"]
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        try:
+            rec = scraper.parse_product(url, scraper.get(url))
+        except Blocked as e:
+            print(f"BLOCKED, stopping batch: {e}")
+            break
+        except Exception:
+            conn.execute("UPDATE crawl_queue SET fails=fails+1, last_scraped=? "
+                         "WHERE retailer=? AND url=?", (now, args.retailer, url))
+            conn.commit()
+            continue
+        conn.execute("UPDATE crawl_queue SET last_scraped=?, fails=0 "
+                     "WHERE retailer=? AND url=?", (now, args.retailer, url))
+        if rec:
+            db.upsert(conn, rec)
+            ok += 1
+        else:
+            conn.execute("UPDATE crawl_queue SET fails=fails+1 "
+                         "WHERE retailer=? AND url=?", (args.retailer, url))
+        conn.commit()
+    print(f"batch done: {ok}/{len(rows)} products stored "
+          f"(rerun to continue through the queue)")
+
+
+def cmd_url(args):
+    """Ingest one specific product URL (auto-detects retailer from domain)."""
+    conn = db.connect()
+    for name, S in REGISTRY.items():
+        if f"{name}.com" in args.url:
+            s = S()
+            rec = s.parse_product(args.url, s.get(args.url))
+            if rec:
+                db.upsert(conn, rec)
+                rrp = f" (rrp ${rec.rrp:.2f})" if rec.rrp else ""
+                print(f"stored: ${rec.price:.2f}{rrp}  {rec.title}")
+            else:
+                print("no product data found on that page")
+            return
+    print(f"no scraper matches that URL (have: {', '.join(REGISTRY)})")
+
+
+def cmd_detect(args):
+    conn = db.connect()
+    deals = detect(conn)
+    if not deals:
+        print("No new anomalies (need RRP gaps, price history, or GTIN overlap).")
+    for d in deals:
+        mp = " [marketplace seller]" if d["marketplace"] else ""
+        print(f"[{d['tier']}] {d['off']} off via {d['signal']}: {d['title'][:55]} "
+              f"${d['price']:.2f} (ref ${d['reference']:.2f}) @ {d['retailer']}{mp}\n  {d['url']}")
+
+
+def cmd_deals(args):
+    conn = db.connect()
+    rows = conn.execute(
+        """SELECT d.*, p.title, p.retailer, p.url, p.is_marketplace
+           FROM deals d JOIN products p ON p.id=d.product_id
+           WHERE d.status != 'expired' ORDER BY d.score DESC LIMIT 50"""
+    ).fetchall()
+    if not rows:
+        print("No deals recorded yet. Run: python run.py scrape all && python run.py detect")
+    for r in rows:
+        mp = " [marketplace seller]" if r["is_marketplace"] else ""
+        print(f"[{r['status']}] {r['score']:.0%} off ({r['signal']}) "
+              f"{r['title'][:55]} ${r['price']:.2f} @ {r['retailer']}{mp}")
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("scrape")
+    s.add_argument("retailer", choices=list(REGISTRY) + ["all"])
+    s.add_argument("--limit", type=int, default=20)
+    s.set_defaults(fn=cmd_scrape)
+    ix = sub.add_parser("index")
+    ix.add_argument("retailer", choices=list(REGISTRY) + ["all"])
+    ix.set_defaults(fn=cmd_index)
+    c = sub.add_parser("crawl")
+    c.add_argument("retailer", choices=list(REGISTRY))
+    c.add_argument("--batch", type=int, default=200)
+    c.set_defaults(fn=cmd_crawl)
+    u = sub.add_parser("url")
+    u.add_argument("url")
+    u.set_defaults(fn=cmd_url)
+    sub.add_parser("detect").set_defaults(fn=cmd_detect)
+    sub.add_parser("deals").set_defaults(fn=cmd_deals)
+    a = ap.parse_args()
+    a.fn(a)

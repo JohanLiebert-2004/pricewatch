@@ -1,0 +1,5 @@
+[
+ {"title":"Sheridan Luxury Otis Herringbone Quilt Cover Set — Queen","retailer":"bigw","url":"#","price":20.0,"reference_price":139.0,"signal":"cross_retailer","score":0.86,"pct_off":86,"error_tier":true,"is_marketplace":true},
+ {"title":"Breville Barista Espresso Machine","retailer":"bigw","url":"#","price":99.0,"reference_price":399.0,"signal":"cross_retailer_fuzzy","score":0.75,"pct_off":75,"error_tier":false,"is_marketplace":false},
+ {"title":"Logitech Z623 400W 2.1 Speaker System","retailer":"officeworks","url":"#","price":99.0,"reference_price":249.0,"signal":"history_drop","score":0.60,"pct_off":60,"error_tier":false,"is_marketplace":false}
+]
