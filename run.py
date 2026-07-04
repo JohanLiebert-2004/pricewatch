@@ -82,6 +82,12 @@ def cmd_crawl(args):
             rec = scraper.parse_product(url, scraper.get(url))
         except Blocked as e:
             print(f"BLOCKED, stopping batch: {e}")
+            # Without this, this exact URL's last_scraped stays NULL forever,
+            # so the oldest-first ordering keeps re-picking it first on every
+            # future cycle and the batch never advances past it.
+            conn.execute("UPDATE crawl_queue SET fails=fails+1, last_scraped=? "
+                         "WHERE retailer=? AND url=?", (now, args.retailer, url))
+            conn.commit()
             break
         except Exception as e:
             print(f"  parse error on {url}: {type(e).__name__}: {e}")
