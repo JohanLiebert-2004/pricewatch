@@ -1,20 +1,28 @@
 name: crawl-and-detect
 # Free on PUBLIC repos (unlimited Actions minutes). The daily DB write also
 # doubles as the Supabase keep-alive that prevents the 7-day free-tier pause.
+#
+# Each retailer gets its own parallel job with its own 50-min budget instead
+# of sharing one job sequentially - roughly 4x more requests get through per
+# cycle. Politeness is still per-retailer: nothing here parallelizes requests
+# to the SAME retailer, only across different retailers.
 
 on:
   schedule:
     - cron: "0 */6 * * *"     # every 6 hours (UTC)
   workflow_dispatch: {}         # manual "Run workflow" button
 
-concurrency:
-  group: crawl
-  cancel-in-progress: false
-
 jobs:
   crawl:
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        retailer: [officeworks, bigw, kmart, target]
+    concurrency:
+      group: crawl-${{ matrix.retailer }}
+      cancel-in-progress: false
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}   # Supabase connection string
     steps:
@@ -25,11 +33,21 @@ jobs:
       - run: pip install -r requirements.txt
       # First run only: uncomment to load full catalogues into the queue.
       # - run: python run.py index all
-      - name: Crawl each retailer (polite batches)
-        run: |
-          python run.py crawl officeworks --batch 300 || true
-          python run.py crawl bigw        --batch 200 || true
-          python run.py crawl kmart       --batch 200 || true
-          python run.py crawl target      --batch 200 || true
+      - name: Crawl ${{ matrix.retailer }} (polite batch)
+        run: python run.py crawl ${{ matrix.retailer }} --batch 900 || true
+
+  detect:
+    needs: crawl
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
       - name: Detect price drops
         run: python run.py detect
