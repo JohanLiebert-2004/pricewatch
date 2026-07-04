@@ -83,7 +83,8 @@ def cmd_crawl(args):
         except Blocked as e:
             print(f"BLOCKED, stopping batch: {e}")
             break
-        except Exception:
+        except Exception as e:
+            print(f"  parse error on {url}: {type(e).__name__}: {e}")
             conn.execute("UPDATE crawl_queue SET fails=fails+1, last_scraped=? "
                          "WHERE retailer=? AND url=?", (now, args.retailer, url))
             conn.commit()
