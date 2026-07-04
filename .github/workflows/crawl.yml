@@ -24,7 +24,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       # First run only: uncomment to load full catalogues into the queue.
-      # - run: python run.py index all
+      - run: python run.py index all
       - name: Crawl each retailer (polite batches)
         run: |
           python run.py crawl officeworks --batch 300 || true
