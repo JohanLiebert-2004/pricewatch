@@ -2,10 +2,15 @@ name: crawl-and-detect
 # Free on PUBLIC repos (unlimited Actions minutes). The daily DB write also
 # doubles as the Supabase keep-alive that prevents the 7-day free-tier pause.
 #
-# Each retailer gets its own parallel job with its own 50-min budget instead
-# of sharing one job sequentially - roughly 4x more requests get through per
+# Each retailer gets its own parallel job with its own budget instead of
+# sharing one job sequentially - roughly 4x more requests get through per
 # cycle. Politeness is still per-retailer: nothing here parallelizes requests
 # to the SAME retailer, only across different retailers.
+#
+# 900 items/retailer/cycle takes ~40-50min for officeworks/bigw at their
+# observed per-request latency; kmart needs more than 50min for the same
+# batch, so the job timeout is set well above that with room to spare
+# (the 6h cron cadence leaves plenty of headroom either way).
 
 on:
   schedule:
@@ -15,7 +20,7 @@ on:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
