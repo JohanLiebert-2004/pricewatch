@@ -109,14 +109,18 @@ def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
     if rec.price is None:
         return None
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # Postgres' pooler negotiates parameter types from the unnamed portal and
+    # sometimes guesses booleans as smallint; an explicit cast sidesteps that.
+    # SQLite doesn't understand "::type" casts, so only apply it under Postgres.
+    bool_cast = "::boolean" if DATABASE_URL else ""
     conn.execute(
-        """INSERT INTO products (retailer, sku, gtin, title, brand, category, url,
+        f"""INSERT INTO products (retailer, sku, gtin, title, brand, category, url,
                                  is_marketplace, region, first_seen, last_seen)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)
+           VALUES (?,?,?,?,?,?,?,?{bool_cast},?,?,?)
            ON CONFLICT(retailer, sku, region) DO UPDATE SET
              gtin=COALESCE(excluded.gtin, products.gtin), title=excluded.title,
              brand=COALESCE(excluded.brand, products.brand), url=excluded.url,
-             is_marketplace=excluded.is_marketplace, last_seen=excluded.last_seen""",
+             is_marketplace=excluded.is_marketplace{bool_cast}, last_seen=excluded.last_seen""",
         (rec.retailer, rec.sku, rec.gtin, rec.title, rec.brand, rec.category,
          rec.url, rec.is_marketplace, rec.region or "", now, now),
     )
@@ -126,7 +130,8 @@ def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
     ).fetchone()
     pid = row["id"]
     conn.execute(
-        "INSERT INTO price_snapshots (product_id, price, rrp, in_stock, scraped_at) VALUES (?,?,?,?,?)",
+        f"INSERT INTO price_snapshots (product_id, price, rrp, in_stock, scraped_at) "
+        f"VALUES (?,?,?,?{bool_cast},?)",
         (pid, rec.price, rec.rrp, rec.in_stock, now),
     )
     conn.commit()
@@ -158,3 +163,6 @@ class _PgShim:
 
     def commit(self):
         self._c.commit()
+
+    def rollback(self):
+        self._c.rollback()

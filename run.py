@@ -88,15 +88,25 @@ def cmd_crawl(args):
                          "WHERE retailer=? AND url=?", (now, args.retailer, url))
             conn.commit()
             continue
-        conn.execute("UPDATE crawl_queue SET last_scraped=?, fails=0 "
-                     "WHERE retailer=? AND url=?", (now, args.retailer, url))
-        if rec:
-            db.upsert(conn, rec)
-            ok += 1
-        else:
+        try:
+            conn.execute("UPDATE crawl_queue SET last_scraped=?, fails=0 "
+                         "WHERE retailer=? AND url=?", (now, args.retailer, url))
+            if rec:
+                db.upsert(conn, rec)
+                ok += 1
+            else:
+                conn.execute("UPDATE crawl_queue SET fails=fails+1 "
+                             "WHERE retailer=? AND url=?", (args.retailer, url))
+            conn.commit()
+        except Exception as e:
+            # A pooled Postgres connection can occasionally throw a transient
+            # error (e.g. a stale prepared statement); don't let one bad row
+            # crash the whole batch - roll back, count it as a fail, move on.
+            conn.rollback()
+            print(f"  DB error on {url}: {e}")
             conn.execute("UPDATE crawl_queue SET fails=fails+1 "
                          "WHERE retailer=? AND url=?", (args.retailer, url))
-        conn.commit()
+            conn.commit()
     print(f"batch done: {ok}/{len(rows)} products stored "
           f"(rerun to continue through the queue)")
 
