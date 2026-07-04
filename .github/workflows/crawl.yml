@@ -1,30 +1,38 @@
 name: crawl-and-detect
-# Free on PUBLIC repos (unlimited Actions minutes). The daily DB write also
+# Free on PUBLIC repos (unlimited Actions minutes). The regular DB write also
 # doubles as the Supabase keep-alive that prevents the 7-day free-tier pause.
 #
-# Each retailer gets its own parallel job with its own budget instead of
-# sharing one job sequentially - roughly 4x more requests get through per
-# cycle. Politeness is still per-retailer: nothing here parallelizes requests
-# to the SAME retailer, only across different retailers.
-#
-# 900 items/retailer/cycle takes ~40-50min for officeworks/bigw at their
-# observed per-request latency; kmart needs more than 50min for the same
-# batch, so the job timeout is set well above that with room to spare
-# (the 6h cron cadence leaves plenty of headroom either way).
+# Two lanes per retailer, in one parallel job each:
+#  1. refresh - bulk listing/API pass (48-200 products per request) that
+#     covers whole catalogues in minutes-to-an-hour and only writes a price
+#     snapshot when a price actually changed.
+#  2. crawl   - small product-page batch for fields listings don't carry
+#     (GTIN on Target, was-price on BigW/Officeworks).
+# Politeness is per-retailer and unchanged: one request at a time, 2.5s
+# delays on Akamai-fronted sites; Blocked exceptions end a lane early and
+# the next cycle resumes where it left off.
 
 on:
   schedule:
-    - cron: "0 */6 * * *"     # every 6 hours (UTC)
+    - cron: "0 */2 * * *"     # every 2 hours (UTC)
   workflow_dispatch: {}         # manual "Run workflow" button
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 110
     strategy:
       fail-fast: false
       matrix:
-        retailer: [officeworks, bigw, kmart, target]
+        include:
+          - retailer: officeworks
+            budget: 900
+          - retailer: bigw
+            budget: 1600
+          - retailer: kmart
+            budget: 1400
+          - retailer: target
+            budget: 700
     concurrency:
       group: crawl-${{ matrix.retailer }}
       cancel-in-progress: false
@@ -38,14 +46,16 @@ jobs:
       - run: pip install -r requirements.txt
       # First run only: uncomment to load full catalogues into the queue.
       # - run: python run.py index all
-      - name: Crawl ${{ matrix.retailer }} (polite batch)
-        run: python run.py crawl ${{ matrix.retailer }} --batch 900 || true
+      - name: Bulk price refresh (${{ matrix.retailer }})
+        run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }} || true
+      - name: Product-page enrichment (${{ matrix.retailer }})
+        run: python run.py crawl ${{ matrix.retailer }} --batch 40 || true
 
   detect:
     needs: crawl
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:

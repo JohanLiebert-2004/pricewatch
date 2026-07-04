@@ -23,7 +23,14 @@ CREATE TABLE IF NOT EXISTS products (
     region TEXT,
     first_seen TEXT,
     last_seen TEXT,
+    current_price REAL,
+    current_rrp REAL,
+    price_updated_at TEXT,
     UNIQUE (retailer, sku, region)
+);
+CREATE TABLE IF NOT EXISTS kv (
+    k TEXT PRIMARY KEY,
+    v TEXT
 );
 CREATE TABLE IF NOT EXISTS price_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,7 +90,19 @@ def connect(path: Path = DB_PATH):
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn):
+    """Add columns introduced after the first deploy; no-op once applied."""
+    for col, typ in (("current_price", "REAL"), ("current_rrp", "REAL"),
+                     ("price_updated_at", "TEXT")):
+        try:
+            conn.execute(f"ALTER TABLE products ADD COLUMN {col} {typ}")
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
 
 def _connect_postgres():
@@ -101,7 +120,9 @@ def _connect_postgres():
     with conn.cursor() as cur:
         cur.execute(pg_schema)
     conn.commit()
-    return _PgShim(conn)
+    shim = _PgShim(conn)
+    _migrate(shim)
+    return shim
 
 
 def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
@@ -115,14 +136,18 @@ def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
     bool_cast = "::boolean" if DATABASE_URL else ""
     conn.execute(
         f"""INSERT INTO products (retailer, sku, gtin, title, brand, category, url,
-                                 is_marketplace, region, first_seen, last_seen)
-           VALUES (?,?,?,?,?,?,?,?{bool_cast},?,?,?)
+                                 is_marketplace, region, first_seen, last_seen,
+                                 current_price, current_rrp, price_updated_at)
+           VALUES (?,?,?,?,?,?,?,?{bool_cast},?,?,?,?,?,?)
            ON CONFLICT(retailer, sku, region) DO UPDATE SET
              gtin=COALESCE(excluded.gtin, products.gtin), title=excluded.title,
              brand=COALESCE(excluded.brand, products.brand), url=excluded.url,
-             is_marketplace=excluded.is_marketplace{bool_cast}, last_seen=excluded.last_seen""",
+             is_marketplace=excluded.is_marketplace{bool_cast}, last_seen=excluded.last_seen,
+             current_price=excluded.current_price, current_rrp=excluded.current_rrp,
+             price_updated_at=excluded.price_updated_at""",
         (rec.retailer, rec.sku, rec.gtin, rec.title, rec.brand, rec.category,
-         rec.url, rec.is_marketplace, rec.region or "", now, now),
+         rec.url, rec.is_marketplace, rec.region or "", now, now,
+         rec.price, rec.rrp, now),
     )
     row = conn.execute(
         "SELECT id FROM products WHERE retailer=? AND sku=? AND region=?",
@@ -136,6 +161,85 @@ def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
     )
     conn.commit()
     return pid
+
+
+def bulk_upsert(conn, recs: list) -> int:
+    """Upsert many ProductRecords with few round trips (for listing refreshes).
+
+    Snapshots are only written when a product's price actually changed (or on
+    first sighting), so frequent refreshes don't bloat price_snapshots.
+    Returns the number of snapshots written.
+    """
+    recs = [r for r in recs if r.price is not None]
+    if not recs:
+        return 0
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    bool_cast = "::boolean" if DATABASE_URL else ""
+    written = 0
+    for i in range(0, len(recs), 400):
+        chunk = recs[i:i + 400]
+        # de-dupe within the chunk (same sku can appear in two listings)
+        seen = {}
+        for r in chunk:
+            seen[(r.retailer, r.sku, r.region or "")] = r
+        chunk = list(seen.values())
+
+        # what do we currently know about these products?
+        old = {}
+        for retailer in {r.retailer for r in chunk}:
+            skus = [r.sku for r in chunk if r.retailer == retailer]
+            for row in conn.execute(
+                    f"SELECT id, retailer, sku, region, current_price "
+                    f"FROM products WHERE retailer=? "
+                    f"AND sku IN ({','.join('?' * len(skus))})",
+                    (retailer, *skus)).fetchall():
+                old[(row["retailer"], row["sku"], row["region"])] = (
+                    row["id"], row["current_price"])
+
+        conn.executemany(
+            f"""INSERT INTO products (retailer, sku, gtin, title, brand, category,
+                    url, is_marketplace, region, first_seen, last_seen,
+                    current_price, current_rrp, price_updated_at)
+                VALUES (?,?,?,?,?,?,?,?{bool_cast},?,?,?,?,?,?)
+                ON CONFLICT(retailer, sku, region) DO UPDATE SET
+                  gtin=COALESCE(excluded.gtin, products.gtin), title=excluded.title,
+                  brand=COALESCE(excluded.brand, products.brand), url=excluded.url,
+                  is_marketplace=excluded.is_marketplace{bool_cast},
+                  last_seen=excluded.last_seen,
+                  current_price=excluded.current_price,
+                  current_rrp=excluded.current_rrp,
+                  price_updated_at=excluded.price_updated_at""",
+            [(r.retailer, r.sku, r.gtin, r.title, r.brand, r.category, r.url,
+              r.is_marketplace, r.region or "", now, now,
+              r.price, r.rrp, now) for r in chunk])
+
+        # ids for rows we hadn't seen before
+        missing = [r for r in chunk
+                   if (r.retailer, r.sku, r.region or "") not in old]
+        for retailer in {r.retailer for r in missing}:
+            skus = [r.sku for r in missing if r.retailer == retailer]
+            for row in conn.execute(
+                    f"SELECT id, retailer, sku, region FROM products "
+                    f"WHERE retailer=? AND sku IN ({','.join('?' * len(skus))})",
+                    (retailer, *skus)).fetchall():
+                old.setdefault((row["retailer"], row["sku"], row["region"]),
+                               (row["id"], None))
+
+        snaps = []
+        for r in chunk:
+            key = (r.retailer, r.sku, r.region or "")
+            if key not in old:
+                continue
+            pid, prev = old[key]
+            if prev is None or abs(float(prev) - r.price) > 0.004:
+                snaps.append((pid, r.price, r.rrp, r.in_stock, now))
+        if snaps:
+            conn.executemany(
+                f"INSERT INTO price_snapshots (product_id, price, rrp, in_stock, "
+                f"scraped_at) VALUES (?,?,?,?{bool_cast},?)", snaps)
+            written += len(snaps)
+        conn.commit()
+    return written
 
 
 class _PgShim:

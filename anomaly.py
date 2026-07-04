@@ -23,25 +23,34 @@ def run(conn) -> list[dict]:
     found = []
     cross_peers = _cross_peers(conn)
     products = conn.execute("SELECT * FROM products").fetchall()
+    # one bulk pass instead of a per-product query: with change-only
+    # snapshots the whole table stays small enough to group in memory
+    history_by_pid = {}
+    for s in conn.execute(
+            "SELECT product_id, price, rrp FROM price_snapshots "
+            "ORDER BY scraped_at DESC"):
+        h = history_by_pid.setdefault(s["product_id"], [])
+        if len(h) < 90:
+            h.append(s)
     for p in products:
-        snaps = conn.execute(
-            "SELECT price, rrp FROM price_snapshots WHERE product_id=? "
-            "ORDER BY scraped_at DESC LIMIT 90", (p["id"],),
-        ).fetchall()
+        snaps = history_by_pid.get(p["id"])
         if not snaps:
             continue
-        price = snaps[0]["price"]
+        price = float(p["current_price"] if p["current_price"] is not None
+                      else snaps[0]["price"])
         if price < MIN_PRICE:
             continue
 
         checks = []
-        rrp = snaps[0]["rrp"]
+        rrp = (p["current_rrp"] if p["current_rrp"] is not None
+               else snaps[0]["rrp"])
+        rrp = float(rrp) if rrp is not None else None
         if rrp and rrp > 0:
             gap = 1 - price / rrp
             if gap >= RRP_GAP_MIN:
                 checks.append(("rrp_gap", rrp, gap))
 
-        history = [s["price"] for s in snaps[1:]]
+        history = [float(s["price"]) for s in snaps[1:]]
         if len(history) >= MIN_HISTORY:
             med = statistics.median(history)
             if med > 0 and 1 - price / med >= HISTORY_DROP_MIN:
@@ -82,13 +91,18 @@ def _cross_peers(conn) -> dict:
     """Map each product_id -> {confidence, prices:[(peer_id, latest_price)]}
     for OTHER retailers in the same match group."""
     latest = {}
-    for r in conn.execute(
-        """SELECT product_id, price FROM price_snapshots ps WHERE id = (
-             SELECT id FROM price_snapshots WHERE product_id=ps.product_id
-             ORDER BY scraped_at DESC LIMIT 1)"""):
-        latest[r["product_id"]] = r["price"]
-    retailer_of = {p["id"]: p["retailer"]
-                   for p in conn.execute("SELECT id, retailer FROM products")}
+    retailer_of = {}
+    for p in conn.execute(
+            "SELECT id, retailer, current_price FROM products"):
+        retailer_of[p["id"]] = p["retailer"]
+        if p["current_price"] is not None:
+            latest[p["id"]] = float(p["current_price"])
+    if not latest:  # legacy rows from before current_price existed
+        for r in conn.execute(
+            """SELECT product_id, price FROM price_snapshots ps WHERE id = (
+                 SELECT id FROM price_snapshots WHERE product_id=ps.product_id
+                 ORDER BY scraped_at DESC LIMIT 1)"""):
+            latest[r["product_id"]] = float(r["price"])
     out = {}
     for g in build_match_groups(conn).values():
         ids = g["product_ids"]

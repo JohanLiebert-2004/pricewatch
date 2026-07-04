@@ -118,6 +118,53 @@ def cmd_crawl(args):
           f"(rerun to continue through the queue)")
 
 
+def cmd_refresh(args):
+    """Fast bulk price refresh via listing pages / retailer APIs.
+
+    Covers whole catalogues in hundreds of requests instead of one request
+    per product; price_snapshots only grow when a price actually changed.
+    """
+    conn = db.connect()
+    names = list(REGISTRY) if args.retailer == "all" else [args.retailer]
+    for name in names:
+        scraper = REGISTRY[name]()
+        if not hasattr(scraper, "refresh_listings"):
+            print(f"== {name}: no fast refresh path, skipping ==")
+            continue
+        print(f"== {name}: bulk refresh (budget {args.budget} requests) ==")
+        kwargs = {}
+        if name == "officeworks":
+            # bulk API needs a SKU list: everything we know + queue-derived
+            skus = {r["sku"] for r in conn.execute(
+                "SELECT sku FROM products WHERE retailer=?", (name,))}
+            for r in conn.execute(
+                    "SELECT url FROM crawl_queue WHERE retailer=?", (name,)):
+                sku = scraper.sku_from_url(r["url"])
+                if sku:
+                    skus.add(sku)
+            kwargs["skus"] = sorted(skus)
+            print(f"  {len(skus)} known SKUs to refresh")
+        seen = 0
+        snaps = 0
+        batch = []
+        try:
+            for rec in scraper.refresh_listings(budget=args.budget, **kwargs):
+                batch.append(rec)
+                seen += 1
+                if len(batch) >= 400:
+                    snaps += db.bulk_upsert(conn, batch)
+                    batch = []
+                    if seen % 4000 == 0:
+                        print(f"  ...{seen} listings, {snaps} price changes")
+        except Blocked as e:
+            print(f"  BLOCKED mid-refresh (keeping what we got): {e}")
+        except Exception as e:
+            print(f"  refresh error after {seen} listings: "
+                  f"{type(e).__name__}: {e}")
+        snaps += db.bulk_upsert(conn, batch)
+        print(f"  -> {seen} listings processed, {snaps} snapshots written\n")
+
+
 def cmd_url(args):
     """Ingest one specific product URL (auto-detects retailer from domain)."""
     conn = db.connect()
@@ -175,6 +222,11 @@ if __name__ == "__main__":
     c.add_argument("retailer", choices=list(REGISTRY))
     c.add_argument("--batch", type=int, default=200)
     c.set_defaults(fn=cmd_crawl)
+    rf = sub.add_parser("refresh")
+    rf.add_argument("retailer", choices=list(REGISTRY) + ["all"])
+    rf.add_argument("--budget", type=int, default=1400,
+                    help="max listing/API requests this run")
+    rf.set_defaults(fn=cmd_refresh)
     u = sub.add_parser("url")
     u.add_argument("url")
     u.set_defaults(fn=cmd_url)
