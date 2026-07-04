@@ -88,8 +88,8 @@
 // Two options, in order of preference:
 // 1) Supabase REST (set SUPABASE_URL + SUPABASE_ANON_KEY below), or
 // 2) a static deals.json committed next to this file (python api_deals.py --export)
-const SUPABASE_URL = "";       // e.g. https://xxxx.supabase.co
-const SUPABASE_ANON_KEY = "";  // the public anon key (read-only via RLS)
+const SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrbGZnd2FseWZ1Z3BlaWVlcXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNDc1NTcsImV4cCI6MjA5ODcyMzU1N30.Y-q-s49eP67iHuQIysRb7Apl5vLA4u2C6fZYCdS7Ijg";  // public anon key (read-only via RLS)
 
 async function loadDeals(){
   if (SUPABASE_URL && SUPABASE_ANON_KEY){
