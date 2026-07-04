@@ -89,7 +89,11 @@ def connect(path: Path = DB_PATH):
 def _connect_postgres():
     import psycopg
     from psycopg.rows import dict_row
-    conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=False)
+    # prepare_threshold=None: Supabase's pooler (port 6543) is PgBouncer in
+    # transaction mode, which can't guarantee a server-side prepared statement
+    # survives to the next call on the same client connection.
+    conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=False,
+                            prepare_threshold=None)
     # translate the SQLite schema to Postgres on first connect
     pg_schema = (SCHEMA
                  .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
@@ -110,11 +114,11 @@ def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
                                  is_marketplace, region, first_seen, last_seen)
            VALUES (?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(retailer, sku, region) DO UPDATE SET
-             gtin=COALESCE(excluded.gtin, gtin), title=excluded.title,
-             brand=COALESCE(excluded.brand, brand), url=excluded.url,
+             gtin=COALESCE(excluded.gtin, products.gtin), title=excluded.title,
+             brand=COALESCE(excluded.brand, products.brand), url=excluded.url,
              is_marketplace=excluded.is_marketplace, last_seen=excluded.last_seen""",
         (rec.retailer, rec.sku, rec.gtin, rec.title, rec.brand, rec.category,
-         rec.url, int(rec.is_marketplace), rec.region or "", now, now),
+         rec.url, rec.is_marketplace, rec.region or "", now, now),
     )
     row = conn.execute(
         "SELECT id FROM products WHERE retailer=? AND sku=? AND region=?",
@@ -123,7 +127,7 @@ def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
     pid = row["id"]
     conn.execute(
         "INSERT INTO price_snapshots (product_id, price, rrp, in_stock, scraped_at) VALUES (?,?,?,?,?)",
-        (pid, rec.price, rec.rrp, None if rec.in_stock is None else int(rec.in_stock), now),
+        (pid, rec.price, rec.rrp, rec.in_stock, now),
     )
     conn.commit()
     return pid
