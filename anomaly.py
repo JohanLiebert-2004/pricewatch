@@ -15,6 +15,10 @@ HISTORY_DROP_MIN = 0.50     # 50%+ below own recent median (needs >= 3 snapshots
 CROSS_RETAILER_MIN = 0.50   # 50%+ below cross-retailer median (needs >= 2 others)
 BIG_DROP = 0.80             # 80%+ = "error-tier" deal, worth an instant alert
 MIN_PRICE = 1.0             # ignore sub-$1 noise
+MIN_REFERENCE = 50.0        # a deal only counts if the item NORMALLY costs
+                            # this much - nobody cares about cheap items on
+                            # sale. (Gates the reference price, not the sale
+                            # price: a $500 item at $20 must still fire.)
 MIN_HISTORY = 3             # snapshots needed before history_drop can fire
 
 
@@ -45,7 +49,7 @@ def run(conn) -> list[dict]:
         rrp = (p["current_rrp"] if p["current_rrp"] is not None
                else snaps[0]["rrp"])
         rrp = float(rrp) if rrp is not None else None
-        if rrp and rrp > 0:
+        if rrp and rrp >= MIN_REFERENCE:
             gap = 1 - price / rrp
             if gap >= RRP_GAP_MIN:
                 checks.append(("rrp_gap", rrp, gap))
@@ -53,7 +57,7 @@ def run(conn) -> list[dict]:
         history = [float(s["price"]) for s in snaps[1:]]
         if len(history) >= MIN_HISTORY:
             med = statistics.median(history)
-            if med > 0 and 1 - price / med >= HISTORY_DROP_MIN:
+            if med >= MIN_REFERENCE and 1 - price / med >= HISTORY_DROP_MIN:
                 checks.append(("history_drop", med, 1 - price / med))
 
         peers = cross_peers.get(p["id"])
@@ -64,7 +68,7 @@ def run(conn) -> list[dict]:
             need = 2 if peers["confidence"] == "high" else 1
             if len(others) >= need:
                 med = statistics.median(others)
-                if med > 0 and 1 - price / med >= CROSS_RETAILER_MIN:
+                if med >= MIN_REFERENCE and 1 - price / med >= CROSS_RETAILER_MIN:
                     sig = "cross_retailer" if peers["confidence"] == "high" \
                           else "cross_retailer_fuzzy"
                     checks.append((sig, med, 1 - price / med))

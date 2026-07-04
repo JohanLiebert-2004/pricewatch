@@ -118,6 +118,12 @@ def cmd_crawl(args):
           f"(rerun to continue through the queue)")
 
 
+MIN_KEEP_PRICE = 50.0   # don't ingest NEW items normally under this - deals
+                        # on cheap items aren't worth tracking. Items already
+                        # in the DB always stay refreshed so a big price DROP
+                        # on an expensive item (even to $5) is still captured.
+
+
 def cmd_refresh(args):
     """Fast bulk price refresh via listing pages / retailer APIs.
 
@@ -132,25 +138,42 @@ def cmd_refresh(args):
             print(f"== {name}: no fast refresh path, skipping ==")
             continue
         print(f"== {name}: bulk refresh (budget {args.budget} requests) ==")
+        known = {r["sku"] for r in conn.execute(
+            "SELECT sku FROM products WHERE retailer=?", (name,))}
         kwargs = {}
         if name == "officeworks":
-            # bulk API needs a SKU list: everything we know + queue-derived
+            # bulk API needs a SKU list: items worth watching (>=$50 or not
+            # yet priced) + SKUs recoverable from queued sitemap URLs
             skus = {r["sku"] for r in conn.execute(
-                "SELECT sku FROM products WHERE retailer=?", (name,))}
+                "SELECT sku FROM products WHERE retailer=? AND "
+                "(current_price IS NULL OR current_price >= ?)",
+                (name, MIN_KEEP_PRICE))}
             for r in conn.execute(
                     "SELECT url FROM crawl_queue WHERE retailer=?", (name,)):
                 sku = scraper.sku_from_url(r["url"])
-                if sku:
+                if sku and sku not in known:
                     skus.add(sku)
             kwargs["skus"] = sorted(skus)
-            print(f"  {len(skus)} known SKUs to refresh")
+            print(f"  {len(skus)} SKUs to refresh")
         seen = 0
+        kept = 0
         snaps = 0
         batch = []
+
+        def worth_keeping(rec):
+            if rec.sku in known:
+                return True          # never lose sight of a tracked item
+            if rec.price is not None and rec.price >= MIN_KEEP_PRICE:
+                return True
+            return bool(rec.rrp and rec.rrp >= MIN_KEEP_PRICE)
+
         try:
             for rec in scraper.refresh_listings(budget=args.budget, **kwargs):
-                batch.append(rec)
                 seen += 1
+                if not worth_keeping(rec):
+                    continue
+                batch.append(rec)
+                kept += 1
                 if len(batch) >= 400:
                     snaps += db.bulk_upsert(conn, batch)
                     batch = []
@@ -162,7 +185,8 @@ def cmd_refresh(args):
             print(f"  refresh error after {seen} listings: "
                   f"{type(e).__name__}: {e}")
         snaps += db.bulk_upsert(conn, batch)
-        print(f"  -> {seen} listings processed, {snaps} snapshots written\n")
+        print(f"  -> {seen} listings seen, {kept} kept (>= ${MIN_KEEP_PRICE:.0f} "
+              f"or already tracked), {snaps} snapshots written\n")
 
 
 def cmd_url(args):
