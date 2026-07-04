@@ -137,7 +137,10 @@ class _PgShim:
 
     @staticmethod
     def _q(sql):
-        return sql.replace("?", "%s")
+        sql = sql.replace("?", "%s")
+        if "INSERT OR IGNORE INTO" in sql:
+            sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO") + " ON CONFLICT DO NOTHING"
+        return sql
 
     def execute(self, sql, params=()):
         cur = self._c.cursor()
