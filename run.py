@@ -8,6 +8,7 @@
 """
 import argparse
 
+import categorize as categorize_mod
 import db
 from anomaly import run as detect
 from scrapers import REGISTRY
@@ -209,6 +210,9 @@ def cmd_url(args):
 
 def cmd_detect(args):
     conn = db.connect()
+    tagged = categorize_mod.backfill(conn)
+    if tagged:
+        print(f"categorised {tagged} new products")
     deals = detect(conn)
     if not deals:
         print("No new anomalies (need RRP gaps, price history, or GTIN overlap).")

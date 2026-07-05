@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalogue — Underpriced</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Spline+Sans+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12100e; --paper:#faf6ef; --line:#e2d9c9;
+    --flag:#c8340f; --deal:#1c6b4a; --muted:#6f665a; --card:#fffdf9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:Inter,system-ui,sans-serif;line-height:1.5;
+    -webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  .wrap{max-width:960px;margin:0 auto;padding:0 20px}
+  header{border-bottom:2px solid var(--ink);padding:28px 0 20px;margin-bottom:6px}
+  .brand{font-family:Fraunces,serif;font-weight:600;font-size:clamp(34px,7vw,60px);
+    letter-spacing:-.02em;line-height:.95;margin:0}
+  .brand em{font-style:italic;color:var(--flag)}
+  .tag{font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--muted);
+    margin-top:10px;text-transform:uppercase;letter-spacing:.08em}
+  .nav{margin-top:14px;font-family:"Spline Sans Mono",monospace;font-size:13px;
+    display:flex;gap:22px;flex-wrap:wrap}
+  .nav a{text-decoration:none;border-bottom:2px solid var(--flag);padding-bottom:1px}
+  .nav a:hover{color:var(--flag)}
+  .barlabel{font-family:"Spline Sans Mono",monospace;font-size:10px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.1em;margin:16px 0 6px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 4px}
+  .chip{font-family:"Spline Sans Mono",monospace;font-size:12px;border:1px solid var(--line);
+    background:var(--card);padding:7px 12px;border-radius:999px;cursor:pointer;
+    color:var(--muted);transition:.15s}
+  .chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .chip .n{opacity:.65;margin-left:4px}
+  .total{font-family:Fraunces,serif;font-weight:600;font-size:20px;margin:26px 0 0}
+  .total span{font-family:"Spline Sans Mono",monospace;font-size:12px;
+    color:var(--muted);font-weight:400}
+  .row{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:baseline;
+    padding:14px 0;border-bottom:1px solid var(--line)}
+  .title{font-weight:500}
+  .title a{text-decoration:none}
+  .title a:hover{text-decoration:underline}
+  .meta{font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--muted);
+    margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .pill{border:1px solid var(--line);border-radius:4px;padding:1px 7px}
+  .pill.mkt{border-color:var(--flag);color:var(--flag)}
+  .price{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .price .now{font-weight:600;font-size:17px}
+  .price .was{color:var(--muted);text-decoration:line-through;font-size:13px}
+  .more{display:block;margin:26px auto;font-family:"Spline Sans Mono",monospace;
+    font-size:13px;cursor:pointer;background:var(--ink);color:var(--paper);
+    border:1px solid var(--ink);border-radius:8px;padding:11px 26px}
+  .more[disabled]{opacity:.4;cursor:default}
+  .empty{padding:60px 0;text-align:center;color:var(--muted)}
+  footer{color:var(--muted);font-size:13px;padding:34px 0;border-top:2px solid var(--ink);
+    margin-top:20px}
+  .note{font-family:"Spline Sans Mono",monospace;font-size:11px;color:var(--muted);
+    line-height:1.7}
+  @media(max-width:560px){.row{grid-template-columns:1fr}
+    .price{text-align:left;margin-top:2px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1 class="brand">The <em>catalogue</em></h1>
+  <div class="tag">every product we track, by store and category</div>
+  <div class="nav">
+    <a href="index.html">← Deal feed</a>
+    <a href="search.html">Price search →</a>
+  </div>
+</div></header>
+
+<main class="wrap">
+  <div class="barlabel">Store</div>
+  <div class="bar" id="retailers"></div>
+  <div class="barlabel">Category</div>
+  <div class="bar" id="cats"></div>
+  <div class="total" id="total"></div>
+  <div id="list"><div class="empty">Loading…</div></div>
+  <button class="more" id="more" hidden>Load 50 more</button>
+</main>
+
+<footer><div class="wrap">
+  <div class="note">
+    Counts cover products with a captured price. Categories are inferred from
+    product names and may occasionally misfile an item. Stores with few or no
+    items (Big W, Target) are still being crawled — retailers block automated
+    requests intermittently, so coverage builds over successive runs.
+  </div>
+</div></footer>
+
+<script>
+const SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrbGZnd2FseWZ1Z3BlaWVlcXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNDc1NTcsImV4cCI6MjA5ODcyMzU1N30.Y-q-s49eP67iHuQIysRb7Apl5vLA4u2C6fZYCdS7Ijg";  // public anon key (read-only via RLS)
+const HDRS = {apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}`};
+
+const money = n => "$"+Number(n).toFixed(2);
+const RETAILERS = [["all","All stores"],["kmart","Kmart"],["bigw","Big W"],
+                   ["officeworks","Officeworks"],["target","Target"]];
+const CATS = [["all","All"],["tech","Tech"],["home","Home"],["kitchen","Kitchen"],
+              ["toys","Toys & Baby"],["clothing","Clothing"],["beauty","Beauty"],
+              ["books","Books & Stationery"],["other","Other"]];
+const RETAILER_LABEL = Object.fromEntries(RETAILERS);
+const esc = s => String(s ?? "").replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtN = n => Number(n).toLocaleString("en-AU");
+
+let STATS = [];           // [{retailer, category, items}]
+let retailer = "all", cat = "all", offset = 0;
+const PAGE = 50;
+
+function count(r, c){
+  return STATS.filter(s =>
+    (r==="all" || s.retailer===r) && (c==="all" || s.category===c))
+    .reduce((a,s)=>a+Number(s.items), 0);
+}
+
+function chips(){
+  document.getElementById("retailers").innerHTML = RETAILERS.map(([k,label])=>
+    `<button class="chip" data-k="${k}" aria-pressed="${k===retailer}">
+       ${label}<span class="n">${fmtN(count(k,"all"))}</span></button>`).join("");
+  document.getElementById("cats").innerHTML = CATS.map(([k,label])=>
+    `<button class="chip" data-k="${k}" aria-pressed="${k===cat}">
+       ${label}<span class="n">${fmtN(count(retailer,k))}</span></button>`).join("");
+  const t = count(retailer, cat);
+  document.getElementById("total").innerHTML =
+    `${fmtN(t)} items <span>· ${RETAILER_LABEL[retailer]}${cat!=="all" ? " · "+cat : ""}</span>`;
+}
+
+async function loadPage(reset){
+  if(reset){ offset = 0; document.getElementById("list").innerHTML =
+    `<div class="empty">Loading…</div>`; }
+  let q = `${SUPABASE_URL}/rest/v1/product_search?select=*` +
+    `&order=title.asc&limit=${PAGE}&offset=${offset}`;
+  if(retailer!=="all") q += `&retailer=eq.${retailer}`;
+  if(cat!=="all") q += `&category=eq.${cat}`;
+  const r = await fetch(q, {headers:HDRS});
+  const rows = r.ok ? await r.json() : [];
+  const html = rows.map(p=>`<div class="row">
+    <div>
+      <div class="title"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a></div>
+      <div class="meta">
+        <span class="pill">${RETAILER_LABEL[p.retailer]||esc(p.retailer)}</span>
+        <span class="pill">${esc(p.category||"other")}</span>
+        <span>SKU ${esc(p.sku)}</span>
+        ${p.brand?`<span>${esc(p.brand)}</span>`:''}
+        ${p.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
+      </div>
+    </div>
+    <div class="price">
+      <div class="now">${money(p.current_price)}</div>
+      ${p.current_rrp && Number(p.current_rrp) > Number(p.current_price)
+        ? `<div class="was">${money(p.current_rrp)}</div>` : ''}
+    </div>
+  </div>`).join("");
+  const list = document.getElementById("list");
+  if(reset) list.innerHTML = html ||
+    `<div class="empty">No items here yet — this store/category combination
+     hasn't been crawled successfully. Coverage builds every 2 hours.</div>`;
+  else list.insertAdjacentHTML("beforeend", html);
+  offset += rows.length;
+  const more = document.getElementById("more");
+  more.hidden = rows.length < PAGE;
+}
+
+function wireBar(id, set){
+  document.getElementById(id).addEventListener("click", e=>{
+    const b = e.target.closest(".chip"); if(!b) return;
+    set(b.dataset.k);
+    chips();
+    loadPage(true);
+  });
+}
+wireBar("retailers", v=>retailer=v);
+wireBar("cats", v=>cat=v);
+document.getElementById("more").addEventListener("click", ()=>loadPage(false));
+
+fetch(`${SUPABASE_URL}/rest/v1/catalogue_stats?select=*`, {headers:HDRS})
+  .then(r=>r.json())
+  .then(s=>{ STATS = s; chips(); return loadPage(true); })
+  .catch(()=>{document.getElementById("list").innerHTML =
+    `<div class="empty">Couldn't load the catalogue. Try again shortly.</div>`;});
+</script>
+</body>
+</html>
