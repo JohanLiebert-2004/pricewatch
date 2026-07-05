@@ -7,6 +7,7 @@
   python run.py deals                           show current deals
 """
 import argparse
+import json
 
 import categorize as categorize_mod
 import db
@@ -156,6 +157,13 @@ def cmd_refresh(args):
                     skus.add(sku)
             kwargs["skus"] = sorted(skus)
             print(f"  {len(skus)} SKUs to refresh")
+        cat_state = None
+        if name == "bigw":
+            # stalest-categories-first sweep order, persisted across runs
+            row = conn.execute("SELECT v FROM kv WHERE k=?",
+                               ("bigw_cat_state",)).fetchone()
+            cat_state = json.loads(row["v"]) if row else {}
+            kwargs["state"] = cat_state
         seen = 0
         kept = 0
         snaps = 0
@@ -187,6 +195,12 @@ def cmd_refresh(args):
                   f"{type(e).__name__}: {e}")
             conn.rollback()   # a failed transaction would poison the flush
         snaps += db.bulk_upsert(conn, batch)
+        if cat_state is not None:
+            conn.execute("INSERT OR IGNORE INTO kv (k, v) VALUES (?,?)",
+                         ("bigw_cat_state", "{}"))
+            conn.execute("UPDATE kv SET v=? WHERE k=?",
+                         (json.dumps(cat_state), "bigw_cat_state"))
+            conn.commit()
         print(f"  -> {seen} listings seen, {kept} kept (>= ${MIN_KEEP_PRICE:.0f} "
               f"or already tracked), {snaps} snapshots written\n")
 

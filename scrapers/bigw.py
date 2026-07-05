@@ -73,14 +73,25 @@ class BigWScraper(BaseScraper):
                 leaves.append(f"/{nodes[cid]}/c/{cid}")
         return leaves
 
-    def refresh_listings(self, budget: int = 1600):
-        """Yield ProductRecords from category listing pages (144/page)."""
+    def refresh_listings(self, budget: int = 1600, state: dict | None = None):
+        """Yield ProductRecords from category listing pages (144/page).
+
+        `state` maps category path -> ISO timestamp of its last completed
+        sweep. Categories are visited stalest-first and the dict is mutated
+        in place as each one completes, so a run that gets blocked mid-way
+        doesn't make the next run re-sweep the same head categories while
+        the tail starves — clearance drops anywhere in the store get seen
+        within a few runs.
+        """
+        from datetime import datetime, timezone
+        state = state if state is not None else {}
         used = 0
         try:
             paths = self._category_paths()
         except Blocked:
             raise
         used += 1
+        paths.sort(key=lambda p: state.get(p, ""))
         for path in paths:
             page = 0
             while used < budget:
@@ -98,6 +109,8 @@ class BigWScraper(BaseScraper):
                 page += 1
                 if len(results) < self.per_page or \
                         page >= (org.get("pageCount") or 1):
+                    state[path] = datetime.now(timezone.utc).isoformat(
+                        timespec="seconds")
                     break
             if used >= budget:
                 return
