@@ -57,8 +57,9 @@ python run.py detect
 ```
 
 ## Project conventions
-- Politeness is non-negotiable: do not lower scraper delays below 2s for
-  Akamai-protected retailers; do not parallelize requests to one retailer.
+- Politeness is non-negotiable: do not lower scraper delays below 1.75s for
+  Akamai-protected retailers (owner-approved floor, July 2026; revert to 2s+
+  if blocks increase); do not parallelize requests to one retailer.
 - SQLite is the local dev DB; setting DATABASE_URL switches everything to
   Postgres. Never commit pricewatch.db or any .env file (see .gitignore).
 - Retailers block datacenter IPs intermittently; a Blocked exception is
