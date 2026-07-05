@@ -118,7 +118,7 @@ def cmd_crawl(args):
           f"(rerun to continue through the queue)")
 
 
-MIN_KEEP_PRICE = 50.0   # don't ingest NEW items normally under this - deals
+MIN_KEEP_PRICE = 40.0   # don't ingest NEW items normally under this - deals
                         # on cheap items aren't worth tracking. Items already
                         # in the DB always stay refreshed so a big price DROP
                         # on an expensive item (even to $5) is still captured.

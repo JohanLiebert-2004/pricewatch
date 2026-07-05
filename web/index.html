@@ -26,11 +26,21 @@
   .brand em{font-style:italic;color:var(--flag)}
   .tag{font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--muted);
     margin-top:10px;text-transform:uppercase;letter-spacing:.08em}
-  .bar{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 26px}
+  .nav{margin-top:14px;font-family:"Spline Sans Mono",monospace;font-size:13px}
+  .nav a{text-decoration:none;border-bottom:2px solid var(--flag);padding-bottom:1px}
+  .nav a:hover{color:var(--flag)}
+  .barlabel{font-family:"Spline Sans Mono",monospace;font-size:10px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.1em;margin:16px 0 6px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 4px}
   .chip{font-family:"Spline Sans Mono",monospace;font-size:12px;border:1px solid var(--line);
     background:var(--card);padding:7px 12px;border-radius:999px;cursor:pointer;
     color:var(--muted);transition:.15s}
   .chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .section-h{font-family:Fraunces,serif;font-weight:600;font-size:22px;
+    margin:34px 0 0;padding-bottom:8px;border-bottom:2px solid var(--ink);
+    text-transform:capitalize;display:flex;align-items:baseline;gap:10px}
+  .section-h .count{font-family:"Spline Sans Mono",monospace;font-size:12px;
+    color:var(--muted);font-weight:400}
   .row{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:baseline;
     padding:18px 0;border-bottom:1px solid var(--line)}
   .off{font-family:Fraunces,serif;font-weight:600;font-size:30px;line-height:1;
@@ -60,10 +70,32 @@
 <body>
 <header><div class="wrap">
   <h1 class="brand">Under<em>priced</em></h1>
-  <div class="tag">live pricing errors across australian retailers · updates every 6h</div>
+  <div class="tag">live pricing errors across australian retailers · items normally $40+ · updates every 2h</div>
+  <div class="nav"><a href="search.html">Search any product's price history →</a></div>
 </div></header>
 
 <main class="wrap">
+  <div class="barlabel">Store</div>
+  <div class="bar" id="retailers">
+    <button class="chip" data-r="all" aria-pressed="true">All stores</button>
+    <button class="chip" data-r="kmart" aria-pressed="false">Kmart</button>
+    <button class="chip" data-r="bigw" aria-pressed="false">Big W</button>
+    <button class="chip" data-r="officeworks" aria-pressed="false">Officeworks</button>
+    <button class="chip" data-r="target" aria-pressed="false">Target</button>
+  </div>
+  <div class="barlabel">Category</div>
+  <div class="bar" id="cats">
+    <button class="chip" data-c="all" aria-pressed="true">All</button>
+    <button class="chip" data-c="tech" aria-pressed="false">Tech</button>
+    <button class="chip" data-c="home" aria-pressed="false">Home</button>
+    <button class="chip" data-c="kitchen" aria-pressed="false">Kitchen</button>
+    <button class="chip" data-c="toys" aria-pressed="false">Toys &amp; Baby</button>
+    <button class="chip" data-c="clothing" aria-pressed="false">Clothing</button>
+    <button class="chip" data-c="beauty" aria-pressed="false">Beauty</button>
+    <button class="chip" data-c="books" aria-pressed="false">Books &amp; Stationery</button>
+    <button class="chip" data-c="other" aria-pressed="false">Other</button>
+  </div>
+  <div class="barlabel">Type</div>
   <div class="bar" id="filters">
     <button class="chip" data-f="all" aria-pressed="true">Everything</button>
     <button class="chip" data-f="err" aria-pressed="false">Error-tier (80%+)</button>
@@ -80,6 +112,7 @@
     before buying. Marketplace items are sold by third-party sellers.<br>
     "Cheaper elsewhere" compares the same barcode across stores; dashed = fuzzy
     (name-matched, unverified) rather than an exact barcode match.
+    Categories are inferred from product names and may occasionally miss.
   </div>
 </div></footer>
 
@@ -94,7 +127,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 async function loadDeals(){
   if (SUPABASE_URL && SUPABASE_ANON_KEY){
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/deal_feed?select=*&order=score.desc&limit=200`,
+      `${SUPABASE_URL}/rest/v1/deal_feed?select=*&order=score.desc&limit=500`,
       {headers:{apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}`}});
     if(r.ok) return r.json();
   }
@@ -102,61 +135,101 @@ async function loadDeals(){
   return r.ok ? r.json() : [];
 }
 
+// ---- categorisation (retailers don't expose categories; infer from title) --
+const CAT_RULES = [
+  ["tech",     /\b(laptop|notebook pc|monitor|headphone|earbud|ear ?pod|speaker|soundbar|tablet|ipad|iphone|galaxy|pixel|phone|charger|power ?bank|usb|hdmi|ssd|hard ?drive|mouse|keyboard|printer|ink|toner|camera|webcam|smart ?watch|fitbit|garmin|television|\btv\b|console|playstation|xbox|nintendo|router|modem|drone|projector|chromebook|macbook|airpod|kindle|e-?reader|gpu|cpu|ram\b)\b/i],
+  ["kitchen",  /\b(air ?fryer|fryer|rice cooker|slow cooker|multi ?cooker|kettle|toaster|blender|mixer|coffee|espresso|frypan|saucepan|pan set|cookware|knife|knives|chopping|dinner ?set|plate|bowl set|mug|glassware|jug|bakeware|oven tray|microwave|dishwasher|utensil|cutlery|thermomix|food processor)\b/i],
+  ["toys",     /\b(toy|lego|duplo|plush|doll|barbie|nerf|puzzle|board game|playset|play set|action figure|hot wheels|paw patrol|bluey|pokemon|disney|marvel|scooter|trampoline|baby|infant|nappy|nappies|pram|stroller|cot\b|bassinet|bottle .*(baby|silicone)|nanobebe|teether|kids?\b|children)\b/i],
+  ["clothing", /\b(t-?shirt|shirt|tee\b|trunks|shorts|jeans|pants|leggings|dress|skirt|jacket|hoodie|jumper|sweater|coat|sock|underwear|bra\b|briefs|pyjama|pajama|sneaker|shoe|boot|sandal|thong|slipper|cap\b|beanie|hat\b|scarf|glove|swimwear|bikini|rashie|wig\b|costume|racing suit)\b/i],
+  ["beauty",   /\b(skincare|skin care|serum|toner|moisturis|cleanser|sunscreen|spf\b|makeup|make-up|mascara|lipstick|foundation|concealer|eyeshadow|shampoo|conditioner|hair ?dryer|straightener|curler|perfume|fragrance|cologne|nail polish|razor|shaver|trimmer|epilator|oxx\b)\b/i],
+  ["books",    /\b(book\b|novel|paperback|hardcover|colouring|coloring|notebook|journal|diary|planner|pen\b|pencil|marker|highlighter|stapler|tape\b|post-?it|envelope|paper\b|folder|binder|calculator|whiteboard|easel)\b/i],
+  ["home",     /\b(chair|desk|table|shelf|shelving|bookcase|drawer|cabinet|sofa|couch|lounge|bed\b|mattress|quilt|doona|duvet|sheet set|pillow|cushion|towel|blanket|throw\b|rug\b|mat\b|curtain|blind|lamp|light\b|lighting|mirror|vase|candle|photo frame|clock|storage|organiser|organizer|basket|hamper|heater|fan\b|air purifier|humidifier|vacuum|mop\b|broom|laundry|ironing|garden|plant\b|pot\b|bbq|outdoor|gazebo|jar\b|container)\b/i],
+];
+function categorize(title){
+  const t = String(title || "");
+  for(const [cat, re] of CAT_RULES) if(re.test(t)) return cat;
+  return "other";
+}
+
 // ---- render ------------------------------------------------------------
 const money = n => "$"+Number(n).toFixed(2);
-let ALL = [], filter = "all";
+const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target"};
+let ALL = [], filter = "all", retailer = "all", cat = "all";
 
 function matches(d){
-  if(filter==="all") return true;
-  if(filter==="err") return d.error_tier;
-  if(filter==="cross") return String(d.signal).startsWith("cross_retailer");
-  if(filter==="mkt") return d.is_marketplace;
+  if(retailer !== "all" && d.retailer !== retailer) return false;
+  if(cat !== "all" && d._cat !== cat) return false;
+  if(filter === "err") return d.error_tier;
+  if(filter === "cross") return String(d.signal).startsWith("cross_retailer");
+  if(filter === "mkt") return d.is_marketplace;
   return true;
+}
+
+function rowHtml(d){
+  const fuzzy = String(d.signal)==="cross_retailer_fuzzy";
+  const sigLabel = {
+    rrp_gap:"vs RRP", history_drop:"vs its usual price",
+    cross_retailer:"vs other stores", cross_retailer_fuzzy:"vs other stores ~"
+  }[d.signal] || d.signal;
+  return `<div class="row ${d.error_tier?'err':''}">
+    <div class="off">${d.pct_off}%</div>
+    <div>
+      <div class="title"><a href="${d.url}" target="_blank" rel="noopener">${d.title}</a></div>
+      <div class="meta">
+        <span class="pill">${RETAILER_LABEL[d.retailer]||d.retailer}</span>
+        <span class="pill">${d._cat}</span>
+        <span>${sigLabel}</span>
+        ${d.error_tier?'<span class="pill err">error-tier</span>':''}
+        ${d.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
+        ${fuzzy?'<span class="pill fuzzy">fuzzy match</span>':''}
+      </div>
+    </div>
+    <div class="price">
+      <div class="now">${money(d.price)}</div>
+      ${d.reference_price?`<div class="was">${money(d.reference_price)}</div>`:''}
+    </div>
+  </div>`;
 }
 
 function render(){
   const list = document.getElementById("list");
   const items = ALL.filter(matches);
   if(!items.length){ list.innerHTML =
-    `<div class="empty">Nothing here yet. Once the crawler has a few days of
-     price history, drops show up automatically.</div>`; return; }
-  list.innerHTML = items.map(d=>{
-    const fuzzy = String(d.signal)==="cross_retailer_fuzzy";
-    const sigLabel = {
-      rrp_gap:"vs RRP", history_drop:"vs its usual price",
-      cross_retailer:"vs other stores", cross_retailer_fuzzy:"vs other stores ~"
-    }[d.signal] || d.signal;
-    return `<div class="row ${d.error_tier?'err':''}">
-      <div class="off">${d.pct_off}%</div>
-      <div>
-        <div class="title"><a href="${d.url}" target="_blank" rel="noopener">${d.title}</a></div>
-        <div class="meta">
-          <span class="pill">${d.retailer}</span>
-          <span>${sigLabel}</span>
-          ${d.error_tier?'<span class="pill err">error-tier</span>':''}
-          ${d.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
-          ${fuzzy?'<span class="pill fuzzy">fuzzy match</span>':''}
-        </div>
-      </div>
-      <div class="price">
-        <div class="now">${money(d.price)}</div>
-        ${d.reference_price?`<div class="was">${money(d.reference_price)}</div>`:''}
-      </div>
-    </div>`;
-  }).join("");
+    `<div class="empty">Nothing here for this combination yet. Once the crawler
+     has a few days of price history, drops show up automatically.</div>`; return; }
+  if(retailer === "all"){
+    // group into a section per retailer
+    const order = ["kmart","bigw","officeworks","target"];
+    const groups = {};
+    for(const d of items) (groups[d.retailer] = groups[d.retailer] || []).push(d);
+    list.innerHTML = order.filter(r=>groups[r]).map(r=>
+      `<h2 class="section-h">${RETAILER_LABEL[r]||r}
+         <span class="count">${groups[r].length} deal${groups[r].length>1?'s':''}</span></h2>` +
+      groups[r].map(rowHtml).join("")
+    ).join("");
+  }else{
+    list.innerHTML = items.map(rowHtml).join("");
+  }
 }
 
-document.getElementById("filters").addEventListener("click", e=>{
-  const b = e.target.closest(".chip"); if(!b) return;
-  filter = b.dataset.f;
-  document.querySelectorAll(".chip").forEach(c=>
-    c.setAttribute("aria-pressed", c===b));
-  render();
-});
+function wireBar(id, attr, set){
+  document.getElementById(id).addEventListener("click", e=>{
+    const b = e.target.closest(".chip"); if(!b) return;
+    set(b.dataset[attr]);
+    document.querySelectorAll(`#${id} .chip`).forEach(c=>
+      c.setAttribute("aria-pressed", c===b));
+    render();
+  });
+}
+wireBar("retailers","r", v=>retailer=v);
+wireBar("cats","c", v=>cat=v);
+wireBar("filters","f", v=>filter=v);
 
-loadDeals().then(d=>{ALL=d; render();})
-  .catch(()=>{document.getElementById("list").innerHTML =
-    `<div class="empty">Couldn't load deals. Check the data source settings.</div>`;});
+loadDeals().then(d=>{
+  ALL = d.map(x=>({...x, _cat: categorize(x.title)}));
+  render();
+}).catch(()=>{document.getElementById("list").innerHTML =
+  `<div class="empty">Couldn't load deals. Check the data source settings.</div>`;});
 </script>
 </body>
 </html>

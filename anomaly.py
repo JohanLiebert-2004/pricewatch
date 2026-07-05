@@ -15,7 +15,7 @@ HISTORY_DROP_MIN = 0.50     # 50%+ below own recent median (needs >= 3 snapshots
 CROSS_RETAILER_MIN = 0.50   # 50%+ below cross-retailer median (needs >= 2 others)
 BIG_DROP = 0.80             # 80%+ = "error-tier" deal, worth an instant alert
 MIN_PRICE = 1.0             # ignore sub-$1 noise
-MIN_REFERENCE = 50.0        # a deal only counts if the item NORMALLY costs
+MIN_REFERENCE = 40.0        # a deal only counts if the item NORMALLY costs
                             # this much - nobody cares about cheap items on
                             # sale. (Gates the reference price, not the sale
                             # price: a $500 item at $20 must still fire.)
