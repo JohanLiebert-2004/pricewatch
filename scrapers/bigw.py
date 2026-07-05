@@ -23,7 +23,7 @@ class BigWScraper(BaseScraper):
     name = "bigw"
     sitemap_index = "https://www.bigw.com.au/sitemap.xml"
     product_url_pattern = r"/product/.+/p/\d+"
-    delay = 2.5
+    delay = 2.0   # project floor for Akamai-fronted sites; do not go lower
     needs_impersonation = True
     warmup_url = "https://www.bigw.com.au/"
 
