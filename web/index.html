@@ -8,106 +8,32 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Spline+Sans+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --ink:#141210; --paper:#f7f2e9; --line:#e3dac9;
-    --flag:#c8340f; --deal:#1c6b4a; --muted:#6f665a;
-    --card:#fffdf8; --soft:#efe8da;
-  }
-  @media (prefers-color-scheme: dark){
-    :root{
-      --ink:#ece5d8; --paper:#16130f; --line:#2e2921;
-      --flag:#ff6a3d; --deal:#54b389; --muted:#9a9184;
-      --card:#1e1a15; --soft:#211d17;
-    }
-  }
-  *{box-sizing:border-box}
-  html{scroll-behavior:smooth}
-  body{margin:0;background:var(--paper);color:var(--ink);
-    font-family:Inter,system-ui,sans-serif;line-height:1.5;
-    -webkit-font-smoothing:antialiased}
-  a{color:inherit}
-  .wrap{max-width:980px;margin:0 auto;padding:0 20px}
-  header{padding:34px 0 0}
-  .brand{font-family:Fraunces,serif;font-weight:600;font-size:clamp(38px,7vw,64px);
-    letter-spacing:-.02em;line-height:.95;margin:0}
-  .brand em{font-style:italic;color:var(--flag)}
-  .tag{font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--muted);
-    margin-top:12px;text-transform:uppercase;letter-spacing:.08em}
-  .stats{display:flex;gap:34px;flex-wrap:wrap;margin:22px 0 26px}
-  .stat b{font-family:Fraunces,serif;font-weight:600;font-size:26px;display:block;
-    line-height:1.1;font-variant-numeric:tabular-nums}
-  .stat span{font-family:"Spline Sans Mono",monospace;font-size:10px;
-    text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
-  .tabs{display:flex;gap:6px;border-bottom:2px solid var(--ink)}
-  .tab{font-family:"Spline Sans Mono",monospace;font-size:13px;text-decoration:none;
-    padding:10px 18px;border:1px solid var(--line);border-bottom:none;
-    border-radius:10px 10px 0 0;color:var(--muted);background:var(--soft);
-    transition:.15s}
-  .tab:hover{color:var(--ink)}
-  .tab.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-  .barlabel{font-family:"Spline Sans Mono",monospace;font-size:10px;color:var(--muted);
-    text-transform:uppercase;letter-spacing:.1em;margin:18px 0 7px}
-  .bar{display:flex;gap:8px;flex-wrap:wrap}
-  .chip{font-family:"Spline Sans Mono",monospace;font-size:12px;border:1px solid var(--line);
-    background:var(--card);padding:7px 13px;border-radius:999px;cursor:pointer;
-    color:var(--muted);transition:.15s}
-  .chip:hover{border-color:var(--muted);color:var(--ink)}
-  .chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-  .section-h{font-family:Fraunces,serif;font-weight:600;font-size:23px;
-    margin:38px 0 4px;padding-bottom:9px;border-bottom:2px solid var(--ink);
-    display:flex;align-items:baseline;gap:12px}
-  .section-h .count{font-family:"Spline Sans Mono",monospace;font-size:11px;
-    color:var(--muted);font-weight:400;letter-spacing:.06em;text-transform:uppercase}
-  .row{display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:baseline;
-    padding:18px 14px;margin:0 -14px;border-bottom:1px solid var(--line);
-    border-radius:12px;transition:background .15s}
-  .row:hover{background:var(--card)}
-  .row.err{box-shadow:inset 3px 0 0 var(--flag)}
-  .off{font-family:Fraunces,serif;font-weight:600;font-size:31px;line-height:1;
-    min-width:86px;color:var(--deal);font-variant-numeric:tabular-nums}
-  .row.err .off{color:var(--flag)}
-  .title{font-weight:500}
-  .title a{text-decoration:none}
-  .title a:hover{text-decoration:underline;text-decoration-color:var(--flag)}
-  .meta{font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--muted);
-    margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .pill{border:1px solid var(--line);border-radius:5px;padding:1px 8px;background:var(--paper)}
-  .pill.mkt{border-color:var(--flag);color:var(--flag)}
-  .pill.err{background:var(--flag);color:#fff;border-color:var(--flag)}
-  .pill.fuzzy{border-style:dashed}
-  .price{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-  .price .now{font-weight:600;font-size:19px}
-  .price .was{color:var(--muted);text-decoration:line-through;font-size:13px}
-  .empty{padding:70px 0;text-align:center;color:var(--muted);
-    font-family:"Spline Sans Mono",monospace;font-size:13px;line-height:2}
-  footer{color:var(--muted);font-size:13px;padding:38px 0;border-top:2px solid var(--ink);
-    margin-top:42px}
-  .note{font-family:"Spline Sans Mono",monospace;font-size:11px;color:var(--muted);
-    line-height:1.8}
-  @media(max-width:560px){
-    .row{grid-template-columns:auto 1fr;gap:8px 14px}
-    .price{grid-column:2;text-align:left;margin-top:2px}
-    .stats{gap:22px}
-    .tab{padding:9px 12px;font-size:12px}
-  }
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Spline+Sans+Mono:wght@400;500&family=Inter:wght@400;500;600;650&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><div class="wrap">
-  <h1 class="brand">Under<em>priced</em></h1>
-  <div class="tag">live pricing errors across australian retailers · items normally $40+ · updates hourly</div>
+
+<nav class="topnav"><div class="wrap navrow">
+  <a class="logo" href="index.html">Under<em>priced</em></a>
+  <div class="navlinks">
+    <a href="index.html" class="active">Deals</a>
+    <a href="catalogue.html">Catalogue</a>
+    <a href="search.html">Search</a>
+  </div>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div class="eyebrow"><span class="live"></span> live price intelligence · australia</div>
+  <h1 class="display">Retail pricing <em>errors</em>,<br>caught within the hour.</h1>
+  <p class="sub">Every price at Kmart, Big W, Officeworks and Target, watched
+    around the clock. When something sells far below what it normally costs,
+    it appears here — often before anyone else notices.</p>
   <div class="stats">
     <div class="stat"><b id="s-deals">–</b><span>live deals</span></div>
     <div class="stat"><b id="s-items">–</b><span>items tracked</span></div>
     <div class="stat"><b>4</b><span>stores</span></div>
+    <div class="stat"><b>24/7</b><span>monitoring</span></div>
   </div>
-  <nav class="tabs">
-    <a class="tab active" href="index.html">Deals</a>
-    <a class="tab" href="catalogue.html">Catalogue</a>
-    <a class="tab" href="search.html">Search</a>
-  </nav>
 </div></header>
 
 <main class="wrap">
@@ -141,11 +67,12 @@
   <div id="list"><div class="empty">Loading the latest finds…</div></div>
 </main>
 
-<footer><div class="wrap">
+<footer><div class="wrap footgrid">
+  <div class="fbrand">Under<em>priced</em></div>
   <div class="note">
     Prices are captured automatically and can change or sell out fast. Retailers
     may cancel orders placed on genuine pricing errors — always check the listing
-    before buying. Marketplace items are sold by third-party sellers.<br>
+    before buying. Marketplace items are sold by third-party sellers.
     "Cheaper elsewhere" compares the same barcode across stores; dashed = fuzzy
     (name-matched, unverified) rather than an exact barcode match.
     Categories are inferred from product names and may occasionally miss.
@@ -207,13 +134,13 @@ function matches(d){
   return true;
 }
 
-function rowHtml(d){
+function rowHtml(d, i){
   const fuzzy = String(d.signal)==="cross_retailer_fuzzy";
   const sigLabel = {
     rrp_gap:"vs RRP", history_drop:"vs its usual price",
     cross_retailer:"vs other stores", cross_retailer_fuzzy:"vs other stores ~"
   }[d.signal] || d.signal;
-  return `<div class="row ${d.error_tier?'err':''}">
+  return `<div class="row ${d.error_tier?'err':''}" style="animation-delay:${Math.min(i*45,450)}ms">
     <div class="off">${d.pct_off}%</div>
     <div>
       <div class="title"><a href="${d.url}" target="_blank" rel="noopener">${d.title}</a></div>
