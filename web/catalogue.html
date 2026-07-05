@@ -4,84 +4,107 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Catalogue — Underpriced</title>
+<meta name="description" content="Browse every product tracked by Underpriced, by store, category and price.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Spline+Sans+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --ink:#12100e; --paper:#faf6ef; --line:#e2d9c9;
-    --flag:#c8340f; --deal:#1c6b4a; --muted:#6f665a; --card:#fffdf9;
+    --ink:#141210; --paper:#f7f2e9; --line:#e3dac9;
+    --flag:#c8340f; --deal:#1c6b4a; --muted:#6f665a;
+    --card:#fffdf8; --soft:#efe8da;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#ece5d8; --paper:#16130f; --line:#2e2921;
+      --flag:#ff6a3d; --deal:#54b389; --muted:#9a9184;
+      --card:#1e1a15; --soft:#211d17;
+    }
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);
     font-family:Inter,system-ui,sans-serif;line-height:1.5;
     -webkit-font-smoothing:antialiased}
   a{color:inherit}
-  .wrap{max-width:960px;margin:0 auto;padding:0 20px}
-  header{border-bottom:2px solid var(--ink);padding:28px 0 20px;margin-bottom:6px}
-  .brand{font-family:Fraunces,serif;font-weight:600;font-size:clamp(34px,7vw,60px);
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px}
+  header{padding:34px 0 0}
+  .brand{font-family:Fraunces,serif;font-weight:600;font-size:clamp(34px,6vw,52px);
     letter-spacing:-.02em;line-height:.95;margin:0}
   .brand em{font-style:italic;color:var(--flag)}
   .tag{font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--muted);
-    margin-top:10px;text-transform:uppercase;letter-spacing:.08em}
-  .nav{margin-top:14px;font-family:"Spline Sans Mono",monospace;font-size:13px;
-    display:flex;gap:22px;flex-wrap:wrap}
-  .nav a{text-decoration:none;border-bottom:2px solid var(--flag);padding-bottom:1px}
-  .nav a:hover{color:var(--flag)}
+    margin-top:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:22px}
+  .tabs{display:flex;gap:6px;border-bottom:2px solid var(--ink)}
+  .tab{font-family:"Spline Sans Mono",monospace;font-size:13px;text-decoration:none;
+    padding:10px 18px;border:1px solid var(--line);border-bottom:none;
+    border-radius:10px 10px 0 0;color:var(--muted);background:var(--soft);
+    transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
   .barlabel{font-family:"Spline Sans Mono",monospace;font-size:10px;color:var(--muted);
-    text-transform:uppercase;letter-spacing:.1em;margin:16px 0 6px}
-  .bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 4px}
+    text-transform:uppercase;letter-spacing:.1em;margin:18px 0 7px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap}
   .chip{font-family:"Spline Sans Mono",monospace;font-size:12px;border:1px solid var(--line);
-    background:var(--card);padding:7px 12px;border-radius:999px;cursor:pointer;
+    background:var(--card);padding:7px 13px;border-radius:999px;cursor:pointer;
     color:var(--muted);transition:.15s}
+  .chip:hover{border-color:var(--muted);color:var(--ink)}
   .chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-  .chip .n{opacity:.65;margin-left:4px}
-  .pricebar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 4px}
+  .chip .n{opacity:.6;margin-left:5px}
+  .pricebar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .pricebar input{font-family:"Spline Sans Mono",monospace;font-size:13px;width:110px;
-    padding:7px 10px;border:1px solid var(--line);border-radius:8px;
-    background:var(--card);color:var(--ink);outline:none}
+    padding:8px 11px;border:1px solid var(--line);border-radius:9px;
+    background:var(--card);color:var(--ink);outline:none;transition:.15s}
   .pricebar input:focus{border-color:var(--ink)}
   .pricebar .dash{color:var(--muted)}
   .pricebar button{font-family:"Spline Sans Mono",monospace;font-size:12px;cursor:pointer;
     background:var(--ink);color:var(--paper);border:1px solid var(--ink);
-    border-radius:999px;padding:7px 16px}
+    border-radius:999px;padding:8px 18px;transition:.15s}
   .pricebar button.clear{background:var(--card);color:var(--muted);border-color:var(--line)}
-  .total{font-family:Fraunces,serif;font-weight:600;font-size:20px;margin:26px 0 0}
-  .total span{font-family:"Spline Sans Mono",monospace;font-size:12px;
-    color:var(--muted);font-weight:400}
+  .pricebar button.clear:hover{color:var(--ink);border-color:var(--muted)}
+  .total{font-family:Fraunces,serif;font-weight:600;font-size:21px;margin:28px 0 0;
+    font-variant-numeric:tabular-nums}
+  .total span{font-family:"Spline Sans Mono",monospace;font-size:11px;
+    color:var(--muted);font-weight:400;letter-spacing:.05em;text-transform:uppercase}
   .row{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:baseline;
-    padding:14px 0;border-bottom:1px solid var(--line)}
+    padding:14px;margin:0 -14px;border-bottom:1px solid var(--line);
+    border-radius:12px;transition:background .15s}
+  .row:hover{background:var(--card)}
   .title{font-weight:500}
   .title a{text-decoration:none}
-  .title a:hover{text-decoration:underline}
+  .title a:hover{text-decoration:underline;text-decoration-color:var(--flag)}
   .meta{font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--muted);
-    margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .pill{border:1px solid var(--line);border-radius:4px;padding:1px 7px}
+    margin-top:5px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .pill{border:1px solid var(--line);border-radius:5px;padding:1px 8px;background:var(--paper)}
   .pill.mkt{border-color:var(--flag);color:var(--flag)}
   .price{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .price .now{font-weight:600;font-size:17px}
   .price .was{color:var(--muted);text-decoration:line-through;font-size:13px}
-  .more{display:block;margin:26px auto;font-family:"Spline Sans Mono",monospace;
+  .more{display:block;margin:28px auto;font-family:"Spline Sans Mono",monospace;
     font-size:13px;cursor:pointer;background:var(--ink);color:var(--paper);
-    border:1px solid var(--ink);border-radius:8px;padding:11px 26px}
-  .more[disabled]{opacity:.4;cursor:default}
-  .empty{padding:60px 0;text-align:center;color:var(--muted)}
-  footer{color:var(--muted);font-size:13px;padding:34px 0;border-top:2px solid var(--ink);
-    margin-top:20px}
+    border:1px solid var(--ink);border-radius:999px;padding:12px 30px;transition:.15s}
+  .more:hover{opacity:.85}
+  .empty{padding:70px 0;text-align:center;color:var(--muted);
+    font-family:"Spline Sans Mono",monospace;font-size:13px;line-height:2}
+  footer{color:var(--muted);font-size:13px;padding:38px 0;border-top:2px solid var(--ink);
+    margin-top:42px}
   .note{font-family:"Spline Sans Mono",monospace;font-size:11px;color:var(--muted);
-    line-height:1.7}
-  @media(max-width:560px){.row{grid-template-columns:1fr}
-    .price{text-align:left;margin-top:2px}}
+    line-height:1.8}
+  @media(max-width:560px){
+    .row{grid-template-columns:1fr}
+    .price{text-align:left;margin-top:2px}
+    .tab{padding:9px 12px;font-size:12px}
+  }
 </style>
 </head>
 <body>
 <header><div class="wrap">
   <h1 class="brand">The <em>catalogue</em></h1>
-  <div class="tag">every product we track, by store and category</div>
-  <div class="nav">
-    <a href="index.html">← Deal feed</a>
-    <a href="search.html">Price search →</a>
-  </div>
+  <div class="tag">every product we track, by store, category and price</div>
+  <nav class="tabs">
+    <a class="tab" href="index.html">Deals</a>
+    <a class="tab active" href="catalogue.html">Catalogue</a>
+    <a class="tab" href="search.html">Search</a>
+  </nav>
 </div></header>
 
 <main class="wrap">
@@ -198,7 +221,7 @@ async function loadPage(reset){
   const list = document.getElementById("list");
   if(reset) list.innerHTML = html ||
     `<div class="empty">No items here yet — this store/category combination
-     hasn't been crawled successfully. Coverage builds every 2 hours.</div>`;
+     hasn't been crawled successfully.<br>Coverage builds every half hour.</div>`;
   else list.insertAdjacentHTML("beforeend", html);
   offset += rows.length;
   const more = document.getElementById("more");

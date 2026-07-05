@@ -4,74 +4,96 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Price search — Underpriced</title>
+<meta name="description" content="Look up the latest tracked price of any product by name or SKU across Kmart, Big W, Officeworks and Target.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Spline+Sans+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --ink:#12100e; --paper:#faf6ef; --line:#e2d9c9;
-    --flag:#c8340f; --deal:#1c6b4a; --muted:#6f665a; --card:#fffdf9;
+    --ink:#141210; --paper:#f7f2e9; --line:#e3dac9;
+    --flag:#c8340f; --deal:#1c6b4a; --muted:#6f665a;
+    --card:#fffdf8; --soft:#efe8da;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#ece5d8; --paper:#16130f; --line:#2e2921;
+      --flag:#ff6a3d; --deal:#54b389; --muted:#9a9184;
+      --card:#1e1a15; --soft:#211d17;
+    }
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);
     font-family:Inter,system-ui,sans-serif;line-height:1.5;
     -webkit-font-smoothing:antialiased}
   a{color:inherit}
-  .wrap{max-width:960px;margin:0 auto;padding:0 20px}
-  header{border-bottom:2px solid var(--ink);padding:28px 0 20px;margin-bottom:6px}
-  .brand{font-family:Fraunces,serif;font-weight:600;font-size:clamp(34px,7vw,60px);
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px}
+  header{padding:34px 0 0}
+  .brand{font-family:Fraunces,serif;font-weight:600;font-size:clamp(34px,6vw,52px);
     letter-spacing:-.02em;line-height:.95;margin:0}
   .brand em{font-style:italic;color:var(--flag)}
   .tag{font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--muted);
-    margin-top:10px;text-transform:uppercase;letter-spacing:.08em}
-  .nav{margin-top:14px;font-family:"Spline Sans Mono",monospace;font-size:13px}
-  .nav a{text-decoration:none;border-bottom:2px solid var(--flag);padding-bottom:1px}
-  .nav a:hover{color:var(--flag)}
-  form{display:flex;gap:10px;margin:26px 0 8px;flex-wrap:wrap}
+    margin-top:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:22px}
+  .tabs{display:flex;gap:6px;border-bottom:2px solid var(--ink)}
+  .tab{font-family:"Spline Sans Mono",monospace;font-size:13px;text-decoration:none;
+    padding:10px 18px;border:1px solid var(--line);border-bottom:none;
+    border-radius:10px 10px 0 0;color:var(--muted);background:var(--soft);
+    transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  form.search{display:flex;gap:10px;margin:30px 0 8px;flex-wrap:wrap}
   input[type=search]{flex:1;min-width:240px;font:inherit;font-size:16px;
-    padding:12px 16px;border:1px solid var(--line);border-radius:8px;
-    background:var(--card);color:var(--ink);outline:none}
+    padding:13px 18px;border:1px solid var(--line);border-radius:12px;
+    background:var(--card);color:var(--ink);outline:none;transition:.15s}
   input[type=search]:focus{border-color:var(--ink)}
   button.go{font-family:"Spline Sans Mono",monospace;font-size:14px;cursor:pointer;
     background:var(--ink);color:var(--paper);border:1px solid var(--ink);
-    border-radius:8px;padding:12px 22px}
+    border-radius:12px;padding:13px 26px;transition:.15s}
+  button.go:hover{opacity:.85}
   .hint{font-family:"Spline Sans Mono",monospace;font-size:11px;color:var(--muted);
-    margin-bottom:20px}
+    margin-bottom:22px}
   .row{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:baseline;
-    padding:18px 0;border-bottom:1px solid var(--line)}
+    padding:16px 14px;margin:0 -14px;border-bottom:1px solid var(--line);
+    border-radius:12px;transition:background .15s}
+  .row:hover{background:var(--card)}
   .title{font-weight:500}
   .title a{text-decoration:none}
-  .title a:hover{text-decoration:underline}
+  .title a:hover{text-decoration:underline;text-decoration-color:var(--flag)}
   .meta{font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--muted);
     margin-top:5px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .pill{border:1px solid var(--line);border-radius:4px;padding:1px 7px}
+  .pill{border:1px solid var(--line);border-radius:5px;padding:1px 8px;background:var(--paper)}
   .pill.mkt{border-color:var(--flag);color:var(--flag)}
   .price{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .price .now{font-weight:600;font-size:18px}
   .price .was{color:var(--muted);text-decoration:line-through;font-size:13px}
   .price .asof{font-family:"Spline Sans Mono",monospace;font-size:11px;color:var(--muted)}
-  .empty{padding:60px 0;text-align:center;color:var(--muted)}
-  footer{color:var(--muted);font-size:13px;padding:34px 0;border-top:2px solid var(--ink);
-    margin-top:20px}
+  .empty{padding:70px 0;text-align:center;color:var(--muted);
+    font-family:"Spline Sans Mono",monospace;font-size:13px;line-height:2}
+  footer{color:var(--muted);font-size:13px;padding:38px 0;border-top:2px solid var(--ink);
+    margin-top:42px}
   .note{font-family:"Spline Sans Mono",monospace;font-size:11px;color:var(--muted);
-    line-height:1.7}
-  @media(max-width:560px){.row{grid-template-columns:1fr}
-    .price{text-align:left;margin-top:2px}}
+    line-height:1.8}
+  @media(max-width:560px){
+    .row{grid-template-columns:1fr}
+    .price{text-align:left;margin-top:2px}
+    .tab{padding:9px 12px;font-size:12px}
+  }
 </style>
 </head>
 <body>
 <header><div class="wrap">
   <h1 class="brand">Price <em>search</em></h1>
   <div class="tag">look up any tracked product by name or sku · 4 au retailers</div>
-  <div class="nav" style="display:flex;gap:22px;flex-wrap:wrap">
-    <a href="index.html">← Back to the deal feed</a>
-    <a href="catalogue.html">Browse the full catalogue →</a>
-  </div>
+  <nav class="tabs">
+    <a class="tab" href="index.html">Deals</a>
+    <a class="tab" href="catalogue.html">Catalogue</a>
+    <a class="tab active" href="search.html">Search</a>
+  </nav>
 </div></header>
 
 <main class="wrap">
-  <form id="f">
-    <input type="search" id="q" placeholder="Product name or SKU — e.g. air fryer, 9903273875"
+  <form class="search" id="f">
+    <input type="search" id="q" placeholder="Product name or SKU — e.g. air fryer, 43549788"
            autocomplete="off" autofocus>
     <button class="go" type="submit">Search</button>
   </form>
@@ -125,7 +147,7 @@ async function search(q){
   }
   if(!rows.length){
     list.innerHTML = `<div class="empty">No tracked product matches
-      “${esc(q)}”. We cover Kmart, Big W, Officeworks and Target.</div>`;
+      “${esc(q)}”.<br>We cover Kmart, Big W, Officeworks and Target.</div>`;
     return;
   }
   list.innerHTML = rows.map(p=>`<div class="row">
@@ -133,6 +155,7 @@ async function search(q){
       <div class="title"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a></div>
       <div class="meta">
         <span class="pill">${RETAILER_LABEL[p.retailer]||esc(p.retailer)}</span>
+        ${p.category?`<span class="pill">${esc(p.category)}</span>`:''}
         <span>SKU ${esc(p.sku)}</span>
         ${p.brand?`<span>${esc(p.brand)}</span>`:''}
         ${p.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
