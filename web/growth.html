@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Growth — Underpriced</title>
+<meta name="description" content="Daily growth of the Underpriced price database: new items tracked and price checks per day.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Spline+Sans+Mono:wght@400;500&family=Inter:wght@400;500;600;650&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .growrow{
+    display:grid;grid-template-columns:120px 1fr auto;gap:20px;align-items:center;
+    padding:18px;margin:6px -18px;border-radius:16px;border:1px solid transparent;
+    transition:all .2s cubic-bezier(.2,.7,.3,1);
+    animation:rise .45s cubic-bezier(.2,.7,.3,1) both;
+  }
+  .growrow:hover{background:var(--card);border-color:var(--hair);
+    box-shadow:var(--shadow-lift);transform:translateY(-2px)}
+  .gday{font-family:Fraunces,serif;font-weight:600;font-size:17px;
+    letter-spacing:-.01em;white-space:nowrap}
+  .gday span{display:block;font-family:"Spline Sans Mono",monospace;font-size:9.5px;
+    font-weight:400;color:var(--faint);letter-spacing:.14em;text-transform:uppercase}
+  .gbarwrap{min-width:0}
+  .gbar{height:9px;border-radius:99px;background:var(--soft);overflow:hidden;
+    display:flex;margin-bottom:9px}
+  .gbar i{height:100%;display:block}
+  .gbar .r-kmart{background:var(--flag)}
+  .gbar .r-bigw{background:#3d7bd9}
+  .gbar .r-officeworks{background:var(--deal)}
+  .gbar .r-target{background:#c9a227}
+  .gmeta{font-size:11.5px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
+  .gmeta b{color:var(--ink);font-weight:600}
+  .dotk{color:var(--flag)} .dotb{color:#3d7bd9}
+  .doto{color:var(--deal)} .dott{color:#c9a227}
+  .gnums{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .gnums .plus{font-weight:650;font-size:19px;color:var(--deal);letter-spacing:-.01em}
+  .gnums .cum{font-family:"Spline Sans Mono",monospace;font-size:10px;
+    color:var(--faint);letter-spacing:.06em;margin-top:2px}
+  @media(max-width:640px){
+    .growrow{grid-template-columns:1fr auto}
+    .gbarwrap{grid-column:1 / -1}
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav"><div class="wrap navrow">
+  <a class="logo" href="index.html">Under<em>priced</em></a>
+  <div class="navlinks">
+    <a href="index.html">Deals</a>
+    <a href="catalogue.html">Catalogue</a>
+    <a href="search.html">Search</a>
+    <a href="growth.html" class="active">Growth</a>
+  </div>
+</div></nav>
+
+<header class="hero compact"><div class="wrap">
+  <div class="eyebrow"><span class="live"></span> database health · day by day</div>
+  <h1 class="display">Growth <em>tracker</em></h1>
+  <p class="sub">Is the database growing? New items discovered and price changes
+    recorded, every day since launch.</p>
+  <div class="stats">
+    <div class="stat"><b id="g-total">–</b><span>items tracked</span></div>
+    <div class="stat"><b id="g-today">–</b><span>added today</span></div>
+    <div class="stat"><b id="g-checks">–</b><span>price changes today</span></div>
+  </div>
+</div></header>
+
+<main class="wrap">
+  <div class="total" style="margin-top:38px">Daily log <span>· newest first · UTC days</span></div>
+  <div id="list"><div class="empty">Loading…</div></div>
+</main>
+
+<footer><div class="wrap footgrid">
+  <div class="fbrand">Under<em>priced</em></div>
+  <div class="note">
+    "New items" are products seen for the first time. "Price changes" counts
+    snapshots written — a snapshot is only recorded when a price actually moved
+    (or an item was first seen), so quiet days are normal once coverage is complete.
+    Days roll over at midnight UTC.
+  </div>
+</div></footer>
+
+<script>
+const SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrbGZnd2FseWZ1Z3BlaWVlcXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNDc1NTcsImV4cCI6MjA5ODcyMzU1N30.Y-q-s49eP67iHuQIysRb7Apl5vLA4u2C6fZYCdS7Ijg";  // public anon key (read-only via RLS)
+const HDRS = {apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}`};
+
+const fmtN = n => Number(n).toLocaleString("en-AU");
+const RETAILERS = ["kmart","bigw","officeworks","target"];
+const RLAB = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target"};
+const DOT = {kmart:"dotk", bigw:"dotb", officeworks:"doto", target:"dott"};
+
+function fmtDay(iso){
+  const d = new Date(iso + "T00:00:00Z");
+  return d.toLocaleDateString("en-AU", {day:"numeric", month:"short", timeZone:"UTC"});
+}
+function weekday(iso){
+  const d = new Date(iso + "T00:00:00Z");
+  return d.toLocaleDateString("en-AU", {weekday:"long", timeZone:"UTC"});
+}
+
+fetch(`${SUPABASE_URL}/rest/v1/growth_daily?select=*&order=day.asc`, {headers:HDRS})
+  .then(r=>r.json())
+  .then(rows=>{
+    // aggregate by day
+    const days = {};
+    for(const r of rows){
+      const d = days[r.day] = days[r.day] ||
+        {day:r.day, np:0, pc:0, by:{}};
+      d.np += Number(r.new_products);
+      d.pc += Number(r.price_checks);
+      d.by[r.retailer] = (d.by[r.retailer]||0) + Number(r.new_products);
+    }
+    const asc = Object.values(days).sort((a,b)=>a.day<b.day?-1:1);
+    let cum = 0;
+    for(const d of asc){ cum += d.np; d.cum = cum; }
+
+    // header stats
+    document.getElementById("g-total").textContent = fmtN(cum);
+    const todayIso = new Date().toISOString().slice(0,10);
+    const today = days[todayIso];
+    document.getElementById("g-today").textContent =
+      today ? "+"+fmtN(today.np) : "+0";
+    document.getElementById("g-checks").textContent =
+      today ? fmtN(today.pc) : "0";
+
+    // scale bars against the biggest non-launch day (launch dwarfs everything)
+    const desc = asc.slice().reverse();
+    const nonLaunch = asc.slice(1).map(d=>d.np);
+    const scaleMax = Math.max(1, ...(nonLaunch.length ? nonLaunch : [asc[0].np]));
+
+    document.getElementById("list").innerHTML = desc.map((d,i)=>{
+      const isLaunch = d.day === asc[0].day;
+      const width = isLaunch ? 100 : Math.max(2, Math.min(100, d.np/scaleMax*100));
+      const segs = RETAILERS.filter(r=>d.by[r]).map(r=>
+        `<i class="r-${r}" style="width:${(d.by[r]/Math.max(1,d.np))*width}%"></i>`).join("");
+      const brk = RETAILERS.filter(r=>d.by[r]).map(r=>
+        `<span><b class="${DOT[r]}">●</b> ${RLAB[r]} <b>+${fmtN(d.by[r])}</b></span>`).join("");
+      return `<div class="growrow" style="animation-delay:${Math.min(i*40,400)}ms">
+        <div class="gday">${fmtDay(d.day)}<span>${isLaunch?"launch day":weekday(d.day)}</span></div>
+        <div class="gbarwrap">
+          <div class="gbar">${segs}</div>
+          <div class="gmeta">${brk || "<span>no new items</span>"}
+            <span>· <b>${fmtN(d.pc)}</b> price changes</span></div>
+        </div>
+        <div class="gnums">
+          <div class="plus">+${fmtN(d.np)}</div>
+          <div class="cum">${fmtN(d.cum)} total</div>
+        </div>
+      </div>`;
+    }).join("");
+  })
+  .catch(()=>{document.getElementById("list").innerHTML =
+    `<div class="empty">Couldn't load growth data. Try again shortly.</div>`;});
+</script>
+</body>
+</html>
