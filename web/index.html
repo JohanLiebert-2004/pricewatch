@@ -58,6 +58,14 @@
     <button class="chip" data-c="books" aria-pressed="false">Books &amp; Stationery</button>
     <button class="chip" data-c="other" aria-pressed="false">Other</button>
   </div>
+  <div class="barlabel">Discount</div>
+  <div class="bar" id="discounts">
+    <button class="chip" data-d="0" aria-pressed="true">Any (50%+)</button>
+    <button class="chip" data-d="60" aria-pressed="false">60%+</button>
+    <button class="chip" data-d="70" aria-pressed="false">70%+</button>
+    <button class="chip" data-d="80" aria-pressed="false">80%+</button>
+    <button class="chip" data-d="90" aria-pressed="false">90%+</button>
+  </div>
   <div class="barlabel">Type</div>
   <div class="bar" id="filters">
     <button class="chip" data-f="all" aria-pressed="true">Everything</button>
@@ -124,11 +132,12 @@ function categorize(title){
 // ---- render ------------------------------------------------------------
 const money = n => "$"+Number(n).toFixed(2);
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target"};
-let ALL = [], filter = "all", retailer = "all", cat = "all";
+let ALL = [], filter = "all", retailer = "all", cat = "all", minOff = 0;
 
 function matches(d){
   if(retailer !== "all" && d.retailer !== retailer) return false;
   if(cat !== "all" && d._cat !== cat) return false;
+  if(Number(d.pct_off) < minOff) return false;
   if(filter === "err") return d.error_tier;
   if(filter === "cross") return String(d.signal).startsWith("cross_retailer");
   if(filter === "mkt") return d.is_marketplace;
@@ -192,6 +201,7 @@ function wireBar(id, attr, set){
 }
 wireBar("retailers","r", v=>retailer=v);
 wireBar("cats","c", v=>cat=v);
+wireBar("discounts","d", v=>minOff=Number(v));
 wireBar("filters","f", v=>filter=v);
 
 loadDeals().then(d=>{
