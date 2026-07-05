@@ -36,6 +36,16 @@
     color:var(--muted);transition:.15s}
   .chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
   .chip .n{opacity:.65;margin-left:4px}
+  .pricebar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 4px}
+  .pricebar input{font-family:"Spline Sans Mono",monospace;font-size:13px;width:110px;
+    padding:7px 10px;border:1px solid var(--line);border-radius:8px;
+    background:var(--card);color:var(--ink);outline:none}
+  .pricebar input:focus{border-color:var(--ink)}
+  .pricebar .dash{color:var(--muted)}
+  .pricebar button{font-family:"Spline Sans Mono",monospace;font-size:12px;cursor:pointer;
+    background:var(--ink);color:var(--paper);border:1px solid var(--ink);
+    border-radius:999px;padding:7px 16px}
+  .pricebar button.clear{background:var(--card);color:var(--muted);border-color:var(--line)}
   .total{font-family:Fraunces,serif;font-weight:600;font-size:20px;margin:26px 0 0}
   .total span{font-family:"Spline Sans Mono",monospace;font-size:12px;
     color:var(--muted);font-weight:400}
@@ -79,6 +89,14 @@
   <div class="bar" id="retailers"></div>
   <div class="barlabel">Category</div>
   <div class="bar" id="cats"></div>
+  <div class="barlabel">Price</div>
+  <form class="pricebar" id="pricebar">
+    <input type="number" id="pmin" min="0" step="1" placeholder="min $">
+    <span class="dash">—</span>
+    <input type="number" id="pmax" min="0" step="1" placeholder="max $">
+    <button type="submit">Apply</button>
+    <button type="button" class="clear" id="pclear">Clear</button>
+  </form>
   <div class="total" id="total"></div>
   <div id="list"><div class="empty">Loading…</div></div>
   <button class="more" id="more" hidden>Load 50 more</button>
@@ -111,6 +129,7 @@ const fmtN = n => Number(n).toLocaleString("en-AU");
 
 let STATS = [];           // [{retailer, category, items}]
 let retailer = "all", cat = "all", offset = 0;
+let pmin = null, pmax = null;   // price filter ($)
 const PAGE = 50;
 
 function count(r, c){
@@ -126,18 +145,37 @@ function chips(){
   document.getElementById("cats").innerHTML = CATS.map(([k,label])=>
     `<button class="chip" data-k="${k}" aria-pressed="${k===cat}">
        ${label}<span class="n">${fmtN(count(retailer,k))}</span></button>`).join("");
-  const t = count(retailer, cat);
-  document.getElementById("total").innerHTML =
-    `${fmtN(t)} items <span>· ${RETAILER_LABEL[retailer]}${cat!=="all" ? " · "+cat : ""}</span>`;
+  const priced = pmin !== null || pmax !== null;
+  const label = `${RETAILER_LABEL[retailer]}${cat!=="all" ? " · "+cat : ""}` +
+    (priced ? ` · $${pmin ?? 0}–${pmax !== null ? "$"+pmax : ""}` : "");
+  if(priced){
+    // stats view doesn't know prices; ask the API for the exact filtered count
+    document.getElementById("total").innerHTML = `… items <span>· ${label}</span>`;
+    fetch(filterUrl() + "&limit=1", {headers:{...HDRS, Prefer:"count=exact"}})
+      .then(r=>{
+        const n = (r.headers.get("content-range")||"").split("/")[1];
+        if(n) document.getElementById("total").innerHTML =
+          `${fmtN(n)} items <span>· ${label}</span>`;
+      });
+  }else{
+    document.getElementById("total").innerHTML =
+      `${fmtN(count(retailer, cat))} items <span>· ${label}</span>`;
+  }
+}
+
+function filterUrl(){
+  let q = `${SUPABASE_URL}/rest/v1/product_search?select=*`;
+  if(retailer!=="all") q += `&retailer=eq.${retailer}`;
+  if(cat!=="all") q += `&category=eq.${cat}`;
+  if(pmin !== null) q += `&current_price=gte.${pmin}`;
+  if(pmax !== null) q += `&current_price=lte.${pmax}`;
+  return q;
 }
 
 async function loadPage(reset){
   if(reset){ offset = 0; document.getElementById("list").innerHTML =
     `<div class="empty">Loading…</div>`; }
-  let q = `${SUPABASE_URL}/rest/v1/product_search?select=*` +
-    `&order=title.asc&limit=${PAGE}&offset=${offset}`;
-  if(retailer!=="all") q += `&retailer=eq.${retailer}`;
-  if(cat!=="all") q += `&category=eq.${cat}`;
+  const q = filterUrl() + `&order=title.asc&limit=${PAGE}&offset=${offset}`;
   const r = await fetch(q, {headers:HDRS});
   const rows = r.ok ? await r.json() : [];
   const html = rows.map(p=>`<div class="row">
@@ -178,6 +216,23 @@ function wireBar(id, set){
 wireBar("retailers", v=>retailer=v);
 wireBar("cats", v=>cat=v);
 document.getElementById("more").addEventListener("click", ()=>loadPage(false));
+
+document.getElementById("pricebar").addEventListener("submit", e=>{
+  e.preventDefault();
+  const lo = document.getElementById("pmin").value;
+  const hi = document.getElementById("pmax").value;
+  pmin = lo === "" ? null : Math.max(0, Number(lo));
+  pmax = hi === "" ? null : Math.max(0, Number(hi));
+  chips();
+  loadPage(true);
+});
+document.getElementById("pclear").addEventListener("click", ()=>{
+  pmin = pmax = null;
+  document.getElementById("pmin").value = "";
+  document.getElementById("pmax").value = "";
+  chips();
+  loadPage(true);
+});
 
 fetch(`${SUPABASE_URL}/rest/v1/catalogue_stats?select=*`, {headers:HDRS})
   .then(r=>r.json())
