@@ -23,7 +23,8 @@ class BigWScraper(BaseScraper):
     name = "bigw"
     sitemap_index = "https://www.bigw.com.au/sitemap.xml"
     product_url_pattern = r"/product/.+/p/\d+"
-    delay = 1.75  # owner-approved floor; if blocks increase, go back to 2.0+
+    delay = 2.5   # 1.75s got the IP flagged within hours (403 on request #1);
+                  # 2.5s + 3-hourly sweeps is the proven-stable rate
     needs_impersonation = True
     warmup_url = "https://www.bigw.com.au/"
 
