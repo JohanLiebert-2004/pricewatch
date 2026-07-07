@@ -13,7 +13,7 @@ deals. Everything runs on free tiers.
 
 ```
 GitHub Actions (half-hourly crawl matrix + detect job)
-        │  scrape / refresh / detect
+        │  scrape / refresh / crawl / detect
         ▼
 Supabase Postgres (Sydney, ap-southeast-2)
    base tables locked by RLS; anon role can SELECT only 5 read views
@@ -28,16 +28,27 @@ Vercel static site (web/ folder, no build step)  +  Telegram alerts
 - Secrets (`DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) live in
   the gitignored `.env` locally and in GitHub Actions secrets. Never commit
   `.env` or `pricewatch.db`.
+- **Domain:** still on the free `web-pi-blush-48.vercel.app` URL. User plans
+  to buy a real domain later and point it at Vercel via its native custom-
+  domain support — no need to migrate off Vercel for this, it's free either
+  way. Nothing to do until the user picks a name.
 
-## Retailers covered (5)
+## Retailers covered (6)
 
-| Retailer    | Method                                              | Notes |
-|-------------|-----------------------------------------------------|-------|
-| Kmart       | Constructor.io listing API                          | ~105k products; images captured |
-| Big W       | `__NEXT_DATA__` category listings                   | Akamai; 2.5s delay after July soft-flag (owner floor 1.75s); no images yet |
-| Officeworks | Bulk price API by SKU list + sitemap                | images captured (s3 PIM) |
-| Target      | Category listings                                   | Akamai; no images yet |
-| JB Hi-Fi    | Shopify `/products.json` (250/page, 100-page cap = 25k most recent) | no bot protection; 1.0s delay; images via Shopify CDN |
+| Retailer     | Method                                              | Notes |
+|--------------|-----------------------------------------------------|-------|
+| Kmart        | Constructor.io listing API                          | ~105k products; images captured |
+| Big W        | `__NEXT_DATA__` category listings                   | Akamai; 2.5s delay after July soft-flag (owner floor 1.75s); no images yet |
+| Officeworks  | Bulk price API by SKU list + sitemap                | images captured (s3 PIM) |
+| Target       | Category listings                                   | Akamai; no images yet |
+| JB Hi-Fi     | Shopify `/products.json` (250/page, 100-page cap = 25k most recent) | no bot protection; 1.0s delay; images via Shopify CDN |
+| The Good Guys| Product sitemap (`product_sitemap_1-4.xml`, 8,629 URLs) + schema.org JSON-LD per page | headless Shopify Hydrogen, no `/products.json`; no bot protection; no RRP field anywhere (relies on 90-day history fallback); crawl batch raised to 500/run (vs default 40) since it's unprotected — first full sweep ≈9h instead of ~4.5 days |
+
+**Bunnings — investigated and ruled out** (July 2026): robots.txt disallows
+`/api/` and `/apis/` (where any bulk endpoint would live), no product-level
+sitemap (only category listings), and active Cloudflare Bot Management
+fingerprinting on the very first plain request. Doesn't fit the no-evasion
+policy. Revisit only if a public, non-disallowed data source turns up.
 
 Politeness is non-negotiable: no delays below the owner-approved floors,
 no parallel requests to one retailer. `Blocked` exceptions are expected
@@ -47,14 +58,28 @@ no parallel requests to one retailer. `Blocked` exceptions are expected
 
 ### Data pipeline (`run.py` subcommands)
 - `index` — load a retailer's full catalogue URLs into `crawl_queue`.
-- `crawl` — work the queue oldest-first, resumable.
+- `crawl` — work the queue oldest-first, resumable. Batch size is set per
+  retailer in `crawl.yml` (`matrix.crawl_batch`, defaults to 40; Good Guys
+  uses 500 since it has no bot protection to be cautious of).
 - `refresh` — fast bulk price sweep via listing/API pages; snapshots only
   written when a price actually changed. $40 keep-floor for *new* items;
-  already-tracked items always stay refreshed.
+  already-tracked items always stay refreshed. No-ops for retailers with
+  no `refresh_listings` method (currently just Good Guys).
 - `detect` — categorise new products, run the anomaly engine (records 50%+
   drops as `deals`), send Telegram alerts, then refresh the `discount_feed`
   materialized view (~0.5s).
 - `url` / `scrape` / `deals` — one-off ingest, smoke-test scrape, list deals.
+
+### Scraper pattern (`scrapers/`)
+- `base.py` — `BaseScraper`: generic sitemap discovery (`discover`/
+  `discover_all`) + generic schema.org JSON-LD `parse_product`. Retailers
+  without JSON-LD (Officeworks, Big W, Kmart/Target's Constructor.io feed)
+  override `parse_product`; those with a bulk listing API (JB Hi-Fi) add
+  `refresh_listings`. The Good Guys is the first retailer to use the base
+  class's default JSON-LD parsing almost as-is (small override just to fix
+  the `is_marketplace` seller-name substring check and add `image_url`,
+  which the base default doesn't set).
+- `Blocked` exception = bot protection triggered; expected, not a bug.
 
 ### Database (schema.sql + views.sql)
 - Tables: `products` (incl. `image_url`, `category`, `current_rrp`,
@@ -71,23 +96,34 @@ no parallel requests to one retailer. `Blocked` exceptions are expected
   - `product_search`, `catalogue_stats`, `growth_daily`.
 
 ### Website (`web/`, static, Vercel)
-- `index.html` — deal feed: store/category chips, 0–99% discount slider,
-  Everything/Error-tier/Marketplace type chips, name/SKU search that stacks
-  with all filters (all server-side via PostgREST), grouped by retailer,
-  product thumbnails.
+- `index.html` — **deal feed, redesigned as a card grid** (v4, see Design
+  system below): search bar, store chips (incl. Good Guys), category chips,
+  sort dropdown (biggest discount / price asc / price desc / newest drops),
+  price min/max filter, 0–99% discount slider, Everything/Error-tier/
+  Marketplace type chips — all server-side via PostgREST, all composable.
 - `catalogue.html` — browse everything tracked; store/category/price
   filters + text search, exact counts via `Prefer: count=exact`.
 - `search.html` — latest tracked price + "as of" date for any product by
-  name/SKU. Ordered by title (recency ordering starved small retailers
-  after big sweeps — the "ps5 shows only Kmart" bug).
+  name/SKU. Runs **one query per retailer in parallel** (not one shared
+  query) so a store with 100k+ products can't crowd smaller stores out of
+  the results — fixed after a real bug where searching "ps5" only returned
+  Kmart because the old single-query/recency-order approach starved JB
+  Hi-Fi's matches.
 - `growth.html` — per-day new products and price checks per retailer.
-- `style.css` — design system v3: cool neutral palette (light `#fafafb`
-  paper / dark `#0c0d10`, green `--deal`, red `--flag`), Inter + Spline
-  Sans Mono only, hairline row separators, 64px thumbnail tiles with
-  retailer-monogram fallback. (v1/v2 with serif/grain/glow were rejected
-  as looking cheap.)
+- `style.css` — **design system v4** ("Bellroy palette", July 2026):
+  light-only (no dark mode — an earlier dark variant was explicitly
+  rejected; `color-scheme: light` forces native controls light too), warm
+  off-white ground (`#faf9f7`), charcoal ink, burnt-orange accent
+  (`#d3572b`), flat hairline borders (no heavy shadows), Figtree font.
+  Chosen by building 3 live sample pages (card grid / dark terminal /
+  warm editorial) and letting the user pick, rather than guessing —
+  see the design-preferences memory for why that approach works better
+  here. v1–v3 (serif+grain, then cool-neutral dark-capable) were both
+  superseded; don't resurrect dark mode without asking again.
 - Thumbnails are downsized at render time (`thumbSrc()`): Shopify
-  `?width=200`, Officeworks `JPEG_300x300`, Kmart `width:200,height:250`.
+  `?width=200/300/400`, Officeworks `JPEG_300x300`, Kmart
+  `width:200,height:250`. Good Guys images are on `cdn.shopify.com` too,
+  so they're covered by the existing Shopify branch with no extra code.
 
 ### Telegram alerts (`alerts.py`)
 - After every `detect`, deals with score ≥ 0.80 **and** reference ≥ $100
@@ -97,8 +133,11 @@ no parallel requests to one retailer. `Blocked` exceptions are expected
   personal for now").
 
 ### CI (`.github/workflows/crawl.yml`)
-- Matrix refresh job per retailer (jbhifi budget 100) + detect job with
-  Telegram secrets. First-run catalogue index line stays commented out.
+- Matrix: one refresh + crawl job pair per retailer, batch size for the
+  crawl lane is per-retailer (`matrix.crawl_batch || 40`). Runs every 30
+  min. Detect job follows with Telegram secrets. First-run catalogue index
+  line stays commented out (`index` was run once per retailer manually
+  against Supabase instead, including Good Guys's 8,629-URL seed).
 
 ## Key decisions
 
@@ -109,25 +148,39 @@ no parallel requests to one retailer. `Blocked` exceptions are expected
   (deferred): tagged "Check Amazon" links + the required "As an Amazon
   Associate I earn from qualifying purchases" disclosure. Keepa (~€49/mo)
   noted as a paid alternative.
+- **Bunnings: ruled out**, see retailer table above.
 - **Target expansion** via Commission Factory affiliate feed — designed,
   blocked on user signup.
 - **"Only 5 deals" problem**: the anomaly engine only records 50%+ drops by
-  design; the fix was the products-level `discount_feed` (~1,500 items ≥1%
+  design; the fix was the products-level `discount_feed` (~1,500+ items ≥1%
   off) plus the slider, not loosening the engine.
 - **JB Hi-Fi 25k window**: Shopify caps page×limit at 25,000; the 100 most
   recent pages (published_at desc) are the actively merchandised stock, so
   the cap is accepted rather than crawling junk collections.
 - **Reference price** = greatest(current RRP, 90-day snapshot high), with a
   $40 floor — deals on cheap items aren't worth tracking, but a big drop on
-  an expensive item is always captured.
+  an expensive item is always captured. Retailers with no RRP field at all
+  (Good Guys) rely entirely on the 90-day history side of that formula.
+- **Design process**: when the user rejects a redesign ("looks cheap/AI
+  made" happened twice), build small *live* sample pages hitting real data
+  and let them pick, instead of iterating blind on describing colours in
+  words. This is how v4 (Bellroy palette, card grid) was reached in two
+  rounds instead of many.
+- **Custom domain**: Vercel supports it natively on the free tier — no
+  reason to move off Vercel. Just needs the user to pick and buy a name.
 
 ## What's left / deferred
 
+- [ ] User to pick a domain name; then point DNS at Vercel (still free).
 - [ ] Amazon affiliate links + footer disclosure (waiting on Partner Tag;
       user said "later").
 - [ ] Target via Commission Factory (waiting on user account).
 - [ ] Big W and Target product images (media fields not yet extracted).
+- [ ] Watch Good Guys's first full crawl sweep (~9h at the raised batch
+      size) for any blocking — none seen in testing, but unverified at
+      full scale/CI network egress.
 - [ ] Watch JB Hi-Fi's GitHub Actions runs for Cloudflare blocking of
       datacenter IPs (fallback: run it in the local task instead).
 - [ ] Officeworks full SKU sweep continues incrementally via Actions.
 - [ ] Telegram mailing-list/channel mode if the site gets an audience.
+- [ ] Revisit Bunnings if a non-robots-disallowed data source appears.
