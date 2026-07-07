@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sample A — Product card grid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#f4f5f7;color:#16181d;font-size:14px}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.top{background:#fff;border-bottom:1px solid #e7e9ee;position:sticky;top:0;z-index:9}
+.toprow{display:flex;align-items:center;justify-content:space-between;height:58px}
+.logo{font-weight:800;font-size:19px;letter-spacing:-.03em}
+.logo b{color:#e11d48}
+.tag{background:#16181d;color:#fff;font-size:11px;font-weight:700;padding:5px 11px;border-radius:99px}
+.hero{padding:34px 0 22px}
+h1{font-size:clamp(26px,4vw,38px);font-weight:800;letter-spacing:-.035em;margin:0}
+h1 span{color:#e11d48}
+.sub{color:#5c616c;margin:8px 0 0;font-size:15px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 6px;align-items:center}
+.controls select,.controls button{
+  font:inherit;font-size:13px;font-weight:600;padding:9px 14px;border-radius:10px;
+  border:1px solid #dcdfe6;background:#fff;cursor:pointer;color:#16181d}
+.controls .on{background:#16181d;color:#fff;border-color:#16181d}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;padding:18px 0 60px}
+.card{background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e7e9ee;
+  display:flex;flex-direction:column;text-decoration:none;color:inherit;
+  transition:transform .15s, box-shadow .15s}
+.card:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(22,24,29,.12)}
+.ph{position:relative;background:#fff;height:190px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #f0f1f4}
+.ph img{max-width:82%;max-height:82%;object-fit:contain}
+.ph .mono{font-size:44px;font-weight:800;color:#dcdfe6}
+.badge{position:absolute;top:10px;left:10px;background:#e11d48;color:#fff;
+  font-weight:800;font-size:14px;padding:5px 10px;border-radius:9px;letter-spacing:-.02em}
+.badge.hot{background:#16181d}
+.body{padding:13px 14px 15px;display:flex;flex-direction:column;gap:8px;flex:1}
+.name{font-weight:600;font-size:13.5px;line-height:1.35;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.7em}
+.prices{display:flex;align-items:baseline;gap:8px;margin-top:auto}
+.now{font-weight:800;font-size:20px;letter-spacing:-.03em}
+.was{color:#9aa0ab;text-decoration:line-through;font-size:13px;font-weight:500}
+.store{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#5c616c;font-weight:600}
+.store .save{color:#0c8f56;font-weight:700}
+.note{text-align:center;color:#9aa0ab;padding:0 0 40px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="top"><div class="wrap toprow">
+  <div class="logo">under<b>priced</b></div><div class="tag">SAMPLE A · card grid</div>
+</div></div>
+<header class="hero wrap">
+  <h1>Today's biggest <span>price drops</span></h1>
+  <p class="sub">Live data — same deals, new look. Cards, big photos, bold prices.</p>
+  <div class="controls">
+    <button class="on">All stores</button><button>Kmart</button><button>Big W</button>
+    <button>Officeworks</button><button>Target</button><button>JB Hi-Fi</button>
+    <select><option>Sort: Biggest discount</option><option>Price: low → high</option>
+      <option>Price: high → low</option><option>Newest drops</option></select>
+  </div>
+</header>
+<main class="wrap"><div class="grid" id="g"></div>
+<div class="note">Sample A — product card grid</div></main>
+<script>
+const K="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrbGZnd2FseWZ1Z3BlaWVlcXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNDc1NTcsImV4cCI6MjA5ODcyMzU1N30.Y-q-s49eP67iHuQIysRb7Apl5vLA4u2C6fZYCdS7Ijg";
+const money=n=>"$"+Number(n).toFixed(2).replace(/\.00$/,"");
+const LAB={kmart:"Kmart",bigw:"Big W",officeworks:"Officeworks",target:"Target",jbhifi:"JB Hi-Fi"};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const t=u=>u.includes("cdn.shopify.com")?u+(u.includes("?")?"&":"?")+"width=400"
+  :u.includes("JPEG_1000x1000")?u.replace("JPEG_1000x1000","JPEG_300x300")
+  :u.includes("assets.kmart.com.au")?u.replace(/width:\d+,height:\d+/,"width:400,height:500"):u;
+fetch("https://eklfgwalyfugpeieeqwz.supabase.co/rest/v1/discount_feed?select=*&pct_off=gte.30&image_url=not.is.null&order=pct_off.desc,reference_price.desc&limit=24",
+  {headers:{apikey:K,Authorization:"Bearer "+K}}).then(r=>r.json()).then(rows=>{
+  document.getElementById("g").innerHTML=rows.map(d=>`
+    <a class="card" href="${esc(d.url)}" target="_blank" rel="noopener">
+      <div class="ph"><span class="badge ${d.pct_off>=70?"":"hot"}">-${d.pct_off}%</span>
+        <img src="${esc(t(d.image_url))}" loading="lazy" alt=""
+          onerror="this.outerHTML='<span class=mono>${(LAB[d.retailer]||"?")[0]}</span>'"></div>
+      <div class="body">
+        <div class="name">${esc(d.title)}</div>
+        <div class="prices"><span class="now">${money(d.price)}</span>
+          <span class="was">${money(d.reference_price)}</span></div>
+        <div class="store"><span>${LAB[d.retailer]||d.retailer}</span>
+          <span class="save">save ${money(d.reference_price-d.price)}</span></div>
+      </div>
+    </a>`).join("");
+});
+</script>
+</body>
+</html>

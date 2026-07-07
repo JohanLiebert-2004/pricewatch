@@ -8,27 +8,31 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <style>
   /* minimum-discount slider */
   .rangebar{display:flex;align-items:center;gap:18px;margin:2px 0 6px;max-width:520px}
   .rangebar input[type=range]{
-    flex:1;-webkit-appearance:none;appearance:none;height:5px;border-radius:99px;
-    background:linear-gradient(90deg,var(--deal) var(--fill,0%),var(--soft) var(--fill,0%));
+    flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:99px;
+    background:linear-gradient(90deg,var(--flag) var(--fill,0%),var(--soft) var(--fill,0%));
     outline:none;cursor:pointer}
   .rangebar input[type=range]::-webkit-slider-thumb{
     -webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;
-    background:var(--ink);border:3px solid var(--paper);box-shadow:0 1px 6px var(--shadow);
+    background:var(--ink);border:3px solid var(--card);box-shadow:var(--shadow);
     transition:transform .15s}
   .rangebar input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
   .rangebar input[type=range]::-moz-range-thumb{
     width:14px;height:14px;border-radius:50%;background:var(--ink);
-    border:3px solid var(--paper);box-shadow:0 1px 6px var(--shadow)}
+    border:3px solid var(--card);box-shadow:var(--shadow)}
   .rangebar output{
-    font-family:"Spline Sans Mono",monospace;font-size:13px;font-weight:500;
-    min-width:64px;text-align:right;color:var(--ink);
+    font-size:13px;font-weight:700;min-width:64px;text-align:right;color:var(--ink);
     font-variant-numeric:tabular-nums;white-space:nowrap}
+  /* control panel */
+  .panel{
+    background:var(--card);border:1px solid var(--hair);border-radius:16px;
+    padding:18px 20px 20px;margin-top:26px;box-shadow:var(--shadow)}
+  .panel .barlabel:first-child{margin-top:0}
 </style>
 </head>
 <body>
@@ -58,48 +62,64 @@
 </div></header>
 
 <main class="wrap">
-  <div class="barlabel">Find in deals</div>
-  <form class="pricebar" id="qbar">
-    <input type="search" id="q" placeholder="name or SKU — e.g. air fryer"
-           autocomplete="off" style="width:min(320px,100%)">
-    <button type="submit">Search</button>
-    <button type="button" class="clear" id="qclear">Clear</button>
-  </form>
-  <div class="barlabel">Store</div>
-  <div class="bar" id="retailers">
-    <button class="chip" data-r="all" aria-pressed="true">All stores</button>
-    <button class="chip" data-r="kmart" aria-pressed="false">Kmart</button>
-    <button class="chip" data-r="bigw" aria-pressed="false">Big W</button>
-    <button class="chip" data-r="officeworks" aria-pressed="false">Officeworks</button>
-    <button class="chip" data-r="target" aria-pressed="false">Target</button>
-    <button class="chip" data-r="jbhifi" aria-pressed="false">JB Hi-Fi</button>
-  </div>
-  <div class="barlabel">Category</div>
-  <div class="bar" id="cats">
-    <button class="chip" data-c="all" aria-pressed="true">All</button>
-    <button class="chip" data-c="tech" aria-pressed="false">Tech</button>
-    <button class="chip" data-c="home" aria-pressed="false">Home</button>
-    <button class="chip" data-c="kitchen" aria-pressed="false">Kitchen</button>
-    <button class="chip" data-c="toys" aria-pressed="false">Toys &amp; Baby</button>
-    <button class="chip" data-c="clothing" aria-pressed="false">Clothing</button>
-    <button class="chip" data-c="beauty" aria-pressed="false">Beauty</button>
-    <button class="chip" data-c="books" aria-pressed="false">Books &amp; Stationery</button>
-    <button class="chip" data-c="other" aria-pressed="false">Other</button>
-  </div>
-  <div class="barlabel">Minimum discount</div>
-  <div class="rangebar">
-    <input type="range" id="minoff" min="0" max="99" step="1" value="0"
-           aria-label="Minimum discount percentage">
-    <output id="minoffval" for="minoff">any</output>
-  </div>
-  <div class="barlabel">Type</div>
-  <div class="bar" id="filters">
-    <button class="chip" data-f="all" aria-pressed="true">Everything</button>
-    <button class="chip" data-f="err" aria-pressed="false">Error-tier (80%+)</button>
-    <button class="chip" data-f="mkt" aria-pressed="false">Marketplace</button>
+  <div class="panel">
+    <div class="barlabel">Search the deals</div>
+    <form class="pricebar" id="qbar">
+      <input type="search" id="q" placeholder="name or SKU — e.g. air fryer"
+             autocomplete="off" style="width:min(300px,100%)">
+      <button type="submit">Search</button>
+      <button type="button" class="clear" id="qclear">Clear</button>
+    </form>
+    <div class="barlabel">Store</div>
+    <div class="bar" id="retailers">
+      <button class="chip" data-r="all" aria-pressed="true">All stores</button>
+      <button class="chip" data-r="kmart" aria-pressed="false">Kmart</button>
+      <button class="chip" data-r="bigw" aria-pressed="false">Big W</button>
+      <button class="chip" data-r="officeworks" aria-pressed="false">Officeworks</button>
+      <button class="chip" data-r="target" aria-pressed="false">Target</button>
+      <button class="chip" data-r="jbhifi" aria-pressed="false">JB Hi-Fi</button>
+    </div>
+    <div class="barlabel">Category</div>
+    <div class="bar" id="cats">
+      <button class="chip" data-c="all" aria-pressed="true">All</button>
+      <button class="chip" data-c="tech" aria-pressed="false">Tech</button>
+      <button class="chip" data-c="home" aria-pressed="false">Home</button>
+      <button class="chip" data-c="kitchen" aria-pressed="false">Kitchen</button>
+      <button class="chip" data-c="toys" aria-pressed="false">Toys &amp; Baby</button>
+      <button class="chip" data-c="clothing" aria-pressed="false">Clothing</button>
+      <button class="chip" data-c="beauty" aria-pressed="false">Beauty</button>
+      <button class="chip" data-c="books" aria-pressed="false">Books &amp; Stationery</button>
+      <button class="chip" data-c="other" aria-pressed="false">Other</button>
+    </div>
+    <div class="barlabel">Sort &amp; price</div>
+    <form class="pricebar" id="pbar">
+      <select id="sort" aria-label="Sort deals">
+        <option value="deep">Biggest discount</option>
+        <option value="price_asc">Price: low to high</option>
+        <option value="price_desc">Price: high to low</option>
+        <option value="fresh">Newest price drops</option>
+      </select>
+      <input type="number" id="pmin" placeholder="min $" min="0" inputmode="numeric">
+      <span class="dash">–</span>
+      <input type="number" id="pmax" placeholder="max $" min="0" inputmode="numeric">
+      <button type="submit">Apply</button>
+      <button type="button" class="clear" id="pclear">Reset</button>
+    </form>
+    <div class="barlabel">Minimum discount</div>
+    <div class="rangebar">
+      <input type="range" id="minoff" min="0" max="99" step="1" value="0"
+             aria-label="Minimum discount percentage">
+      <output id="minoffval" for="minoff">any</output>
+    </div>
+    <div class="barlabel">Type</div>
+    <div class="bar" id="filters">
+      <button class="chip" data-f="all" aria-pressed="true">Everything</button>
+      <button class="chip" data-f="err" aria-pressed="false">Error-tier (80%+)</button>
+      <button class="chip" data-f="mkt" aria-pressed="false">Marketplace</button>
+    </div>
   </div>
   <div class="total" id="total"></div>
-  <div id="list"><div class="empty">Loading the latest finds…</div></div>
+  <div class="grid" id="list"><div class="empty">Loading the latest finds…</div></div>
 </main>
 
 <footer><div class="wrap footgrid">
@@ -119,7 +139,7 @@
 const SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrbGZnd2FseWZ1Z3BlaWVlcXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNDc1NTcsImV4cCI6MjA5ODcyMzU1N30.Y-q-s49eP67iHuQIysRb7Apl5vLA4u2C6fZYCdS7Ijg";  // public anon key (read-only via RLS)
 const HDRS = {apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}`};
-const LIMIT = 500;
+const LIMIT = 240;
 
 // header stats
 fetch(`${SUPABASE_URL}/rest/v1/catalogue_stats?select=items`, {headers:HDRS})
@@ -136,20 +156,29 @@ fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=sku&pct_off=gte.50&limit=1`,
   .catch(()=>{});
 
 // ---- render ------------------------------------------------------------
-const money = n => "$"+Number(n).toFixed(2);
+const money = n => "$"+Number(n).toFixed(2).replace(/\.00$/,"");
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi"};
+const SORTS = {
+  deep:  "pct_off.desc,reference_price.desc",
+  price_asc:  "price.asc,pct_off.desc",
+  price_desc: "price.desc,pct_off.desc",
+  fresh: "price_updated_at.desc,pct_off.desc",
+};
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let retailer = "all", cat = "all", filter = "all", minOff = 0, q = "", fetchSeq = 0;
+let retailer = "all", cat = "all", filter = "all", minOff = 0, q = "",
+    sort = "deep", pmin = null, pmax = null, fetchSeq = 0;
 
 function feedUrl(){
   let u = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
-          `&order=pct_off.desc,reference_price.desc&limit=${LIMIT}`;
+          `&order=${SORTS[sort]}&limit=${LIMIT}`;
   if(minOff > 0) u += `&pct_off=gte.${minOff}`;
   if(retailer !== "all") u += `&retailer=eq.${retailer}`;
   if(cat !== "all") u += `&category=eq.${cat}`;
   if(filter === "err") u += `&error_tier=is.true`;
   if(filter === "mkt") u += `&is_marketplace=is.true`;
+  if(pmin !== null) u += `&price=gte.${pmin}`;
+  if(pmax !== null) u += `&price=lte.${pmax}`;
   if(q){
     // PostgREST or= syntax breaks on , ( ) — strip them; * are wildcards
     const pat = `*${q.replace(/[,()*]/g," ").trim().split(/\s+/).join("*")}*`;
@@ -159,65 +188,56 @@ function feedUrl(){
 }
 
 function thumbSrc(u){
-  if(u.includes("cdn.shopify.com")) return u + (u.includes("?")?"&":"?") + "width=200";
+  if(u.includes("cdn.shopify.com")) return u + (u.includes("?")?"&":"?") + "width=400";
   if(u.includes("JPEG_1000x1000")) return u.replace("JPEG_1000x1000","JPEG_300x300");
-  if(u.includes("assets.kmart.com.au")) return u.replace(/width:\d+,height:\d+/,"width:200,height:250");
+  if(u.includes("assets.kmart.com.au")) return u.replace(/width:\d+,height:\d+/,"width:400,height:500");
   return u;
 }
-function thumbHtml(d){
-  const mono = (RETAILER_LABEL[d.retailer]||"?")[0];
-  return `<div class="thumb">${d.image_url
-    ? `<img src="${esc(thumbSrc(d.image_url))}" loading="lazy" alt=""
-         onerror="this.outerHTML='<span class=mono>${mono}</span>'">`
-    : `<span class="mono">${mono}</span>`}</div>`;
-}
 
-function rowHtml(d, i){
-  const sigLabel = {rrp_gap:"vs RRP", history_drop:"vs its usual price"}[d.signal] || d.signal;
-  return `<div class="row media ${d.error_tier?'err':''}" style="animation-delay:${Math.min(i*45,450)}ms">
-    <div class="off">${d.pct_off}%</div>
-    ${thumbHtml(d)}
-    <div>
-      <div class="title"><a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a></div>
-      <div class="meta">
-        <span class="pill">${RETAILER_LABEL[d.retailer]||esc(d.retailer)}</span>
-        <span class="pill">${esc(d.category)}</span>
-        <span>${sigLabel}</span>
+function cardHtml(d, i){
+  const mono = (RETAILER_LABEL[d.retailer]||"?")[0];
+  const save = d.reference_price - d.price;
+  return `<a class="card" href="${esc(d.url)}" target="_blank" rel="noopener"
+             style="animation-delay:${Math.min(i*25,350)}ms">
+    <div class="ph">
+      <span class="badge ${d.pct_off>=50?"":"mild"}">-${d.pct_off}%</span>
+      ${d.image_url
+        ? `<img src="${esc(thumbSrc(d.image_url))}" loading="lazy" alt=""
+             onerror="this.outerHTML='<span class=mono>${mono}</span>'">`
+        : `<span class="mono">${mono}</span>`}
+    </div>
+    <div class="cbody">
+      <div class="cname">${esc(d.title)}</div>
+      <div class="ctags">
         ${d.error_tier?'<span class="pill err">error-tier</span>':''}
         ${d.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
+        <span class="pill">${esc(d.category)}</span>
       </div>
+      <div class="cprices"><span class="cnow">${money(d.price)}</span>
+        <span class="cwas">${money(d.reference_price)}</span></div>
+      <div class="cfoot"><span>${RETAILER_LABEL[d.retailer]||esc(d.retailer)}</span>
+        <span class="save">save ${money(save)}</span></div>
     </div>
-    <div class="price">
-      <div class="now">${money(d.price)}</div>
-      ${d.reference_price?`<div class="was">${money(d.reference_price)}</div>`:''}
-    </div>
-  </div>`;
+  </a>`;
 }
 
+const SORT_LABEL = {deep:"biggest discount", price_asc:"price low→high",
+                    price_desc:"price high→low", fresh:"newest drops"};
 function render(rows, total){
   const label = `${RETAILER_LABEL[retailer]||"All stores"}` +
     (cat!=="all" ? ` · ${cat}` : "") +
     (minOff>0 ? ` · ${minOff}%+ off` : "") +
+    (pmin!==null||pmax!==null ? ` · $${pmin??0}–${pmax!==null?"$"+pmax:"any"}` : "") +
+    ` · ${SORT_LABEL[sort]}` +
     (q ? ` · “${esc(q)}”` : "");
   document.getElementById("total").innerHTML =
     `${total.toLocaleString("en-AU")} discounted item${total===1?"":"s"} <span>· ${label}` +
-    (total > rows.length ? ` · showing the deepest ${rows.length}` : "") + `</span>`;
+    (total > rows.length ? ` · showing ${rows.length}` : "") + `</span>`;
   const list = document.getElementById("list");
   if(!rows.length){ list.innerHTML =
-    `<div class="empty">Nothing here for this combination yet.<br>Try a lower
-     minimum discount — or check back once the crawler has more price history.</div>`; return; }
-  if(retailer === "all"){
-    const order = ["kmart","bigw","officeworks","target","jbhifi"];
-    const groups = {};
-    for(const d of rows) (groups[d.retailer] = groups[d.retailer] || []).push(d);
-    list.innerHTML = order.filter(r=>groups[r]).map(r=>
-      `<h2 class="section-h">${RETAILER_LABEL[r]||r}
-         <span class="count">${groups[r].length} deal${groups[r].length>1?'s':''}</span></h2>` +
-      groups[r].map(rowHtml).join("")
-    ).join("");
-  }else{
-    list.innerHTML = rows.map(rowHtml).join("");
-  }
+    `<div class="empty" style="grid-column:1/-1">Nothing here for this combination yet.<br>Try a lower
+     minimum discount or a wider price range.</div>`; return; }
+  list.innerHTML = rows.map(cardHtml).join("");
 }
 
 async function refresh(){
@@ -231,7 +251,7 @@ async function refresh(){
   }catch(e){
     if(seq !== fetchSeq) return;
     document.getElementById("list").innerHTML =
-      `<div class="empty">Couldn't load deals — try again in a moment.</div>`;
+      `<div class="empty" style="grid-column:1/-1">Couldn't load deals — try again in a moment.</div>`;
   }
 }
 
@@ -257,6 +277,24 @@ document.getElementById("qbar").addEventListener("submit", e=>{
 document.getElementById("qclear").addEventListener("click", ()=>{
   q = "";
   document.getElementById("q").value = "";
+  refresh();
+});
+
+document.getElementById("sort").addEventListener("change", e=>{
+  sort = e.target.value;
+  refresh();
+});
+const num = v => { const n = Number(v); return v !== "" && isFinite(n) && n >= 0 ? n : null; };
+document.getElementById("pbar").addEventListener("submit", e=>{
+  e.preventDefault();
+  pmin = num(document.getElementById("pmin").value);
+  pmax = num(document.getElementById("pmax").value);
+  refresh();
+});
+document.getElementById("pclear").addEventListener("click", ()=>{
+  pmin = pmax = null;
+  document.getElementById("pmin").value = "";
+  document.getElementById("pmax").value = "";
   refresh();
 });
 
