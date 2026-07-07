@@ -36,8 +36,10 @@ jobs:
           - retailer: jbhifi
             budget: 100      # 100 pages x 250 = the full reachable catalogue
           - retailer: goodguys
-            budget: 50       # no bulk listing API - refresh lane is a no-op,
-                              # all coverage comes from the crawl (queue) lane
+            budget: 50        # no bulk listing API - refresh lane is a no-op,
+                               # all coverage comes from the crawl (queue) lane
+            crawl_batch: 500  # no bot protection seen - safe to crawl the
+                               # 8.6k-URL queue faster than the 40/run default
     concurrency:
       group: crawl-${{ matrix.retailer }}
       cancel-in-progress: false
@@ -54,7 +56,7 @@ jobs:
       - name: Bulk price refresh (${{ matrix.retailer }})
         run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }} || true
       - name: Product-page enrichment (${{ matrix.retailer }})
-        run: python run.py crawl ${{ matrix.retailer }} --batch 40 || true
+        run: python run.py crawl ${{ matrix.retailer }} --batch ${{ matrix.crawl_batch || 40 }} || true
 
   detect:
     needs: crawl
