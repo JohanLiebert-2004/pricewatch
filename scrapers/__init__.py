@@ -1,5 +1,7 @@
 from .bigw import BigWScraper
+from .jbhifi import JBHiFiScraper
 from .kmart_group import KmartScraper, TargetScraper
 from .officeworks import OfficeworksScraper
 
-REGISTRY = {s.name: s for s in (BigWScraper, KmartScraper, TargetScraper, OfficeworksScraper)}
+REGISTRY = {s.name: s for s in (BigWScraper, KmartScraper, TargetScraper,
+                                OfficeworksScraper, JBHiFiScraper)}

@@ -36,7 +36,7 @@
            autocomplete="off" autofocus>
     <button class="go" type="submit">Search</button>
   </form>
-  <div class="hint">matches product titles and SKUs across kmart · big w · officeworks · target</div>
+  <div class="hint">matches product titles and SKUs across kmart · big w · officeworks · target · jb hi-fi</div>
   <div id="list"><div class="empty">Type a product name or SKU above to see its latest tracked price.</div></div>
 </main>
 
@@ -53,7 +53,7 @@ const SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrbGZnd2FseWZ1Z3BlaWVlcXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNDc1NTcsImV4cCI6MjA5ODcyMzU1N30.Y-q-s49eP67iHuQIysRb7Apl5vLA4u2C6fZYCdS7Ijg";  // public anon key (read-only via RLS)
 
 const money = n => "$"+Number(n).toFixed(2);
-const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target"};
+const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi"};
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -87,7 +87,7 @@ async function search(q){
   }
   if(!rows.length){
     list.innerHTML = `<div class="empty">No tracked product matches
-      “${esc(q)}”.<br>We cover Kmart, Big W, Officeworks and Target.</div>`;
+      “${esc(q)}”.<br>We cover Kmart, Big W, Officeworks, Target and JB Hi-Fi.</div>`;
     return;
   }
   list.innerHTML = rows.map((p,i)=>`<div class="row plain" style="animation-delay:${Math.min(i*30,300)}ms">

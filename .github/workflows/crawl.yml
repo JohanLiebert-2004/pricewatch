@@ -33,6 +33,8 @@ jobs:
             budget: 1400
           - retailer: target
             budget: 700
+          - retailer: jbhifi
+            budget: 100      # 100 pages x 250 = the full reachable catalogue
     concurrency:
       group: crawl-${{ matrix.retailer }}
       cancel-in-progress: false

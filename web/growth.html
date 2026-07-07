@@ -31,10 +31,11 @@
   .gbar .r-bigw{background:#3d7bd9}
   .gbar .r-officeworks{background:var(--deal)}
   .gbar .r-target{background:#c9a227}
+  .gbar .r-jbhifi{background:#8a5cd6}
   .gmeta{font-size:11.5px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
   .gmeta b{color:var(--ink);font-weight:600}
   .dotk{color:var(--flag)} .dotb{color:#3d7bd9}
-  .doto{color:var(--deal)} .dott{color:#c9a227}
+  .doto{color:var(--deal)} .dott{color:#c9a227} .dotj{color:#8a5cd6}
   .gnums{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   .gnums .plus{font-weight:650;font-size:19px;color:var(--deal);letter-spacing:-.01em}
   .gnums .cum{font-family:"Spline Sans Mono",monospace;font-size:10px;
@@ -90,9 +91,9 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const HDRS = {apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}`};
 
 const fmtN = n => Number(n).toLocaleString("en-AU");
-const RETAILERS = ["kmart","bigw","officeworks","target"];
-const RLAB = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target"};
-const DOT = {kmart:"dotk", bigw:"dotb", officeworks:"doto", target:"dott"};
+const RETAILERS = ["kmart","bigw","officeworks","target","jbhifi"];
+const RLAB = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi"};
+const DOT = {kmart:"dotk", bigw:"dotb", officeworks:"doto", target:"dott", jbhifi:"dotj"};
 
 function fmtDay(iso){
   const d = new Date(iso + "T00:00:00Z");

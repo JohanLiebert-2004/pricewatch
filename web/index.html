@@ -45,6 +45,7 @@
     <button class="chip" data-r="bigw" aria-pressed="false">Big W</button>
     <button class="chip" data-r="officeworks" aria-pressed="false">Officeworks</button>
     <button class="chip" data-r="target" aria-pressed="false">Target</button>
+    <button class="chip" data-r="jbhifi" aria-pressed="false">JB Hi-Fi</button>
   </div>
   <div class="barlabel">Category</div>
   <div class="bar" id="cats">
@@ -131,7 +132,7 @@ function categorize(title){
 
 // ---- render ------------------------------------------------------------
 const money = n => "$"+Number(n).toFixed(2);
-const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target"};
+const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi"};
 let ALL = [], filter = "all", retailer = "all", cat = "all", minOff = 0;
 
 function matches(d){
@@ -177,7 +178,7 @@ function render(){
     `<div class="empty">Nothing here for this combination yet.<br>Once the
      crawler has a few days of price history, drops show up automatically.</div>`; return; }
   if(retailer === "all"){
-    const order = ["kmart","bigw","officeworks","target"];
+    const order = ["kmart","bigw","officeworks","target","jbhifi"];
     const groups = {};
     for(const d of items) (groups[d.retailer] = groups[d.retailer] || []).push(d);
     list.innerHTML = order.filter(r=>groups[r]).map(r=>
