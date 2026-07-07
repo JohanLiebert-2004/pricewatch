@@ -9,6 +9,7 @@
 import argparse
 import json
 
+import alerts
 import categorize as categorize_mod
 import db
 from anomaly import run as detect
@@ -234,6 +235,9 @@ def cmd_detect(args):
         mp = " [marketplace seller]" if d["marketplace"] else ""
         print(f"[{d['tier']}] {d['off']} off via {d['signal']}: {d['title'][:55]} "
               f"${d['price']:.2f} (ref ${d['reference']:.2f}) @ {d['retailer']}{mp}\n  {d['url']}")
+    pinged = alerts.send_alerts(conn)
+    if pinged:
+        print(f"telegram: {pinged} alert(s) sent")
 
 
 def cmd_deals(args):

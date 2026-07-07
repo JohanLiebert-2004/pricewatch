@@ -5,9 +5,12 @@
 $ErrorActionPreference = "Continue"
 Set-Location $PSScriptRoot
 
-$envLine = Get-Content "$PSScriptRoot\.env" | Where-Object { $_ -match '^DATABASE_URL=' } | Select-Object -First 1
-if (-not $envLine) { Write-Error "No DATABASE_URL in .env"; exit 1 }
-$env:DATABASE_URL = $envLine -replace '^DATABASE_URL=', ''
+# load every KEY=VALUE from .env (DATABASE_URL, TELEGRAM_* alert config, ...)
+Get-Content "$PSScriptRoot\.env" | Where-Object { $_ -match '^[A-Z_]+=' } | ForEach-Object {
+    $k, $v = $_ -split '=', 2
+    Set-Item -Path "env:$k" -Value $v
+}
+if (-not $env:DATABASE_URL) { Write-Error "No DATABASE_URL in .env"; exit 1 }
 
 $log = "$PSScriptRoot\local_refresh.log"
 "=== $(Get-Date -Format o) bigw local refresh ===" | Out-File $log -Encoding utf8

@@ -121,6 +121,19 @@ def _migrate(conn):
             conn.commit()
         except Exception:
             conn.rollback()
+    if DATABASE_URL:
+        have_deals = {r["column_name"] for r in conn.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='deals'").fetchall()}
+    else:
+        have_deals = {r["name"] for r in conn.execute(
+            "PRAGMA table_info(deals)").fetchall()}
+    if "alerted_at" not in have_deals:
+        try:
+            conn.execute("ALTER TABLE deals ADD COLUMN alerted_at TEXT")
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
 
 def _connect_postgres():
