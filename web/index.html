@@ -4,12 +4,32 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Underpriced — live retail pricing errors</title>
-<meta name="description" content="Live price-drop and pricing-error tracker across Australian retailers — Kmart, Big W, Officeworks and Target.">
+<meta name="description" content="Live price-drop and pricing-error tracker across Australian retailers — Kmart, Big W, Officeworks, Target and JB Hi-Fi.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Spline+Sans+Mono:wght@400;500&family=Inter:wght@400;500;600;650&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<style>
+  /* minimum-discount slider */
+  .rangebar{display:flex;align-items:center;gap:18px;margin:2px 0 6px;max-width:520px}
+  .rangebar input[type=range]{
+    flex:1;-webkit-appearance:none;appearance:none;height:5px;border-radius:99px;
+    background:linear-gradient(90deg,var(--deal) var(--fill,0%),var(--soft) var(--fill,0%));
+    outline:none;cursor:pointer}
+  .rangebar input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;
+    background:var(--ink);border:3px solid var(--paper);box-shadow:0 1px 6px var(--shadow);
+    transition:transform .15s}
+  .rangebar input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
+  .rangebar input[type=range]::-moz-range-thumb{
+    width:14px;height:14px;border-radius:50%;background:var(--ink);
+    border:3px solid var(--paper);box-shadow:0 1px 6px var(--shadow)}
+  .rangebar output{
+    font-family:"Spline Sans Mono",monospace;font-size:13px;font-weight:500;
+    min-width:64px;text-align:right;color:var(--ink);
+    font-variant-numeric:tabular-nums;white-space:nowrap}
+</style>
 </head>
 <body>
 
@@ -26,13 +46,13 @@
 <header class="hero"><div class="wrap">
   <div class="eyebrow"><span class="live"></span> live price intelligence · australia</div>
   <h1 class="display">Retail pricing <em>errors</em>,<br>caught within the hour.</h1>
-  <p class="sub">Every price at Kmart, Big W, Officeworks and Target, watched
-    around the clock. When something sells far below what it normally costs,
+  <p class="sub">Every price at Kmart, Big W, Officeworks, Target and JB Hi-Fi,
+    watched around the clock. When something sells below what it normally costs,
     it appears here — often before anyone else notices.</p>
   <div class="stats">
-    <div class="stat"><b id="s-deals">–</b><span>live deals</span></div>
+    <div class="stat"><b id="s-deals">–</b><span>50%+ deals live</span></div>
     <div class="stat"><b id="s-items">–</b><span>items tracked</span></div>
-    <div class="stat"><b>4</b><span>stores</span></div>
+    <div class="stat"><b>5</b><span>stores</span></div>
     <div class="stat"><b>24/7</b><span>monitoring</span></div>
   </div>
 </div></header>
@@ -59,21 +79,19 @@
     <button class="chip" data-c="books" aria-pressed="false">Books &amp; Stationery</button>
     <button class="chip" data-c="other" aria-pressed="false">Other</button>
   </div>
-  <div class="barlabel">Discount</div>
-  <div class="bar" id="discounts">
-    <button class="chip" data-d="0" aria-pressed="true">Any (50%+)</button>
-    <button class="chip" data-d="60" aria-pressed="false">60%+</button>
-    <button class="chip" data-d="70" aria-pressed="false">70%+</button>
-    <button class="chip" data-d="80" aria-pressed="false">80%+</button>
-    <button class="chip" data-d="90" aria-pressed="false">90%+</button>
+  <div class="barlabel">Minimum discount</div>
+  <div class="rangebar">
+    <input type="range" id="minoff" min="0" max="99" step="1" value="0"
+           aria-label="Minimum discount percentage">
+    <output id="minoffval" for="minoff">any</output>
   </div>
   <div class="barlabel">Type</div>
   <div class="bar" id="filters">
     <button class="chip" data-f="all" aria-pressed="true">Everything</button>
     <button class="chip" data-f="err" aria-pressed="false">Error-tier (80%+)</button>
-    <button class="chip" data-f="cross" aria-pressed="false">Cheaper elsewhere</button>
     <button class="chip" data-f="mkt" aria-pressed="false">Marketplace</button>
   </div>
+  <div class="total" id="total"></div>
   <div id="list"><div class="empty">Loading the latest finds…</div></div>
 </main>
 
@@ -83,8 +101,8 @@
     Prices are captured automatically and can change or sell out fast. Retailers
     may cancel orders placed on genuine pricing errors — always check the listing
     before buying. Marketplace items are sold by third-party sellers.
-    "Cheaper elsewhere" compares the same barcode across stores; dashed = fuzzy
-    (name-matched, unverified) rather than an exact barcode match.
+    Discounts are measured against the retailer's own RRP, or the highest price
+    we've recorded in the last 90 days when no RRP is published.
     Categories are inferred from product names and may occasionally miss.
   </div>
 </div></footer>
@@ -94,17 +112,7 @@
 const SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrbGZnd2FseWZ1Z3BlaWVlcXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNDc1NTcsImV4cCI6MjA5ODcyMzU1N30.Y-q-s49eP67iHuQIysRb7Apl5vLA4u2C6fZYCdS7Ijg";  // public anon key (read-only via RLS)
 const HDRS = {apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}`};
-
-async function loadDeals(){
-  if (SUPABASE_URL && SUPABASE_ANON_KEY){
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/deal_feed?select=*&order=score.desc&limit=500`,
-      {headers:HDRS});
-    if(r.ok) return r.json();
-  }
-  const r = await fetch("deals.json"); // fallback
-  return r.ok ? r.json() : [];
-}
+const LIMIT = 500;
 
 // header stats
 fetch(`${SUPABASE_URL}/rest/v1/catalogue_stats?select=items`, {headers:HDRS})
@@ -113,55 +121,43 @@ fetch(`${SUPABASE_URL}/rest/v1/catalogue_stats?select=items`, {headers:HDRS})
     if(t) document.getElementById("s-items").textContent =
       t.toLocaleString("en-AU"); })
   .catch(()=>{});
-
-// ---- categorisation (retailers don't expose categories; infer from title) --
-const CAT_RULES = [
-  ["tech",     /\b(laptop|notebook pc|monitor|headphone|earbud|ear ?pod|speaker|soundbar|tablet|ipad|iphone|galaxy|pixel|phone|charger|power ?bank|usb|hdmi|ssd|hard ?drive|mouse|keyboard|printer|ink|toner|camera|webcam|smart ?watch|fitbit|garmin|television|\btv\b|console|playstation|xbox|nintendo|router|modem|drone|projector|chromebook|macbook|airpod|kindle|e-?reader|gpu|cpu|ram\b)\b/i],
-  ["kitchen",  /\b(air ?fryer|fryer|rice cooker|slow cooker|multi ?cooker|kettle|toaster|blender|mixer|coffee|espresso|frypan|saucepan|pan set|cookware|knife|knives|chopping|dinner ?set|plate|bowl set|mug|glassware|jug|bakeware|oven tray|microwave|dishwasher|utensil|cutlery|thermomix|food processor)\b/i],
-  ["toys",     /\b(toy|lego|duplo|plush|doll|barbie|nerf|puzzle|board game|playset|play set|action figure|hot wheels|paw patrol|bluey|pokemon|disney|marvel|scooter|trampoline|baby|infant|nappy|nappies|pram|stroller|cot\b|bassinet|bottle .*(baby|silicone)|nanobebe|teether|kids?\b|children)\b/i],
-  ["clothing", /\b(t-?shirt|shirt|tee\b|trunks|shorts|jeans|pants|leggings|dress|skirt|jacket|hoodie|jumper|sweater|coat|sock|underwear|bra\b|briefs|pyjama|pajama|sneaker|shoe|boot|sandal|thong|slipper|cap\b|beanie|hat\b|scarf|glove|swimwear|bikini|rashie|wig\b|costume|racing suit)\b/i],
-  ["beauty",   /\b(skincare|skin care|serum|toner|moisturis|cleanser|sunscreen|spf\b|makeup|make-up|mascara|lipstick|foundation|concealer|eyeshadow|shampoo|conditioner|hair ?dryer|straightener|curler|perfume|fragrance|cologne|nail polish|razor|shaver|trimmer|epilator|oxx\b)\b/i],
-  ["books",    /\b(book\b|novel|paperback|hardcover|colouring|coloring|notebook|journal|diary|planner|pen\b|pencil|marker|highlighter|stapler|tape\b|post-?it|envelope|paper\b|folder|binder|calculator|whiteboard|easel)\b/i],
-  ["home",     /\b(chair|desk|table|shelf|shelving|bookcase|drawer|cabinet|sofa|couch|lounge|bed\b|mattress|quilt|doona|duvet|sheet set|pillow|cushion|towel|blanket|throw\b|rug\b|mat\b|curtain|blind|lamp|light\b|lighting|mirror|vase|candle|photo frame|clock|storage|organiser|organizer|basket|hamper|heater|fan\b|air purifier|humidifier|vacuum|mop\b|broom|laundry|ironing|garden|plant\b|pot\b|bbq|outdoor|gazebo|jar\b|container)\b/i],
-];
-function categorize(title){
-  const t = String(title || "");
-  for(const [cat, re] of CAT_RULES) if(re.test(t)) return cat;
-  return "other";
-}
+fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=sku&pct_off=gte.50&limit=1`,
+      {headers:{...HDRS, Prefer:"count=exact"}})
+  .then(r=>{ const n = (r.headers.get("content-range")||"").split("/")[1];
+    if(n) document.getElementById("s-deals").textContent =
+      Number(n).toLocaleString("en-AU"); })
+  .catch(()=>{});
 
 // ---- render ------------------------------------------------------------
 const money = n => "$"+Number(n).toFixed(2);
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi"};
-let ALL = [], filter = "all", retailer = "all", cat = "all", minOff = 0;
+const esc = s => String(s ?? "").replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let retailer = "all", cat = "all", filter = "all", minOff = 0, fetchSeq = 0;
 
-function matches(d){
-  if(retailer !== "all" && d.retailer !== retailer) return false;
-  if(cat !== "all" && d._cat !== cat) return false;
-  if(Number(d.pct_off) < minOff) return false;
-  if(filter === "err") return d.error_tier;
-  if(filter === "cross") return String(d.signal).startsWith("cross_retailer");
-  if(filter === "mkt") return d.is_marketplace;
-  return true;
+function feedUrl(){
+  let q = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
+          `&order=pct_off.desc,reference_price.desc&limit=${LIMIT}`;
+  if(minOff > 0) q += `&pct_off=gte.${minOff}`;
+  if(retailer !== "all") q += `&retailer=eq.${retailer}`;
+  if(cat !== "all") q += `&category=eq.${cat}`;
+  if(filter === "err") q += `&error_tier=is.true`;
+  if(filter === "mkt") q += `&is_marketplace=is.true`;
+  return q;
 }
 
 function rowHtml(d, i){
-  const fuzzy = String(d.signal)==="cross_retailer_fuzzy";
-  const sigLabel = {
-    rrp_gap:"vs RRP", history_drop:"vs its usual price",
-    cross_retailer:"vs other stores", cross_retailer_fuzzy:"vs other stores ~"
-  }[d.signal] || d.signal;
+  const sigLabel = {rrp_gap:"vs RRP", history_drop:"vs its usual price"}[d.signal] || d.signal;
   return `<div class="row ${d.error_tier?'err':''}" style="animation-delay:${Math.min(i*45,450)}ms">
     <div class="off">${d.pct_off}%</div>
     <div>
-      <div class="title"><a href="${d.url}" target="_blank" rel="noopener">${d.title}</a></div>
+      <div class="title"><a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a></div>
       <div class="meta">
-        <span class="pill">${RETAILER_LABEL[d.retailer]||d.retailer}</span>
-        <span class="pill">${d._cat}</span>
+        <span class="pill">${RETAILER_LABEL[d.retailer]||esc(d.retailer)}</span>
+        <span class="pill">${esc(d.category)}</span>
         <span>${sigLabel}</span>
         ${d.error_tier?'<span class="pill err">error-tier</span>':''}
         ${d.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
-        ${fuzzy?'<span class="pill fuzzy">fuzzy match</span>':''}
       </div>
     </div>
     <div class="price">
@@ -171,46 +167,72 @@ function rowHtml(d, i){
   </div>`;
 }
 
-function render(){
+function render(rows, total){
+  const label = `${RETAILER_LABEL[retailer]||"All stores"}` +
+    (cat!=="all" ? ` · ${cat}` : "") +
+    (minOff>0 ? ` · ${minOff}%+ off` : "");
+  document.getElementById("total").innerHTML =
+    `${total.toLocaleString("en-AU")} discounted item${total===1?"":"s"} <span>· ${label}` +
+    (total > rows.length ? ` · showing the deepest ${rows.length}` : "") + `</span>`;
   const list = document.getElementById("list");
-  const items = ALL.filter(matches);
-  if(!items.length){ list.innerHTML =
-    `<div class="empty">Nothing here for this combination yet.<br>Once the
-     crawler has a few days of price history, drops show up automatically.</div>`; return; }
+  if(!rows.length){ list.innerHTML =
+    `<div class="empty">Nothing here for this combination yet.<br>Try a lower
+     minimum discount — or check back once the crawler has more price history.</div>`; return; }
   if(retailer === "all"){
     const order = ["kmart","bigw","officeworks","target","jbhifi"];
     const groups = {};
-    for(const d of items) (groups[d.retailer] = groups[d.retailer] || []).push(d);
+    for(const d of rows) (groups[d.retailer] = groups[d.retailer] || []).push(d);
     list.innerHTML = order.filter(r=>groups[r]).map(r=>
       `<h2 class="section-h">${RETAILER_LABEL[r]||r}
          <span class="count">${groups[r].length} deal${groups[r].length>1?'s':''}</span></h2>` +
       groups[r].map(rowHtml).join("")
     ).join("");
   }else{
-    list.innerHTML = items.map(rowHtml).join("");
+    list.innerHTML = rows.map(rowHtml).join("");
   }
 }
 
+async function refresh(){
+  const seq = ++fetchSeq;
+  try{
+    const r = await fetch(feedUrl(), {headers:{...HDRS, Prefer:"count=exact"}});
+    if(seq !== fetchSeq) return;      // a newer filter superseded this fetch
+    const rows = r.ok ? await r.json() : [];
+    const total = Number((r.headers.get("content-range")||"").split("/")[1]) || rows.length;
+    render(rows, total);
+  }catch(e){
+    if(seq !== fetchSeq) return;
+    document.getElementById("list").innerHTML =
+      `<div class="empty">Couldn't load deals — try again in a moment.</div>`;
+  }
+}
+
+// ---- controls ----------------------------------------------------------
 function wireBar(id, attr, set){
   document.getElementById(id).addEventListener("click", e=>{
     const b = e.target.closest(".chip"); if(!b) return;
     set(b.dataset[attr]);
     document.querySelectorAll(`#${id} .chip`).forEach(c=>
       c.setAttribute("aria-pressed", c===b));
-    render();
+    refresh();
   });
 }
 wireBar("retailers","r", v=>retailer=v);
 wireBar("cats","c", v=>cat=v);
-wireBar("discounts","d", v=>minOff=Number(v));
 wireBar("filters","f", v=>filter=v);
 
-loadDeals().then(d=>{
-  ALL = d.map(x=>({...x, _cat: categorize(x.title)}));
-  document.getElementById("s-deals").textContent = ALL.length.toLocaleString("en-AU");
-  render();
-}).catch(()=>{document.getElementById("list").innerHTML =
-  `<div class="empty">Couldn't load deals. Check the data source settings.</div>`;});
+const slider = document.getElementById("minoff");
+const sliderVal = document.getElementById("minoffval");
+let sliderTimer = null;
+slider.addEventListener("input", ()=>{
+  const v = Number(slider.value);
+  slider.style.setProperty("--fill", `${v}%`);
+  sliderVal.textContent = v === 0 ? "any" : `${v}%+`;
+  clearTimeout(sliderTimer);
+  sliderTimer = setTimeout(()=>{ minOff = v; refresh(); }, 250);
+});
+
+refresh();
 </script>
 </body>
 </html>
