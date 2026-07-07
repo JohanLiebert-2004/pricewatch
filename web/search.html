@@ -78,17 +78,21 @@ async function search(q){
   const safe = q.replace(/[,()*]/g, " ").trim();
   if(!safe){ list.innerHTML = `<div class="empty">Type something to search.</div>`; return; }
   const pat = `*${safe.split(/\s+/).join("*")}*`;
-  const url = `${SUPABASE_URL}/rest/v1/product_search` +
-    `?or=(sku.ilike.${encodeURIComponent(pat)},title.ilike.${encodeURIComponent(pat)})` +
-    `&order=title.asc&limit=100`;   // recency order starved small retailers
-                                    // after big sweeps; stable order + bigger
-                                    // page keeps every store represented
+  // one query per retailer so a store with 100k matches can't crowd the
+  // others out of a single shared result page
+  const urls = Object.keys(RETAILER_LABEL).map(r =>
+    `${SUPABASE_URL}/rest/v1/product_search?retailer=eq.${r}` +
+    `&or=(sku.ilike.${encodeURIComponent(pat)},title.ilike.${encodeURIComponent(pat)})` +
+    `&order=title.asc&limit=20`);
   let rows = [];
   try{
-    const r = await fetch(url, {headers:{apikey:SUPABASE_ANON_KEY,
-      Authorization:`Bearer ${SUPABASE_ANON_KEY}`}});
-    if(!r.ok) throw new Error(r.status);
-    rows = await r.json();
+    const parts = await Promise.all(urls.map(async u=>{
+      const r = await fetch(u, {headers:{apikey:SUPABASE_ANON_KEY,
+        Authorization:`Bearer ${SUPABASE_ANON_KEY}`}});
+      if(!r.ok) throw new Error(r.status);
+      return r.json();
+    }));
+    rows = parts.flat();
   }catch(e){
     list.innerHTML = `<div class="empty">Search failed — try again in a moment.</div>`;
     return;
