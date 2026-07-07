@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Underpriced — live retail pricing errors</title>
-<meta name="description" content="Live price-drop and pricing-error tracker across Australian retailers — Kmart, Big W, Officeworks, Target, JB Hi-Fi and The Good Guys.">
+<title>Underpriced — Curated Pricing Intelligence for Australian Retail</title>
+<meta name="description" content="Real-time intelligence on price drops and pricing anomalies across Australia's leading retailers — Kmart, Big W, Officeworks, Target, JB Hi-Fi and The Good Guys.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,31 +48,31 @@
 </div></nav>
 
 <header class="hero"><div class="wrap">
-  <div class="eyebrow"><span class="live"></span> live price intelligence · australia</div>
-  <h1 class="display">Retail pricing <em>errors</em>,<br>caught within the hour.</h1>
+  <div class="eyebrow"><span class="live"></span> real-time price intelligence · australia</div>
+  <h1 class="display">Rare pricing <em>errors</em>,<br>uncovered within the hour.</h1>
   <p class="sub">Every price at Kmart, Big W, Officeworks, Target, JB Hi-Fi and
-    The Good Guys, watched around the clock. When something sells below what it
-    normally costs, it appears here — often before anyone else notices.</p>
+    The Good Guys, watched around the clock. The instant something sells for
+    less than it should, it surfaces here — often before anyone else notices.</p>
   <div class="stats">
-    <div class="stat"><b id="s-deals">–</b><span>50%+ deals live</span></div>
-    <div class="stat"><b id="s-items">–</b><span>items tracked</span></div>
-    <div class="stat"><b>6</b><span>stores</span></div>
-    <div class="stat"><b>24/7</b><span>monitoring</span></div>
+    <div class="stat"><b id="s-deals">–</b><span>live deals, 50%+ off</span></div>
+    <div class="stat"><b id="s-items">–</b><span>products under watch</span></div>
+    <div class="stat"><b>6</b><span>retailers covered</span></div>
+    <div class="stat"><b>24/7</b><span>continuous monitoring</span></div>
   </div>
 </div></header>
 
 <main class="wrap">
   <div class="panel">
-    <div class="barlabel">Search the deals</div>
+    <div class="barlabel">Search the Collection</div>
     <form class="pricebar" id="qbar">
       <input type="search" id="q" placeholder="name or SKU — e.g. air fryer"
              autocomplete="off" style="width:min(300px,100%)">
       <button type="submit">Search</button>
       <button type="button" class="clear" id="qclear">Clear</button>
     </form>
-    <div class="barlabel">Store</div>
+    <div class="barlabel">Retailer</div>
     <div class="bar" id="retailers">
-      <button class="chip" data-r="all" aria-pressed="true">All stores</button>
+      <button class="chip" data-r="all" aria-pressed="true">All Retailers</button>
       <button class="chip" data-r="kmart" aria-pressed="false">Kmart</button>
       <button class="chip" data-r="bigw" aria-pressed="false">Big W</button>
       <button class="chip" data-r="officeworks" aria-pressed="false">Officeworks</button>
@@ -92,7 +92,7 @@
       <button class="chip" data-c="books" aria-pressed="false">Books &amp; Stationery</button>
       <button class="chip" data-c="other" aria-pressed="false">Other</button>
     </div>
-    <div class="barlabel">Sort &amp; price</div>
+    <div class="barlabel">Sort &amp; Price Range</div>
     <form class="pricebar" id="pbar">
       <select id="sort" aria-label="Sort deals">
         <option value="deep">Biggest discount</option>
@@ -106,32 +106,32 @@
       <button type="submit">Apply</button>
       <button type="button" class="clear" id="pclear">Reset</button>
     </form>
-    <div class="barlabel">Minimum discount</div>
+    <div class="barlabel">Minimum Discount</div>
     <div class="rangebar">
       <input type="range" id="minoff" min="0" max="99" step="1" value="0"
              aria-label="Minimum discount percentage">
       <output id="minoffval" for="minoff">any</output>
     </div>
-    <div class="barlabel">Type</div>
+    <div class="barlabel">Listing Type</div>
     <div class="bar" id="filters">
-      <button class="chip" data-f="all" aria-pressed="true">Everything</button>
-      <button class="chip" data-f="err" aria-pressed="false">Error-tier (80%+)</button>
+      <button class="chip" data-f="all" aria-pressed="true">All Listings</button>
+      <button class="chip" data-f="err" aria-pressed="false">Error-Tier (80%+ Off)</button>
       <button class="chip" data-f="mkt" aria-pressed="false">Marketplace</button>
     </div>
   </div>
   <div class="total" id="total"></div>
-  <div class="grid" id="list"><div class="empty">Loading the latest finds…</div></div>
+  <div class="grid" id="list"><div class="empty">Curating the latest finds…</div></div>
 </main>
 
 <footer><div class="wrap footgrid">
   <div class="fbrand">Under<em>priced</em></div>
   <div class="note">
     Prices are captured automatically and can change or sell out fast. Retailers
-    may cancel orders placed on genuine pricing errors — always check the listing
-    before buying. Marketplace items are sold by third-party sellers.
+    may cancel orders placed on genuine pricing errors — always verify the listing
+    before purchasing. Marketplace items are sold by third-party sellers.
     Discounts are measured against the retailer's own RRP, or the highest price
-    we've recorded in the last 90 days when no RRP is published.
-    Categories are inferred from product names and may occasionally miss.
+    recorded in the last 90 days where no RRP is published.
+    Categories are inferred from product names and may occasionally be misclassified.
   </div>
 </div></footer>
 
@@ -236,7 +236,7 @@ function render(rows, total){
     (total > rows.length ? ` · showing ${rows.length}` : "") + `</span>`;
   const list = document.getElementById("list");
   if(!rows.length){ list.innerHTML =
-    `<div class="empty" style="grid-column:1/-1">Nothing here for this combination yet.<br>Try a lower
+    `<div class="empty" style="grid-column:1/-1">Nothing matches this combination just yet.<br>Try a lower
      minimum discount or a wider price range.</div>`; return; }
   list.innerHTML = rows.map(cardHtml).join("");
 }
@@ -252,7 +252,7 @@ async function refresh(){
   }catch(e){
     if(seq !== fetchSeq) return;
     document.getElementById("list").innerHTML =
-      `<div class="empty" style="grid-column:1/-1">Couldn't load deals — try again in a moment.</div>`;
+      `<div class="empty" style="grid-column:1/-1">We couldn't load the deals — please try again in a moment.</div>`;
   }
 }
 

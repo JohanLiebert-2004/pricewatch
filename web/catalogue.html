@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Catalogue — Underpriced</title>
-<meta name="description" content="Browse every product tracked by Underpriced, by store, category and price.">
+<title>The Catalogue — Underpriced</title>
+<meta name="description" content="Browse the full Underpriced catalogue — every product under watch, by retailer, category and price.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -26,22 +26,22 @@
 <header class="hero compact"><div class="wrap">
   <div class="eyebrow">full coverage · refreshed continuously</div>
   <h1 class="display">The <em>catalogue</em></h1>
-  <p class="sub">Every product we track, browsable by store, category and price.</p>
+  <p class="sub">Every product under watch, curated and browsable by retailer, category and price.</p>
 </div></header>
 
 <main class="wrap">
-  <div class="barlabel">Find in catalogue</div>
+  <div class="barlabel">Search the Catalogue</div>
   <form class="pricebar" id="qbar">
     <input type="search" id="q" placeholder="name or SKU — e.g. air fryer"
            autocomplete="off" style="width:min(320px,100%);border-radius:999px">
     <button type="submit">Search</button>
     <button type="button" class="clear" id="qclear">Clear</button>
   </form>
-  <div class="barlabel">Store</div>
+  <div class="barlabel">Retailer</div>
   <div class="bar" id="retailers"></div>
   <div class="barlabel">Category</div>
   <div class="bar" id="cats"></div>
-  <div class="barlabel">Price</div>
+  <div class="barlabel">Price Range</div>
   <form class="pricebar" id="pricebar">
     <input type="number" id="pmin" min="0" step="1" placeholder="min $">
     <span class="dash">—</span>
@@ -50,17 +50,17 @@
     <button type="button" class="clear" id="pclear">Clear</button>
   </form>
   <div class="total" id="total"></div>
-  <div id="list"><div class="empty">Loading…</div></div>
-  <button class="more" id="more" hidden>Load 50 more</button>
+  <div id="list"><div class="empty">Curating the catalogue…</div></div>
+  <button class="more" id="more" hidden>Show 50 more</button>
 </main>
 
 <footer><div class="wrap footgrid">
   <div class="fbrand">Under<em>priced</em></div>
   <div class="note">
     Counts cover products with a captured price. Categories are inferred from
-    product names and may occasionally misfile an item. Stores with few or no
-    items (Big W, Target) are still being crawled — retailers block automated
-    requests intermittently, so coverage builds over successive runs.
+    product names and may occasionally be misclassified. Retailers with limited
+    coverage so far (Big W, Target) remain in active crawling — retailers block
+    automated requests intermittently, so coverage builds over successive runs.
   </div>
 </div></footer>
 
@@ -141,7 +141,7 @@ function filterUrl(){
 
 async function loadPage(reset){
   if(reset){ offset = 0; document.getElementById("list").innerHTML =
-    `<div class="empty">Loading…</div>`; }
+    `<div class="empty">Curating the catalogue…</div>`; }
   const q = filterUrl() + `&order=title.asc&limit=${PAGE}&offset=${offset}`;
   const r = await fetch(q, {headers:HDRS});
   const rows = r.ok ? await r.json() : [];
@@ -168,8 +168,8 @@ async function loadPage(reset){
   </div>`).join("");
   const list = document.getElementById("list");
   if(reset) list.innerHTML = html ||
-    `<div class="empty">No items here yet — this store/category combination
-     hasn't been crawled successfully.<br>Coverage builds every half hour.</div>`;
+    `<div class="empty">Nothing here yet — this retailer/category combination
+     hasn't been fully crawled.<br>Coverage builds every half hour.</div>`;
   else list.insertAdjacentHTML("beforeend", html);
   offset += rows.length;
   const more = document.getElementById("more");
@@ -221,7 +221,7 @@ fetch(`${SUPABASE_URL}/rest/v1/catalogue_stats?select=*`, {headers:HDRS})
   .then(r=>r.json())
   .then(s=>{ STATS = s; chips(); return loadPage(true); })
   .catch(()=>{document.getElementById("list").innerHTML =
-    `<div class="empty">Couldn't load the catalogue. Try again shortly.</div>`;});
+    `<div class="empty">We couldn't load the catalogue — please try again shortly.</div>`;});
 </script>
 </body>
 </html>
