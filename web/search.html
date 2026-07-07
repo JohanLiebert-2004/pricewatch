@@ -80,7 +80,9 @@ async function search(q){
   const pat = `*${safe.split(/\s+/).join("*")}*`;
   const url = `${SUPABASE_URL}/rest/v1/product_search` +
     `?or=(sku.ilike.${encodeURIComponent(pat)},title.ilike.${encodeURIComponent(pat)})` +
-    `&order=price_updated_at.desc.nullslast&limit=50`;
+    `&order=title.asc&limit=100`;   // recency order starved small retailers
+                                    // after big sweeps; stable order + bigger
+                                    // page keeps every store represented
   let rows = [];
   try{
     const r = await fetch(url, {headers:{apikey:SUPABASE_ANON_KEY,
