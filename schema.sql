@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS products (
     brand TEXT,
     category TEXT,
     url TEXT,
+    image_url TEXT,
     is_marketplace BOOLEAN DEFAULT FALSE,
     region TEXT DEFAULT '',              -- store/region-priced retailers (Bunnings, Harvey Norman)
     first_seen TIMESTAMPTZ DEFAULT now(),

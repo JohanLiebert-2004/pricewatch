@@ -30,6 +30,13 @@
 </div></header>
 
 <main class="wrap">
+  <div class="barlabel">Find in catalogue</div>
+  <form class="pricebar" id="qbar">
+    <input type="search" id="q" placeholder="name or SKU — e.g. air fryer"
+           autocomplete="off" style="width:min(320px,100%);border-radius:999px">
+    <button type="submit">Search</button>
+    <button type="button" class="clear" id="qclear">Clear</button>
+  </form>
   <div class="barlabel">Store</div>
   <div class="bar" id="retailers"></div>
   <div class="barlabel">Category</div>
@@ -77,6 +84,7 @@ const fmtN = n => Number(n).toLocaleString("en-AU");
 let STATS = [];           // [{retailer, category, items}]
 let retailer = "all", cat = "all", offset = 0;
 let pmin = null, pmax = null;   // price filter ($)
+let q = "";                     // text filter (name/SKU)
 const PAGE = 50;
 
 function count(r, c){
@@ -92,11 +100,12 @@ function chips(){
   document.getElementById("cats").innerHTML = CATS.map(([k,label])=>
     `<button class="chip" data-k="${k}" aria-pressed="${k===cat}">
        ${label}<span class="n">${fmtN(count(retailer,k))}</span></button>`).join("");
-  const priced = pmin !== null || pmax !== null;
+  const priced = pmin !== null || pmax !== null || q;
   const label = `${RETAILER_LABEL[retailer]}${cat!=="all" ? " · "+cat : ""}` +
-    (priced ? ` · $${pmin ?? 0}–${pmax !== null ? "$"+pmax : ""}` : "");
+    (pmin !== null || pmax !== null ? ` · $${pmin ?? 0}–${pmax !== null ? "$"+pmax : ""}` : "") +
+    (q ? ` · “${esc(q)}”` : "");
   if(priced){
-    // stats view doesn't know prices; ask the API for the exact filtered count
+    // stats view doesn't know prices/text; ask the API for the exact filtered count
     document.getElementById("total").innerHTML = `… items <span>· ${label}</span>`;
     fetch(filterUrl() + "&limit=1", {headers:{...HDRS, Prefer:"count=exact"}})
       .then(r=>{
@@ -111,12 +120,17 @@ function chips(){
 }
 
 function filterUrl(){
-  let q = `${SUPABASE_URL}/rest/v1/product_search?select=*`;
-  if(retailer!=="all") q += `&retailer=eq.${retailer}`;
-  if(cat!=="all") q += `&category=eq.${cat}`;
-  if(pmin !== null) q += `&current_price=gte.${pmin}`;
-  if(pmax !== null) q += `&current_price=lte.${pmax}`;
-  return q;
+  let u = `${SUPABASE_URL}/rest/v1/product_search?select=*`;
+  if(retailer!=="all") u += `&retailer=eq.${retailer}`;
+  if(cat!=="all") u += `&category=eq.${cat}`;
+  if(pmin !== null) u += `&current_price=gte.${pmin}`;
+  if(pmax !== null) u += `&current_price=lte.${pmax}`;
+  if(q){
+    // PostgREST or= syntax breaks on , ( ) — strip them; * are wildcards
+    const pat = `*${q.replace(/[,()*]/g," ").trim().split(/\s+/).join("*")}*`;
+    u += `&or=(sku.ilike.${encodeURIComponent(pat)},title.ilike.${encodeURIComponent(pat)})`;
+  }
+  return u;
 }
 
 async function loadPage(reset){
@@ -125,7 +139,11 @@ async function loadPage(reset){
   const q = filterUrl() + `&order=title.asc&limit=${PAGE}&offset=${offset}`;
   const r = await fetch(q, {headers:HDRS});
   const rows = r.ok ? await r.json() : [];
-  const html = rows.map((p,i)=>`<div class="row plain" style="animation-delay:${Math.min(i*30,300)}ms">
+  const html = rows.map((p,i)=>`<div class="row plain media" style="animation-delay:${Math.min(i*30,300)}ms">
+    <div class="thumb">${p.image_url
+      ? `<img src="${esc(p.image_url)}" loading="lazy" alt=""
+           onerror="this.outerHTML='<span class=mono>${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>'">`
+      : `<span class="mono">${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>`}</div>
     <div>
       <div class="title"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a></div>
       <div class="meta">
@@ -177,6 +195,18 @@ document.getElementById("pclear").addEventListener("click", ()=>{
   pmin = pmax = null;
   document.getElementById("pmin").value = "";
   document.getElementById("pmax").value = "";
+  chips();
+  loadPage(true);
+});
+document.getElementById("qbar").addEventListener("submit", e=>{
+  e.preventDefault();
+  q = document.getElementById("q").value.trim();
+  chips();
+  loadPage(true);
+});
+document.getElementById("qclear").addEventListener("click", ()=>{
+  q = "";
+  document.getElementById("q").value = "";
   chips();
   loadPage(true);
 });

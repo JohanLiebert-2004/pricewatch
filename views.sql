@@ -27,7 +27,7 @@ with hist as (
 )
 select p.retailer, p.sku, p.title, p.brand,
        coalesce(nullif(p.category,''),'other') as category,
-       p.url, p.is_marketplace,
+       p.url, p.image_url, p.is_marketplace,
        p.current_price as price,
        greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)) as reference_price,
        round((1 - p.current_price/greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)))*100) as pct_off,
@@ -48,7 +48,7 @@ grant select on discount_feed to anon;
 drop view if exists product_search;
 create view product_search as
 select p.retailer, p.sku, p.title, p.brand, p.category, p.url,
-       p.is_marketplace, p.current_price, p.current_rrp,
+       p.image_url, p.is_marketplace, p.current_price, p.current_rrp,
        coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at
 from products p
 where p.current_price is not null;

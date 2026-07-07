@@ -104,6 +104,7 @@ class OfficeworksScraper(BaseScraper):
                     if not sku or cents is None:
                         continue
                     seo = p.get("seoPath") or p.get("urlKeyword") or ""
+                    img = p.get("image") or ""
                     yield ProductRecord(
                         retailer=self.name,
                         sku=sku,
@@ -112,6 +113,8 @@ class OfficeworksScraper(BaseScraper):
                         brand=None,
                         url=(f"https://www.officeworks.com.au/shop/officeworks"
                              f"/p/{seo}" if seo else ""),
+                        image_url=(f"https:{img}" if img.startswith("//")
+                                   else img or None),
                         price=cents / 100.0,
                         rrp=None,
                         in_stock=bool(p.get("rangedOnline", True)),

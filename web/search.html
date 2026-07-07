@@ -90,7 +90,11 @@ async function search(q){
       “${esc(q)}”.<br>We cover Kmart, Big W, Officeworks, Target and JB Hi-Fi.</div>`;
     return;
   }
-  list.innerHTML = rows.map((p,i)=>`<div class="row plain" style="animation-delay:${Math.min(i*30,300)}ms">
+  list.innerHTML = rows.map((p,i)=>`<div class="row plain media" style="animation-delay:${Math.min(i*30,300)}ms">
+    <div class="thumb">${p.image_url
+      ? `<img src="${esc(p.image_url)}" loading="lazy" alt=""
+           onerror="this.outerHTML='<span class=mono>${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>'">`
+      : `<span class="mono">${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>`}</div>
     <div>
       <div class="title"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a></div>
       <div class="meta">

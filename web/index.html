@@ -146,10 +146,19 @@ function feedUrl(){
   return q;
 }
 
+function thumbHtml(d){
+  const mono = (RETAILER_LABEL[d.retailer]||"?")[0];
+  return `<div class="thumb">${d.image_url
+    ? `<img src="${esc(d.image_url)}" loading="lazy" alt=""
+         onerror="this.outerHTML='<span class=mono>${mono}</span>'">`
+    : `<span class="mono">${mono}</span>`}</div>`;
+}
+
 function rowHtml(d, i){
   const sigLabel = {rrp_gap:"vs RRP", history_drop:"vs its usual price"}[d.signal] || d.signal;
-  return `<div class="row ${d.error_tier?'err':''}" style="animation-delay:${Math.min(i*45,450)}ms">
+  return `<div class="row media ${d.error_tier?'err':''}" style="animation-delay:${Math.min(i*45,450)}ms">
     <div class="off">${d.pct_off}%</div>
+    ${thumbHtml(d)}
     <div>
       <div class="title"><a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a></div>
       <div class="meta">

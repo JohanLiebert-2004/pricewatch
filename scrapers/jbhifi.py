@@ -70,6 +70,7 @@ class JBHiFiScraper(BaseScraper):
                 rrp = cap
         except (TypeError, ValueError):
             pass
+        images = item.get("images") or []
         return ProductRecord(
             retailer=self.name,
             sku=str(var.get("sku") or item["id"]),
@@ -78,6 +79,7 @@ class JBHiFiScraper(BaseScraper):
             brand=item.get("vendor"),
             category=_TYPE_CAT.get((item.get("product_type") or "").upper()),
             url=f"https://www.jbhifi.com.au/products/{item['handle']}",
+            image_url=(images[0].get("src") if images else None),
             price=price,
             rrp=rrp,
             in_stock=any(v.get("available") for v in variants),

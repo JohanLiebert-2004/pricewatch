@@ -130,6 +130,7 @@ class KmartScraper(BaseScraper):
             title=str(item.get("value") or d.get("MerchClassName") or sku),
             brand=d.get("Brand"),
             url="https://www.kmart.com.au" + d.get("url", ""),
+            image_url=d.get("image_url"),
             price=float(price),
             rrp=rrp,
             in_stock=None,
