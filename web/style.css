@@ -4,6 +4,7 @@
    High-contrast text: near-black ink, dark slate for secondary. */
 
 :root{
+  color-scheme:light;   /* keep native controls light even in OS dark mode */
   --paper:#f4f5f7; --ink:#16181d; --hair:#e3e5ec; --hair2:#eceef2;
   --card:#ffffff; --soft:#eaecf1;
   --flag:#e11d48; --flag-soft:rgba(225,29,72,.08);
@@ -12,17 +13,7 @@
   --shadow:0 1px 2px rgba(22,24,29,.05), 0 4px 16px rgba(22,24,29,.06);
   --shadow-lift:0 4px 8px rgba(22,24,29,.07), 0 14px 36px rgba(22,24,29,.13);
 }
-@media (prefers-color-scheme: dark){
-  :root{
-    --paper:#101116; --ink:#f2f3f7; --hair:#23242c; --hair2:#1a1b21;
-    --card:#191a21; --soft:#20212a;
-    --flag:#fb5776; --flag-soft:rgba(251,87,118,.12);
-    --deal:#2fc47e; --deal-soft:rgba(47,196,126,.12);
-    --muted:#b9bdc9; --faint:#6d717f;
-    --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 24px rgba(0,0,0,.35);
-    --shadow-lift:0 2px 4px rgba(0,0,0,.45), 0 14px 40px rgba(0,0,0,.55);
-  }
-}
+/* light-only by design — the dark variant was rejected */
 
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
@@ -206,9 +197,6 @@ a{color:inherit}
 }
 .thumb img{width:100%;height:100%;object-fit:contain;padding:4px;display:block}
 .thumb .mono{font-weight:800;font-size:20px;color:var(--faint)}
-@media (prefers-color-scheme: dark){
-  .thumb, .ph{background:#f4f5f7;border-color:#2a2b34}
-}
 .row.err .off{color:var(--flag)}
 .off{
   font-weight:800;font-size:23px;line-height:1;
