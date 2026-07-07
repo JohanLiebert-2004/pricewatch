@@ -35,6 +35,9 @@ jobs:
             budget: 700
           - retailer: jbhifi
             budget: 100      # 100 pages x 250 = the full reachable catalogue
+          - retailer: goodguys
+            budget: 50       # no bulk listing API - refresh lane is a no-op,
+                              # all coverage comes from the crawl (queue) lane
     concurrency:
       group: crawl-${{ matrix.retailer }}
       cancel-in-progress: false

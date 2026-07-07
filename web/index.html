@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Underpriced — live retail pricing errors</title>
-<meta name="description" content="Live price-drop and pricing-error tracker across Australian retailers — Kmart, Big W, Officeworks, Target and JB Hi-Fi.">
+<meta name="description" content="Live price-drop and pricing-error tracker across Australian retailers — Kmart, Big W, Officeworks, Target, JB Hi-Fi and The Good Guys.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -50,13 +50,13 @@
 <header class="hero"><div class="wrap">
   <div class="eyebrow"><span class="live"></span> live price intelligence · australia</div>
   <h1 class="display">Retail pricing <em>errors</em>,<br>caught within the hour.</h1>
-  <p class="sub">Every price at Kmart, Big W, Officeworks, Target and JB Hi-Fi,
-    watched around the clock. When something sells below what it normally costs,
-    it appears here — often before anyone else notices.</p>
+  <p class="sub">Every price at Kmart, Big W, Officeworks, Target, JB Hi-Fi and
+    The Good Guys, watched around the clock. When something sells below what it
+    normally costs, it appears here — often before anyone else notices.</p>
   <div class="stats">
     <div class="stat"><b id="s-deals">–</b><span>50%+ deals live</span></div>
     <div class="stat"><b id="s-items">–</b><span>items tracked</span></div>
-    <div class="stat"><b>5</b><span>stores</span></div>
+    <div class="stat"><b>6</b><span>stores</span></div>
     <div class="stat"><b>24/7</b><span>monitoring</span></div>
   </div>
 </div></header>
@@ -78,6 +78,7 @@
       <button class="chip" data-r="officeworks" aria-pressed="false">Officeworks</button>
       <button class="chip" data-r="target" aria-pressed="false">Target</button>
       <button class="chip" data-r="jbhifi" aria-pressed="false">JB Hi-Fi</button>
+      <button class="chip" data-r="goodguys" aria-pressed="false">The Good Guys</button>
     </div>
     <div class="barlabel">Category</div>
     <div class="bar" id="cats">
@@ -157,7 +158,7 @@ fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=sku&pct_off=gte.50&limit=1`,
 
 // ---- render ------------------------------------------------------------
 const money = n => "$"+Number(n).toFixed(2).replace(/\.00$/,"");
-const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi"};
+const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys"};
 const SORTS = {
   deep:  "pct_off.desc,reference_price.desc",
   price_asc:  "price.asc,pct_off.desc",
