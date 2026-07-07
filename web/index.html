@@ -58,6 +58,13 @@
 </div></header>
 
 <main class="wrap">
+  <div class="barlabel">Find in deals</div>
+  <form class="pricebar" id="qbar">
+    <input type="search" id="q" placeholder="name or SKU — e.g. air fryer"
+           autocomplete="off" style="width:min(320px,100%)">
+    <button type="submit">Search</button>
+    <button type="button" class="clear" id="qclear">Clear</button>
+  </form>
   <div class="barlabel">Store</div>
   <div class="bar" id="retailers">
     <button class="chip" data-r="all" aria-pressed="true">All stores</button>
@@ -133,17 +140,22 @@ const money = n => "$"+Number(n).toFixed(2);
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi"};
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let retailer = "all", cat = "all", filter = "all", minOff = 0, fetchSeq = 0;
+let retailer = "all", cat = "all", filter = "all", minOff = 0, q = "", fetchSeq = 0;
 
 function feedUrl(){
-  let q = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
+  let u = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
           `&order=pct_off.desc,reference_price.desc&limit=${LIMIT}`;
-  if(minOff > 0) q += `&pct_off=gte.${minOff}`;
-  if(retailer !== "all") q += `&retailer=eq.${retailer}`;
-  if(cat !== "all") q += `&category=eq.${cat}`;
-  if(filter === "err") q += `&error_tier=is.true`;
-  if(filter === "mkt") q += `&is_marketplace=is.true`;
-  return q;
+  if(minOff > 0) u += `&pct_off=gte.${minOff}`;
+  if(retailer !== "all") u += `&retailer=eq.${retailer}`;
+  if(cat !== "all") u += `&category=eq.${cat}`;
+  if(filter === "err") u += `&error_tier=is.true`;
+  if(filter === "mkt") u += `&is_marketplace=is.true`;
+  if(q){
+    // PostgREST or= syntax breaks on , ( ) — strip them; * are wildcards
+    const pat = `*${q.replace(/[,()*]/g," ").trim().split(/\s+/).join("*")}*`;
+    u += `&or=(sku.ilike.${encodeURIComponent(pat)},title.ilike.${encodeURIComponent(pat)})`;
+  }
+  return u;
 }
 
 function thumbSrc(u){
@@ -185,7 +197,8 @@ function rowHtml(d, i){
 function render(rows, total){
   const label = `${RETAILER_LABEL[retailer]||"All stores"}` +
     (cat!=="all" ? ` · ${cat}` : "") +
-    (minOff>0 ? ` · ${minOff}%+ off` : "");
+    (minOff>0 ? ` · ${minOff}%+ off` : "") +
+    (q ? ` · “${esc(q)}”` : "");
   document.getElementById("total").innerHTML =
     `${total.toLocaleString("en-AU")} discounted item${total===1?"":"s"} <span>· ${label}` +
     (total > rows.length ? ` · showing the deepest ${rows.length}` : "") + `</span>`;
@@ -235,6 +248,17 @@ function wireBar(id, attr, set){
 wireBar("retailers","r", v=>retailer=v);
 wireBar("cats","c", v=>cat=v);
 wireBar("filters","f", v=>filter=v);
+
+document.getElementById("qbar").addEventListener("submit", e=>{
+  e.preventDefault();
+  q = document.getElementById("q").value.trim();
+  refresh();
+});
+document.getElementById("qclear").addEventListener("click", ()=>{
+  q = "";
+  document.getElementById("q").value = "";
+  refresh();
+});
 
 const slider = document.getElementById("minoff");
 const sliderVal = document.getElementById("minoffval");
