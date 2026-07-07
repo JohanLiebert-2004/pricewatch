@@ -238,6 +238,14 @@ def cmd_detect(args):
     pinged = alerts.send_alerts(conn)
     if pinged:
         print(f"telegram: {pinged} alert(s) sent")
+    if db.DATABASE_URL:
+        # keep the website's precomputed discount feed current (cheap: ~0.5s)
+        try:
+            conn.execute("refresh materialized view concurrently discount_feed")
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f"  ! discount_feed refresh failed: {e}")
 
 
 def cmd_deals(args):

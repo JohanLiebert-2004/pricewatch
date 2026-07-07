@@ -15,10 +15,11 @@ where d.status <> 'expired' and coalesce(d.reference_price, 0) >= 40
 order by d.score desc;
 grant select on deal_feed to anon;
 
--- Every discounted product at any depth: powers the deal page's 0-99% slider.
--- Reference = the retailer's RRP or our 90-day price high, whichever is higher.
-drop view if exists discount_feed;
-create view discount_feed as
+-- Every discounted product at any depth: powers the deal page's 0-99% slider
+-- and its text search. Materialized (refreshed by every `run.py detect`) so
+-- anon ilike/filter queries stay milliseconds under Supabase's timeout.
+drop materialized view if exists discount_feed;
+create materialized view discount_feed as
 with hist as (
   select product_id, max(price) as hi
   from price_snapshots
@@ -42,6 +43,7 @@ where p.current_price is not null
   and greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)) > p.current_price
   and p.last_seen > now() - interval '10 days'
   and round((1 - p.current_price/greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)))*100) >= 1;
+create unique index discount_feed_pk on discount_feed (retailer, sku);
 grant select on discount_feed to anon;
 
 -- Search page: latest price + date for any tracked product.
