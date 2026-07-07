@@ -80,6 +80,12 @@ const RETAILER_LABEL = Object.fromEntries(RETAILERS);
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmtN = n => Number(n).toLocaleString("en-AU");
+function thumbSrc(u){
+  if(u.includes("cdn.shopify.com")) return u + (u.includes("?")?"&":"?") + "width=200";
+  if(u.includes("JPEG_1000x1000")) return u.replace("JPEG_1000x1000","JPEG_300x300");
+  if(u.includes("assets.kmart.com.au")) return u.replace(/width:\d+,height:\d+/,"width:200,height:250");
+  return u;
+}
 
 let STATS = [];           // [{retailer, category, items}]
 let retailer = "all", cat = "all", offset = 0;
@@ -141,7 +147,7 @@ async function loadPage(reset){
   const rows = r.ok ? await r.json() : [];
   const html = rows.map((p,i)=>`<div class="row plain media" style="animation-delay:${Math.min(i*30,300)}ms">
     <div class="thumb">${p.image_url
-      ? `<img src="${esc(p.image_url)}" loading="lazy" alt=""
+      ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt=""
            onerror="this.outerHTML='<span class=mono>${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>'">`
       : `<span class="mono">${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>`}</div>
     <div>

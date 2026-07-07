@@ -146,10 +146,16 @@ function feedUrl(){
   return q;
 }
 
+function thumbSrc(u){
+  if(u.includes("cdn.shopify.com")) return u + (u.includes("?")?"&":"?") + "width=200";
+  if(u.includes("JPEG_1000x1000")) return u.replace("JPEG_1000x1000","JPEG_300x300");
+  if(u.includes("assets.kmart.com.au")) return u.replace(/width:\d+,height:\d+/,"width:200,height:250");
+  return u;
+}
 function thumbHtml(d){
   const mono = (RETAILER_LABEL[d.retailer]||"?")[0];
   return `<div class="thumb">${d.image_url
-    ? `<img src="${esc(d.image_url)}" loading="lazy" alt=""
+    ? `<img src="${esc(thumbSrc(d.image_url))}" loading="lazy" alt=""
          onerror="this.outerHTML='<span class=mono>${mono}</span>'">`
     : `<span class="mono">${mono}</span>`}</div>`;
 }
