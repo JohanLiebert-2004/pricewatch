@@ -1,7 +1,12 @@
 """Telegram deal alerts.
 
-Pings a Telegram chat the moment the anomaly engine records a monster deal:
-ALERT_MIN_SCORE off an item whose normal price is ALERT_MIN_REFERENCE or more.
+Pings a Telegram chat for every new deal the anomaly engine records - any
+row landing in `deals` (anomaly.py already gates on its own thresholds:
+50%+ off RRP/history/cross-retailer and a $40+ reference price, so this
+module doesn't re-filter). ALERT_MIN_SCORE/ALERT_MIN_REFERENCE opened up
+from 80%/$100 on 2026-07-08 - that bar was stricter than any real deal
+seen so far, so alerts were silently never firing; raise them again here
+if the flood of alerts at every-deal volume turns out to be too noisy.
 
 Setup (once):
   1. In Telegram, message @BotFather -> /newbot -> copy the bot token.
@@ -19,11 +24,12 @@ from datetime import datetime, timezone
 
 import httpx
 
-ALERT_MIN_SCORE = 0.80        # 80%+ off
-ALERT_MIN_REFERENCE = 100.0   # items that normally cost $100+
+ALERT_MIN_SCORE = 0.0         # any deal the anomaly engine records
+ALERT_MIN_REFERENCE = 0.0     # anomaly.py already gates reference >= $40
 
 RETAILER_LABEL = {"kmart": "Kmart", "bigw": "Big W", "target": "Target",
-                  "officeworks": "Officeworks", "jbhifi": "JB Hi-Fi"}
+                  "officeworks": "Officeworks", "jbhifi": "JB Hi-Fi",
+                  "goodguys": "The Good Guys", "supercheap": "Supercheap Auto"}
 
 
 def _config():
@@ -99,7 +105,7 @@ def test_message():
         f"https://api.telegram.org/bot{token}/sendMessage",
         json={"chat_id": chat_id, "parse_mode": "HTML",
               "text": "✅ Pricewatch alerts are live — you'll get a ping "
-                      "here for every deal 80%+ off an item normally $100+."},
+                      "here for every new deal the site detects."},
         timeout=15)
     print(r.status_code, r.text[:200])
 
