@@ -1,10 +1,18 @@
 """Supercheap Auto scraper.
 
 Salesforce Commerce Cloud (Demandware) storefront, no bot challenge on plain
-requests. Every product page carries a schema.org Product JSON-LD block
-(price nested under offers.priceSpecification, not offers.price) plus a GA4
-dataLayer items[] blob with the SKU (item_id), category tree, and — on
-discounted items — the dollar `discount`, so was-price = price + discount.
+requests. The per-product schema.org Product JSON-LD block used to be
+static HTML but as of ~July 2026 SCA moved it behind client-side JS
+(`jsonLdScripts = document.querySelectorAll('script[type="application/
+ld+json"]')` executed in-browser) — a plain HTTP fetch never sees it
+anymore, which silently broke this scraper (every parse_product() call
+returned None). The GA4 `view_item` dataLayer event is still emitted
+server-side as inline JS (`GTM.updateDataLayerByJson({"event":"view_item",
+...})`), so that's now the primary (only) data source: SKU (item_id),
+title, brand, category tree, price, and — on discounted items — the dollar
+`discount`, so was-price = price + discount. og:image meta tag covers the
+image (JSON-LD used to provide this). No reliable stock-status signal is
+present in the static HTML, so in_stock defaults to True.
 
 Full-catalogue discovery via the product sitemaps (~518k URLs across the
 `sitemap_N-product.xml` children of sitemap_index.xml) using the base
@@ -14,8 +22,12 @@ category browsing pages (start=, sz=, format=ajax); sitemap XML files are
 unaffected. Storage checked empirically before this expansion (~336
 bytes/row measured against production) - see PROJECT_NOTES.md.
 """
+import json
+import re
+from html import unescape
+
 from db import ProductRecord
-from .base import BaseScraper, extract_jsonld, _num, _brand
+from .base import BaseScraper, _brand
 
 
 class SupercheapScraper(BaseScraper):
@@ -25,54 +37,31 @@ class SupercheapScraper(BaseScraper):
     delay = 1.5
 
     def parse_product(self, url, html):
-        for block in extract_jsonld(html):
-            if block.get("@type") != "Product":
-                continue
-            offer = block.get("offers") or {}
-            if isinstance(offer, list):
-                offer = offer[0] if offer else {}
-            spec = offer.get("priceSpecification") or []
-            if isinstance(spec, dict):
-                spec = [spec]
-            price = _num(offer.get("price")) or \
-                (_num(spec[0].get("price")) if spec else None)
-            if price is None:
-                continue
-            sku, rrp = self._datalayer(html, price)
-            images = block.get("image") or []
-            if isinstance(images, str):
-                images = [images]
-            return ProductRecord(
-                retailer=self.name,
-                sku=sku or url.rstrip("/").split("/")[-1].removesuffix(".html"),
-                gtin=str(block.get("gtin13") or block.get("gtin") or "") or None,
-                title=block.get("name") or "",
-                brand=_brand(block.get("brand")),
-                url=url,
-                image_url=images[0] if images else None,
-                price=price,
-                rrp=rrp,
-                in_stock="InStock" in str(offer.get("availability", "")),
-                is_marketplace=False,   # SCA sells first-party only
-            )
-        return None
-
-    @staticmethod
-    def _datalayer(html, price):
-        """SKU and was-price from the GA4 items[] blob.
-
-        `discount` is the dollar amount off, so the pre-sale price is
-        price + discount (verified against clearance items' strike price).
-        """
-        m = re.search(r'"item_id"\s*:\s*"(\d+)"', html)
-        sku = m.group(1) if m else None
-        rrp = None
-        d = re.search(r'"discount"\s*:\s*([\d.]+)', html)
-        if d:
-            try:
-                off = float(d.group(1))
-                if off > 0:
-                    rrp = round(price + off, 2)
-            except ValueError:
-                pass
-        return sku, rrp
+        m = re.search(r'GTM\.updateDataLayerByJson\(\s*(\{.*?"event"\s*:\s*'
+                       r'"view_item".*?\})\s*\)\s*;', html)
+        if not m:
+            return None
+        try:
+            item = json.loads(m.group(1))["ecommerce"]["items"][0]
+        except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+            return None
+        price = item.get("price")
+        if price is None:
+            return None
+        price = float(price)
+        discount = item.get("discount") or 0
+        rrp = round(price + discount, 2) if discount > 0 else None
+        img = re.search(r'property="og:image"\s+content="([^"]+)"', html)
+        return ProductRecord(
+            retailer=self.name,
+            sku=item.get("item_id") or url.rstrip("/").split("/")[-1].removesuffix(".html"),
+            gtin=None,
+            title=item.get("item_name") or "",
+            brand=_brand(item.get("item_brand")),
+            url=url,
+            image_url=unescape(img.group(1)) if img else None,
+            price=price,
+            rrp=rrp,
+            in_stock=True,
+            is_marketplace=False,   # SCA sells first-party only
+        )
