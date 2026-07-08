@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Underpriced — Curated Pricing Intelligence for Australian Retail</title>
-<meta name="description" content="Real-time intelligence on price drops and pricing anomalies across Australia's leading retailers — Kmart, Big W, Officeworks, Target, JB Hi-Fi and The Good Guys.">
+<meta name="description" content="Real-time intelligence on price drops and pricing anomalies across Australia's leading retailers — Kmart, Big W, Officeworks, Target, JB Hi-Fi, The Good Guys and Supercheap Auto.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -49,14 +49,14 @@
 
 <header class="hero"><div class="wrap">
   <div class="eyebrow"><span class="live"></span> real-time price intelligence · australia</div>
-  <h1 class="display">Rare pricing <em>errors</em>,<br>uncovered within the hour.</h1>
-  <p class="sub">Every price at Kmart, Big W, Officeworks, Target, JB Hi-Fi and
-    The Good Guys, watched around the clock. The instant something sells for
-    less than it should, it surfaces here — often before anyone else notices.</p>
+  <h1 class="display">Prices too <em>good</em> to last,<br>caught within the hour.</h1>
+  <p class="sub">We watch every price at Kmart, Big W, Officeworks, Target,
+    JB Hi-Fi, The Good Guys and Supercheap Auto, day and night. When something is selling for
+    less than it should, it shows up here first.</p>
   <div class="stats">
     <div class="stat"><b id="s-deals">–</b><span>live deals, 50%+ off</span></div>
     <div class="stat"><b id="s-items">–</b><span>products under watch</span></div>
-    <div class="stat"><b>6</b><span>retailers covered</span></div>
+    <div class="stat"><b>7</b><span>retailers covered</span></div>
     <div class="stat"><b>24/7</b><span>continuous monitoring</span></div>
   </div>
 </div></header>
@@ -79,6 +79,7 @@
       <button class="chip" data-r="target" aria-pressed="false">Target</button>
       <button class="chip" data-r="jbhifi" aria-pressed="false">JB Hi-Fi</button>
       <button class="chip" data-r="goodguys" aria-pressed="false">The Good Guys</button>
+      <button class="chip" data-r="supercheap" aria-pressed="false">Supercheap Auto</button>
     </div>
     <div class="barlabel">Category</div>
     <div class="bar" id="cats">
@@ -99,6 +100,7 @@
         <option value="price_asc">Price: low to high</option>
         <option value="price_desc">Price: high to low</option>
         <option value="fresh">Newest price drops</option>
+        <option value="arrivals">New arrivals</option>
       </select>
       <input type="number" id="pmin" placeholder="min $" min="0" inputmode="numeric">
       <span class="dash">–</span>
@@ -158,12 +160,13 @@ fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=sku&pct_off=gte.50&limit=1`,
 
 // ---- render ------------------------------------------------------------
 const money = n => "$"+Number(n).toFixed(2).replace(/\.00$/,"");
-const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys"};
+const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", supercheap:"Supercheap Auto"};
 const SORTS = {
   deep:  "pct_off.desc,reference_price.desc",
   price_asc:  "price.asc,pct_off.desc",
   price_desc: "price.desc,pct_off.desc",
   fresh: "price_updated_at.desc,pct_off.desc",
+  arrivals: "first_seen.desc,pct_off.desc",
 };
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -225,7 +228,8 @@ function cardHtml(d, i){
 }
 
 const SORT_LABEL = {deep:"biggest discount", price_asc:"price low→high",
-                    price_desc:"price high→low", fresh:"newest drops"};
+                    price_desc:"price high→low", fresh:"newest drops",
+                    arrivals:"new arrivals"};
 function render(rows, total){
   const label = `${RETAILER_LABEL[retailer]||"All stores"}` +
     (cat!=="all" ? ` · ${cat}` : "") +

@@ -33,7 +33,7 @@ Vercel static site (web/ folder, no build step)  +  Telegram alerts
   domain support — no need to migrate off Vercel for this, it's free either
   way. Nothing to do until the user picks a name.
 
-## Retailers covered (6)
+## Retailers covered (7)
 
 | Retailer     | Method                                              | Notes |
 |--------------|-----------------------------------------------------|-------|
@@ -43,6 +43,7 @@ Vercel static site (web/ folder, no build step)  +  Telegram alerts
 | Target       | Category listings                                   | Akamai; no images yet |
 | JB Hi-Fi     | Shopify `/products.json` (250/page, 100-page cap = 25k most recent) | no bot protection; 1.0s delay; images via Shopify CDN |
 | The Good Guys| Product sitemap (`product_sitemap_1-4.xml`, 8,629 URLs) + schema.org JSON-LD per page | headless Shopify Hydrogen, no `/products.json`; no bot protection; no RRP field anywhere (relies on 90-day history fallback); crawl batch raised to 500/run (vs default 40) since it's unprotected — first full sweep ≈9h instead of ~4.5 days |
+| Supercheap Auto | Deal/clearance category pages (server-rendered, first page only) + JSON-LD & GA4 dataLayer per product page | Salesforce Commerce Cloud; no bot protection; **clearance-focused by design** — full catalogue is ~518k auto parts (won't fit free-tier DB) and robots.txt disallows pagination params (`start=`, `sz=`, `format=ajax`), so only the server-rendered `/clearance` page (~34 rotating items/cycle, accumulating in the queue) is enumerated — other deal pages build their grids client-side; was-price = price + dataLayer `discount`; images via demandware.static |
 
 **Bunnings — investigated and ruled out** (July 2026): robots.txt disallows
 `/api/` and `/apis/` (where any bulk endpoint would live), no product-level
@@ -53,6 +54,16 @@ policy. Revisit only if a public, non-disallowed data source turns up.
 Politeness is non-negotiable: no delays below the owner-approved floors,
 no parallel requests to one retailer. `Blocked` exceptions are expected
 (datacenter IPs), not bugs — batches resume next run.
+
+**Proxy policy (updated 2026-07-08):** residential/rotating proxies are now
+allowed for the three Akamai-fronted retailers (Big W, Kmart, Target) to
+cut down on datacenter-IP flags, since the goal is a real production
+service rather than a hobby deployment. `scrapers/base.py` supports a
+`PROXY_URL` env var + per-scraper `use_proxy` flag (all three already set);
+still needs a provider account + `gh secret set PROXY_URL` before it does
+anything. Delay floors and the one-request-at-a-time rule above are
+unchanged. Bunnings stays ruled out for now (Cloudflare fingerprinting,
+not just IP reputation) — this proxy allowance doesn't reopen that.
 
 ## What's built
 

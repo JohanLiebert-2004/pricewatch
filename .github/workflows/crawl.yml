@@ -40,11 +40,17 @@ jobs:
                                # all coverage comes from the crawl (queue) lane
             crawl_batch: 500  # no bot protection seen - safe to crawl the
                                # 8.6k-URL queue faster than the 40/run default
+          - retailer: supercheap
+            budget: 50        # refresh lane is a no-op (no compliant bulk
+                               # listing; robots.txt disallows pagination params)
+            crawl_batch: 300  # clearance-focused queue stays small (hundreds);
+                               # no bot protection seen on plain requests
     concurrency:
       group: crawl-${{ matrix.retailer }}
       cancel-in-progress: false
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}   # Supabase connection string
+      PROXY_URL: ${{ secrets.PROXY_URL }}         # optional: residential proxy for Akamai retailers (bigw/kmart/target)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -53,6 +59,11 @@ jobs:
       - run: pip install -r requirements.txt
       # First run only: uncomment to load full catalogues into the queue.
       # - run: python run.py index all
+      # Supercheap's deal categories rotate, so re-index its (small) clearance
+      # queue every cycle - ~6 requests, keeps fresh markdowns flowing in.
+      - name: Refresh clearance queue (supercheap only)
+        if: matrix.retailer == 'supercheap'
+        run: python run.py index supercheap || true
       - name: Bulk price refresh (${{ matrix.retailer }})
         run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }} || true
       - name: Product-page enrichment (${{ matrix.retailer }})
