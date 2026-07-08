@@ -25,6 +25,17 @@ CREATE TABLE IF NOT EXISTS price_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_snap_product ON price_snapshots(product_id, scraped_at DESC);
 CREATE INDEX IF NOT EXISTS idx_products_gtin ON products(gtin);
+CREATE TABLE IF NOT EXISTS crawl_queue (
+    retailer TEXT NOT NULL,
+    url TEXT NOT NULL,
+    last_scraped TIMESTAMPTZ,
+    fails INTEGER DEFAULT 0,
+    PRIMARY KEY (retailer, url)
+);
+CREATE TABLE IF NOT EXISTS kv (
+    k TEXT PRIMARY KEY,
+    v TEXT
+);
 CREATE TABLE IF NOT EXISTS deals (
     id BIGSERIAL PRIMARY KEY,
     product_id BIGINT NOT NULL REFERENCES products(id),
@@ -48,3 +59,22 @@ CREATE TABLE IF NOT EXISTS watches (
 );
 CREATE INDEX IF NOT EXISTS idx_watches_unfired ON watches(product_id)
     WHERE fired_at IS NULL AND cancelled_at IS NULL;
+
+-- Base tables are never public: only the anon-readable views in views.sql
+-- (plus the narrow watches INSERT policy + cancel_watch() RPC also defined
+-- there) are reachable with the public anon key. Enabling RLS with no
+-- policy denies all access from anon/authenticated by default; the
+-- crawler/detector connect with the postgres role, which bypasses RLS, so
+-- none of this affects the backend. crawl_queue and kv previously shipped
+-- with RLS off and full anon/authenticated grants (Supabase's default
+-- table privileges) — flagged by a Supabase security scan and fixed here;
+-- run the REVOKEs below on any project where those tables predate this.
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE price_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crawl_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kv ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON crawl_queue FROM anon, authenticated;
+REVOKE ALL ON kv FROM anon, authenticated;
+-- watches' RLS + anon policies are set up in views.sql, next to the
+-- cancel_watch() RPC they depend on.
