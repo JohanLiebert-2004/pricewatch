@@ -9,6 +9,15 @@ GitHub (repo + Actions agents) -> Supabase (Postgres) -> Vercel (website).
   Supabase access token at https://supabase.com/dashboard/account/tokens
 - Never ask for or handle raw passwords. Pause and ask them to complete
   each login in the browser, then continue.
+- Price-watch emails (watch_alerts.py / product.html's "watch this price"
+  form): sign up at resend.com, verify a sending domain (their shared
+  onboarding.resend.dev sender only delivers to the account owner's own
+  address, not to real visitors — a real domain is required), create an
+  API key. Then `gh secret set RESEND_API_KEY` and `gh secret set
+  RESEND_FROM` (e.g. alerts@yourdomain.com). Until both secrets are set,
+  watch_alerts.send_watch_alerts() is a no-op — watches still get created,
+  they just never fire, exactly like Telegram alerts before its token was
+  set.
 
 ## Deployment steps (automate all of this)
 

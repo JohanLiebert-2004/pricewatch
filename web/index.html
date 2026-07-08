@@ -198,8 +198,9 @@ function thumbSrc(u){
 function cardHtml(d, i){
   const mono = (RETAILER_LABEL[d.retailer]||"?")[0];
   const save = d.reference_price - d.price;
-  return `<a class="card" href="${esc(d.url)}" target="_blank" rel="noopener"
-             style="animation-delay:${Math.min(i*25,350)}ms">
+  const histUrl = `product.html?retailer=${d.retailer}&sku=${encodeURIComponent(d.sku)}`;
+  return `<div class="card" style="animation-delay:${Math.min(i*25,350)}ms">
+    <a class="card-link" href="${esc(d.url)}" target="_blank" rel="noopener" aria-label="${esc(d.title)}"></a>
     <div class="ph">
       <span class="badge ${d.pct_off>=50?"":"mild"}">-${d.pct_off}%</span>
       ${d.image_url
@@ -218,8 +219,9 @@ function cardHtml(d, i){
         <span class="cwas">${money(d.reference_price)}</span></div>
       <div class="cfoot"><span>${RETAILER_LABEL[d.retailer]||esc(d.retailer)}</span>
         <span class="save">save ${money(save)}</span></div>
+      <a class="history-link" href="${histUrl}">Price history &amp; watch alert →</a>
     </div>
-  </a>`;
+  </div>`;
 }
 
 const SORT_LABEL = {deep:"biggest discount", price_asc:"price low→high",

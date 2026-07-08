@@ -150,11 +150,20 @@ a{color:inherit}
 /* ---------- card grid (deals) ---------- */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:14px;padding:16px 0 30px}
 .card{
-  background:var(--card);border-radius:14px;overflow:hidden;border:1px solid var(--hair);
-  display:flex;flex-direction:column;text-decoration:none;color:inherit;
+  position:relative;background:var(--card);border-radius:14px;overflow:hidden;
+  border:1px solid var(--hair);display:flex;flex-direction:column;
   transition:transform .15s, box-shadow .15s;animation:rise .3s ease-out both;
 }
 .card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lift)}
+/* stretched-link: the whole card is clickable (goes to the retailer), while
+   .history-link sits above it (higher z-index) as its own clickable target —
+   avoids nesting an <a> inside the card's <a>, which HTML disallows. */
+.card-link{position:absolute;inset:0;z-index:1;text-decoration:none;color:inherit}
+.history-link{
+  position:relative;z-index:2;text-decoration:none;color:var(--muted);
+  font-weight:600;
+}
+.history-link:hover{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 .ph{
   position:relative;background:#fff;height:185px;flex:none;
   display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--hair2);
@@ -208,6 +217,8 @@ a{color:inherit}
 .title{font-weight:600;font-size:14.5px;letter-spacing:-.005em;color:var(--ink)}
 .title a{text-decoration:none}
 .title a:hover{text-decoration:underline;text-underline-offset:3px}
+.title .history-link{margin-left:10px;font-size:11.5px;font-weight:600;color:var(--faint)}
+.title .history-link:hover{color:var(--flag)}
 .meta{
   font-size:12px;color:var(--muted);margin-top:6px;font-weight:500;
   display:flex;gap:6px;flex-wrap:wrap;align-items:center;

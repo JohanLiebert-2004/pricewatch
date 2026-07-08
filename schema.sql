@@ -36,3 +36,15 @@ CREATE TABLE IF NOT EXISTS deals (
     detected_at TIMESTAMPTZ DEFAULT now(),
     UNIQUE (product_id, price, signal)
 );
+CREATE TABLE IF NOT EXISTS watches (
+    id BIGSERIAL PRIMARY KEY,
+    product_id BIGINT NOT NULL REFERENCES products(id),
+    email TEXT NOT NULL,
+    target_price NUMERIC(10,2) NOT NULL,
+    token TEXT NOT NULL UNIQUE,          -- unguessable id, used for the unsubscribe link
+    created_at TIMESTAMPTZ DEFAULT now(),
+    fired_at TIMESTAMPTZ,                -- stamped once the alert email is sent
+    cancelled_at TIMESTAMPTZ             -- stamped by the anon unsubscribe action
+);
+CREATE INDEX IF NOT EXISTS idx_watches_unfired ON watches(product_id)
+    WHERE fired_at IS NULL AND cancelled_at IS NULL;

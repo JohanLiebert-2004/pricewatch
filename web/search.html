@@ -109,7 +109,8 @@ async function search(q){
            onerror="this.outerHTML='<span class=mono>${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>'">`
       : `<span class="mono">${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>`}</div>
     <div>
-      <div class="title"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a></div>
+      <div class="title"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a>
+        <a class="history-link" href="product.html?retailer=${p.retailer}&sku=${encodeURIComponent(p.sku)}">history</a></div>
       <div class="meta">
         <span class="pill">${RETAILER_LABEL[p.retailer]||esc(p.retailer)}</span>
         ${p.category?`<span class="pill">${esc(p.category)}</span>`:''}

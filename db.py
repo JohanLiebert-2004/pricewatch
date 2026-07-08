@@ -63,6 +63,18 @@ CREATE TABLE IF NOT EXISTS deals (
     detected_at TEXT NOT NULL,
     UNIQUE (product_id, price, signal)
 );
+CREATE TABLE IF NOT EXISTS watches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    email TEXT NOT NULL,
+    target_price REAL NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    fired_at TEXT,
+    cancelled_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_watches_unfired ON watches(product_id)
+    WHERE fired_at IS NULL AND cancelled_at IS NULL;
 """
 
 

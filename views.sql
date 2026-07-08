@@ -86,3 +86,50 @@ select coalesce(np.day, sn.day) as day,
        coalesce(sn.price_checks, 0) as price_checks
 from np full outer join sn on np.day = sn.day and np.retailer = sn.retailer;
 grant select on growth_daily to anon;
+
+-- Product history page: full snapshot series for one product (filter by
+-- retailer+sku via PostgREST). Not materialized — single-product lookups are
+-- cheap and should always be fresh, unlike discount_feed's aggregate scan.
+drop view if exists product_history;
+create view product_history as
+select p.id as product_id, p.retailer, p.sku, p.title, p.brand, p.category,
+       p.url, p.image_url, p.is_marketplace, p.current_price, p.current_rrp,
+       coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at,
+       ps.price, ps.rrp as snapshot_rrp, ps.in_stock, ps.scraped_at
+from price_snapshots ps
+join products p on p.id = ps.product_id;
+grant select on product_history to anon;
+
+-- Watches: anon can create a watch (product.html's signup form) via a plain
+-- INSERT policy, but can never SELECT the table back — emails stay private.
+-- Cancelling (the unsubscribe link) can't be a plain anon UPDATE policy: for
+-- UPDATE, Postgres also requires the target row to be visible under a SELECT
+-- policy (there isn't one here), so `USING (true)` alone silently matches
+-- zero rows. Instead, cancel_watch() is a SECURITY DEFINER RPC — owned by
+-- the table owner (which has BYPASSRLS and RLS isn't FORCEd), so it can
+-- update by token without any anon-facing SELECT/UPDATE grant at all. The
+-- unguessable per-row token, not RLS, is what gates which row a visitor can
+-- reach — same trust level as the rest of the public site's anon key.
+alter table watches enable row level security;
+
+grant insert on watches to anon;
+drop policy if exists watches_insert_anon on watches;
+create policy watches_insert_anon on watches for insert to anon with check (true);
+
+create or replace function cancel_watch(p_token text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  affected int;
+begin
+  update watches set cancelled_at = now()
+  where token = p_token and cancelled_at is null and fired_at is null;
+  get diagnostics affected = row_count;
+  return affected > 0;
+end;
+$$;
+revoke all on function cancel_watch(text) from public;
+grant execute on function cancel_watch(text) to anon;

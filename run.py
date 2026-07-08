@@ -12,6 +12,7 @@ import json
 import alerts
 import categorize as categorize_mod
 import db
+import watch_alerts
 from anomaly import run as detect
 from scrapers import REGISTRY
 from scrapers.base import Blocked
@@ -238,6 +239,9 @@ def cmd_detect(args):
     pinged = alerts.send_alerts(conn)
     if pinged:
         print(f"telegram: {pinged} alert(s) sent")
+    watched = watch_alerts.send_watch_alerts(conn)
+    if watched:
+        print(f"resend: {watched} watch alert(s) sent")
     if db.DATABASE_URL:
         # keep the website's precomputed discount feed current (cheap: ~0.5s)
         try:

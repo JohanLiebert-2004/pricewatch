@@ -54,6 +54,21 @@ Live data (no manual export): open `web/index.html`, set `SUPABASE_URL` and
 `deal_feed` view directly. Keep Row Level Security ON and grant only SELECT on
 that view to the anon role, so the public key can read deals and nothing else.
 
+## 4. Price-watch emails — Resend (optional)
+Product-history pages (`web/product.html`) let a visitor watch a product at a
+target price. Sending the actual alert email needs a verified sending domain:
+
+1. Sign up at resend.com (free tier).
+2. Add and verify your domain (DNS records) — the shared `onboarding.resend.dev`
+   sender only delivers to the account owner's own address, not to visitors.
+3. Create an API key.
+4. Repo -> Settings -> Secrets and variables -> Actions -> New secret:
+   `RESEND_API_KEY` (the key) and `RESEND_FROM` (e.g. `alerts@yourdomain.com`).
+
+Until both secrets are set, watches are still created but `watch_alerts.py`
+is a no-op (same deferred-activation pattern as the Telegram secrets above) —
+nothing breaks, alerts just don't send yet.
+
 ## Cost ceiling
 Everything above is free at prototype scale. You'll pay only if you (a) make the
 scraper repo private and blow past 2,000 Action-minutes, (b) exceed Supabase's
