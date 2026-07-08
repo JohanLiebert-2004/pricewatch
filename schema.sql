@@ -62,18 +62,30 @@ CREATE INDEX IF NOT EXISTS idx_watches_unfired ON watches(product_id)
 
 -- Base tables are never public: only the anon-readable views in views.sql
 -- (plus the narrow watches INSERT policy + cancel_watch() RPC also defined
--- there) are reachable with the public anon key. Enabling RLS with no
--- policy denies all access from anon/authenticated by default; the
--- crawler/detector connect with the postgres role, which bypasses RLS, so
--- none of this affects the backend. crawl_queue and kv previously shipped
--- with RLS off and full anon/authenticated grants (Supabase's default
--- table privileges) — flagged by a Supabase security scan and fixed here;
--- run the REVOKEs below on any project where those tables predate this.
+-- there) are reachable with the public anon key. The crawler/detector
+-- connect with the postgres role, which bypasses RLS, so none of this
+-- affects the backend.
+--
+-- RLS-enabled-with-no-policy denies DIRECT table access from anon/
+-- authenticated regardless of GRANTs — but that is NOT sufficient on its
+-- own: every table here (not just crawl_queue/kv) shipped with Supabase's
+-- default full INSERT/UPDATE/DELETE/TRUNCATE grants for anon/authenticated,
+-- and a simple, single-table anon-readable VIEW over a table (e.g.
+-- product_search over products) is auto-updatable by Postgres — writes
+-- pass straight through to the base table using the VIEW OWNER's
+-- privileges (postgres, which has BYPASSRLS), completely bypassing the
+-- base table's RLS. This was exploited during testing via product_search.
+-- The fix has two parts: revoke the stray grants here on every base table,
+-- AND revoke-then-grant-only-select on every view in views.sql (see the
+-- comment at the top of that file).
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE price_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crawl_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kv ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON products FROM anon, authenticated;
+REVOKE ALL ON price_snapshots FROM anon, authenticated;
+REVOKE ALL ON deals FROM anon, authenticated;
 REVOKE ALL ON crawl_queue FROM anon, authenticated;
 REVOKE ALL ON kv FROM anon, authenticated;
 -- watches' RLS + anon policies are set up in views.sql, next to the

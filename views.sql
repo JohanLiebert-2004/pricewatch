@@ -2,6 +2,18 @@
 -- The anon role can SELECT only these views; base tables stay locked (RLS).
 -- Re-run this file after recreating the database. Grants are lost when a
 -- view is dropped, so every view is followed by its grant.
+--
+-- IMPORTANT: every `create view`/`create materialized view` below is
+-- immediately preceded by a `revoke all ... from anon, authenticated` on
+-- that object, before the single `grant select` it actually needs. This
+-- isn't defensive paranoia — Supabase grants anon/authenticated full
+-- INSERT/UPDATE/DELETE/TRUNCATE on newly created public objects by default,
+-- and a plain `grant select` layered on top does NOT remove that. This was
+-- exploited during testing: product_search is a simple single-table view
+-- (no join/aggregate), which Postgres auto-updates through to `products`;
+-- since the view is owned by `postgres` (BYPASSRLS), an anon PATCH request
+-- through product_search silently bypassed products' RLS entirely and
+-- rewrote a live row. Always revoke-then-grant on every new view here.
 
 -- Anomaly-engine deals (50%+ drops recorded by `run.py detect`).
 drop view if exists deal_feed;
@@ -13,6 +25,7 @@ select d.price, d.reference_price, d.signal, d.score, d.status, d.detected_at,
 from deals d join products p on p.id = d.product_id
 where d.status <> 'expired' and coalesce(d.reference_price, 0) >= 40
 order by d.score desc;
+revoke all on deal_feed from anon, authenticated;
 grant select on deal_feed to anon;
 
 -- Every discounted product at any depth: powers the deal page's 0-99% slider
@@ -44,6 +57,7 @@ where p.current_price is not null
   and p.last_seen > now() - interval '10 days'
   and round((1 - p.current_price/greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)))*100) >= 1;
 create unique index discount_feed_pk on discount_feed (retailer, sku);
+revoke all on discount_feed from anon, authenticated;
 grant select on discount_feed to anon;
 
 -- Search page: latest price + date for any tracked product.
@@ -54,6 +68,7 @@ select p.retailer, p.sku, p.title, p.brand, p.category, p.url,
        coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at
 from products p
 where p.current_price is not null;
+revoke all on product_search from anon, authenticated;
 grant select on product_search to anon;
 
 -- Catalogue page chip counts.
@@ -64,6 +79,7 @@ select retailer, coalesce(nullif(category,''),'other') as category,
 from products
 where current_price is not null
 group by 1, 2;
+revoke all on catalogue_stats from anon, authenticated;
 grant select on catalogue_stats to anon;
 
 -- Growth page: per-day new products and price changes (UTC days).
@@ -85,6 +101,7 @@ select coalesce(np.day, sn.day) as day,
        coalesce(np.new_products, 0) as new_products,
        coalesce(sn.price_checks, 0) as price_checks
 from np full outer join sn on np.day = sn.day and np.retailer = sn.retailer;
+revoke all on growth_daily from anon, authenticated;
 grant select on growth_daily to anon;
 
 -- Product history page: full snapshot series for one product (filter by
@@ -98,6 +115,7 @@ select p.id as product_id, p.retailer, p.sku, p.title, p.brand, p.category,
        ps.price, ps.rrp as snapshot_rrp, ps.in_stock, ps.scraped_at
 from price_snapshots ps
 join products p on p.id = ps.product_id;
+revoke all on product_history from anon, authenticated;
 grant select on product_history to anon;
 
 -- Watches: anon can create a watch (product.html's signup form) via a plain
@@ -112,6 +130,7 @@ grant select on product_history to anon;
 -- reach — same trust level as the rest of the public site's anon key.
 alter table watches enable row level security;
 
+revoke all on watches from anon, authenticated;
 grant insert on watches to anon;
 drop policy if exists watches_insert_anon on watches;
 create policy watches_insert_anon on watches for insert to anon with check (true);
