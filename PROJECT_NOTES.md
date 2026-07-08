@@ -1,6 +1,6 @@
 # Underpriced (Pricewatch) — project notes
 
-*Last updated: 7 July 2026*
+*Last updated: 8 July 2026*
 
 An AU retail price-anomaly tracker. Crawlers watch retailer catalogues,
 an anomaly engine flags big price drops, and a public website shows the
@@ -43,7 +43,7 @@ Vercel static site (web/ folder, no build step)  +  Telegram alerts
 | Target       | Category listings                                   | Akamai; no images yet |
 | JB Hi-Fi     | Shopify `/products.json` (250/page, 100-page cap = 25k most recent) | no bot protection; 1.0s delay; images via Shopify CDN |
 | The Good Guys| Product sitemap (`product_sitemap_1-4.xml`, 8,629 URLs) + schema.org JSON-LD per page | headless Shopify Hydrogen, no `/products.json`; no bot protection; no RRP field anywhere (relies on 90-day history fallback); crawl batch raised to 500/run (vs default 40) since it's unprotected — first full sweep ≈9h instead of ~4.5 days |
-| Supercheap Auto | Deal/clearance category pages (server-rendered, first page only) + JSON-LD & GA4 dataLayer per product page | Salesforce Commerce Cloud; no bot protection; **clearance-focused by design** — full catalogue is ~518k auto parts (won't fit free-tier DB) and robots.txt disallows pagination params (`start=`, `sz=`, `format=ajax`), so only the server-rendered `/clearance` page (~34 rotating items/cycle, accumulating in the queue) is enumerated — other deal pages build their grids client-side; was-price = price + dataLayer `discount`; images via demandware.static |
+| Supercheap Auto | Full product sitemap (104 `sitemap_N-product.xml` files, ~518k URLs) + JSON-LD & GA4 dataLayer per product page | Salesforce Commerce Cloud; no bot protection; **full catalogue**, indexed 2026-07-08 after empirical storage testing showed it fits the free tier (~518k rows × ~336 bytes ≈ 166MB added, 292MB total DB); crawl_batch raised to 1000/cycle (~11-day first sweep); was-price = price + dataLayer `discount`; images via demandware.static. (SKUs are alphanumeric, e.g. `SPO81491` — the product URL regex must allow letters, not just digits, or most sitemap files silently match zero URLs.) |
 
 **Bunnings — investigated and ruled out** (July 2026): robots.txt disallows
 `/api/` and `/apis/` (where any bulk endpoint would live), no product-level

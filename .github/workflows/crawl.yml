@@ -43,8 +43,10 @@ jobs:
           - retailer: supercheap
             budget: 50        # refresh lane is a no-op (no compliant bulk
                                # listing; robots.txt disallows pagination params)
-            crawl_batch: 300  # clearance-focused queue stays small (hundreds);
-                               # no bot protection seen on plain requests
+            crawl_batch: 1000 # full ~518k-URL catalogue (queued via a one-off
+                               # manual `index supercheap`, like Good Guys's
+                               # initial seed); no bot protection seen on
+                               # plain requests, full sweep takes ~11 days
     concurrency:
       group: crawl-${{ matrix.retailer }}
       cancel-in-progress: false
@@ -59,11 +61,6 @@ jobs:
       - run: pip install -r requirements.txt
       # First run only: uncomment to load full catalogues into the queue.
       # - run: python run.py index all
-      # Supercheap's deal categories rotate, so re-index its (small) clearance
-      # queue every cycle - ~6 requests, keeps fresh markdowns flowing in.
-      - name: Refresh clearance queue (supercheap only)
-        if: matrix.retailer == 'supercheap'
-        run: python run.py index supercheap || true
       - name: Bulk price refresh (${{ matrix.retailer }})
         run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }} || true
       - name: Product-page enrichment (${{ matrix.retailer }})
