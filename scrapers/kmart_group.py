@@ -31,6 +31,7 @@ class KmartScraper(BaseScraper):
     delay = 2.5
     needs_impersonation = True
     warmup_url = "https://www.kmart.com.au/"
+    use_proxy = True   # Akamai-fronted; see CLAUDE.md "Proxy policy"
 
     # -- fast listing refresh via Constructor.io ---------------------------
     api_delay = 0.6           # polite pause between API calls (not Akamai)
@@ -145,6 +146,7 @@ class TargetScraper(BaseScraper):
     delay = 2.5
     needs_impersonation = True
     warmup_url = "https://www.target.com.au/"
+    use_proxy = True   # Akamai-fronted; see CLAUDE.md "Proxy policy"
 
     per_page = 48  # fixed by the site
     all_products_path = "/c/all-products/AP01"

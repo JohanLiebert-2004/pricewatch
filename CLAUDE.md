@@ -69,6 +69,21 @@ python run.py detect
 - Politeness is non-negotiable: do not lower scraper delays below 1.75s for
   Akamai-protected retailers (owner-approved floor, July 2026; revert to 2s+
   if blocks increase); do not parallelize requests to one retailer.
+- **Proxy policy (updated 2026-07-08):** residential/rotating proxies are
+  permitted for Akamai-fronted retailers (Big W, Kmart, Target) to reduce
+  datacenter-IP flags, now that the site is meant to run as a real
+  production service rather than a hobby Vercel deployment. Config is
+  already wired: `scrapers/base.py` reads `PROXY_URL` (format
+  `http://user:pass@host:port`) and routes any scraper with `use_proxy =
+  True` through it via curl_cffi; unset, everything runs exactly as before
+  (direct GitHub Actions runner IP). The human still needs to sign up with
+  a provider (e.g. Bright Data, Oxylabs, Smartproxy, IPRoyal) and run
+  `gh secret set PROXY_URL` — do not attempt that signup yourself. This
+  does NOT relax the delay floors or concurrency rule above; it only adds
+  a proxy option on top of the existing politeness budget. Scope is
+  intentionally limited to the three Akamai retailers, not the whole
+  no-evasion stance (Bunnings' Cloudflare fingerprinting stays ruled out
+  unless the human decides otherwise).
 - SQLite is the local dev DB; setting DATABASE_URL switches everything to
   Postgres. Never commit pricewatch.db or any .env file (see .gitignore).
 - Retailers block datacenter IPs intermittently; a Blocked exception is

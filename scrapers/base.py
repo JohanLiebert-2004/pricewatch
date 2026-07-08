@@ -5,6 +5,7 @@ HTTP layer: uses curl_cffi with Chrome TLS impersonation when installed
 falls back to httpx. Politeness defaults: 1-2 s between requests, hard limits.
 """
 import json
+import os
 import random
 import re
 import time
@@ -17,6 +18,13 @@ except ImportError:
     HAVE_CFFI = False
 
 import httpx
+
+# Residential/rotating proxy for Akamai-fronted retailers (Big W, Kmart,
+# Target) - set as a GitHub secret, same pattern as DATABASE_URL/TELEGRAM_*.
+# Format: http://user:pass@host:port (provider-specific; check its docs).
+# Unset by default - datacenter IPs (GitHub Actions runners) are used until
+# a provider is configured. See CLAUDE.md "Proxy policy" for rationale.
+PROXY_URL = os.environ.get("PROXY_URL")
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
@@ -56,10 +64,15 @@ class BaseScraper:
     impersonate = "chrome99_android"  # profile that passes AU retail WAF tiers
     warmup_url = None               # homepage to visit once for cookies
     max_child_sitemaps = 3          # cap when following generic child sitemaps
+    use_proxy = False               # opt in per-retailer; only meaningful w/ PROXY_URL set
 
     def __init__(self):
         if self.needs_impersonation and HAVE_CFFI:
-            self.session = cffi_requests.Session(impersonate=self.impersonate)
+            proxies = {"http": PROXY_URL, "https": PROXY_URL} \
+                if (self.use_proxy and PROXY_URL) else None
+            self.session = cffi_requests.Session(
+                impersonate=self.impersonate, proxies=proxies
+            )
             self.session.headers.update({"Accept-Language": "en-AU,en;q=0.9"})
             self._cffi = True
         else:
@@ -88,7 +101,9 @@ class BaseScraper:
             # Akamai blocks are often session-scoped: retry once fresh
             from curl_cffi import requests as _cr
             time.sleep(5 + self.delay)
-            self.session = _cr.Session(impersonate=self.impersonate)
+            proxies = {"http": PROXY_URL, "https": PROXY_URL} \
+                if (self.use_proxy and PROXY_URL) else None
+            self.session = _cr.Session(impersonate=self.impersonate, proxies=proxies)
             if self.warmup_url:
                 try:
                     self._request(self.warmup_url)

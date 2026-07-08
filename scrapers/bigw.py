@@ -27,6 +27,7 @@ class BigWScraper(BaseScraper):
                   # 2.5s + 3-hourly sweeps is the proven-stable rate
     needs_impersonation = True
     warmup_url = "https://www.bigw.com.au/"
+    use_proxy = True   # Akamai-fronted; see CLAUDE.md "Proxy policy"
 
     def parse_product(self, url, raw):
         rec = super().parse_product(url, raw)
