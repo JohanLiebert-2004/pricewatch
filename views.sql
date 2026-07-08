@@ -48,7 +48,8 @@ select p.retailer, p.sku, p.title, p.brand,
        ((1 - p.current_price/greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0))) >= 0.8) as error_tier,
        case when coalesce(p.current_rrp,0) >= coalesce(h.hi,0)
             then 'rrp_gap' else 'history_drop' end as signal,
-       coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at
+       coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at,
+       p.first_seen
 from products p
 left join hist h on h.product_id = p.id
 where p.current_price is not null
