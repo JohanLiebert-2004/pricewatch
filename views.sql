@@ -119,22 +119,61 @@ join products p on p.id = ps.product_id;
 revoke all on product_history from anon, authenticated;
 grant select on product_history to anon;
 
--- Watches: anon can create a watch (product.html's signup form) via a plain
--- INSERT policy, but can never SELECT the table back — emails stay private.
--- Cancelling (the unsubscribe link) can't be a plain anon UPDATE policy: for
--- UPDATE, Postgres also requires the target row to be visible under a SELECT
--- policy (there isn't one here), so `USING (true)` alone silently matches
--- zero rows. Instead, cancel_watch() is a SECURITY DEFINER RPC — owned by
--- the table owner (which has BYPASSRLS and RLS isn't FORCEd), so it can
--- update by token without any anon-facing SELECT/UPDATE grant at all. The
--- unguessable per-row token, not RLS, is what gates which row a visitor can
--- reach — same trust level as the rest of the public site's anon key.
+-- Watches: anon can never touch the table directly (no SELECT/INSERT/UPDATE
+-- grants at all) — both creating and cancelling a watch go through
+-- SECURITY DEFINER RPCs owned by the table owner (BYPASSRLS, RLS isn't
+-- FORCEd), same pattern for both directions.
+--
+-- create_watch() replaced a plain `insert ... with check (true)` policy on
+-- 2026-07-09: that policy let anon set *every* column via a raw PostgREST
+-- POST, including email — meaning anyone could insert watches for arbitrary
+-- third-party addresses with no ownership check. Harmless while
+-- RESEND_API_KEY is unset (see project_pricewatch_deferred), but the moment
+-- email sending is switched on that's an open spam relay against a verified
+-- domain. create_watch() now validates the email/price/product server-side,
+-- generates the unguessable token itself (never client-supplied), and caps
+-- both total watches per email and duplicate active watches on the same
+-- product — narrows the door PostgREST exposes down to "one legitimate
+-- watch, one email format, one reasonable price" instead of "any row".
 alter table watches enable row level security;
-
 revoke all on watches from anon, authenticated;
-grant insert on watches to anon;
 drop policy if exists watches_insert_anon on watches;
-create policy watches_insert_anon on watches for insert to anon with check (true);
+
+create or replace function create_watch(p_product_id bigint, p_email text, p_target_price numeric)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_token text;
+  v_email text := lower(trim(p_email));
+begin
+  if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+    raise exception 'invalid email';
+  end if;
+  if p_target_price is null or p_target_price <= 0 or p_target_price > 100000 then
+    raise exception 'invalid target price';
+  end if;
+  if not exists (select 1 from products where id = p_product_id) then
+    raise exception 'invalid product';
+  end if;
+  if (select count(*) from watches where email = v_email) >= 25 then
+    raise exception 'too many watches for this email';
+  end if;
+  if exists (select 1 from watches where product_id = p_product_id and email = v_email
+             and cancelled_at is null and fired_at is null) then
+    raise exception 'already watching this product';
+  end if;
+
+  v_token := gen_random_uuid()::text;
+  insert into watches (product_id, email, target_price, token)
+  values (p_product_id, v_email, p_target_price, v_token);
+  return v_token;
+end;
+$$;
+revoke all on function create_watch(bigint, text, numeric) from public;
+grant execute on function create_watch(bigint, text, numeric) to anon;
 
 create or replace function cancel_watch(p_token text)
 returns boolean

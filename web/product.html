@@ -161,15 +161,14 @@ async function submitWatch(productId, e){
     out.innerHTML = `<div class="watcherr">Enter a valid email and target price.</div>`;
     return;
   }
-  const token = crypto.randomUUID();
   try{
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/watches`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/create_watch`, {
       method:"POST",
-      headers:{...HDRS, "Content-Type":"application/json", Prefer:"return=minimal"},
-      body: JSON.stringify({product_id: productId, email, target_price: target,
-        token, created_at: new Date().toISOString()})
+      headers:{...HDRS, "Content-Type":"application/json"},
+      body: JSON.stringify({p_product_id: productId, p_email: email, p_target_price: target})
     });
     if(!r.ok) throw new Error(r.status);
+    const token = await r.json();
     const cancelUrl = `${location.origin}${location.pathname}?retailer=${retailer}&sku=${encodeURIComponent(sku)}&cancel=${token}`;
     out.innerHTML = `<div class="watchok">You're watching this at ${money(target)} or below —
       we'll email ${esc(email)} once, the first time it drops there.<br>
