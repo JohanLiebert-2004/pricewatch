@@ -26,6 +26,8 @@ import httpx
 
 ALERT_MIN_SCORE = 0.0         # any deal the anomaly engine records
 ALERT_MIN_REFERENCE = 0.0     # anomaly.py already gates reference >= $40
+ALERT_EXCLUDE_RETAILERS = {"supercheap"}  # user opted out 2026-07-09 - still
+                                          # shown on-site, just no Telegram ping
 
 RETAILER_LABEL = {"kmart": "Kmart", "bigw": "Big W", "target": "Target",
                   "officeworks": "Officeworks", "jbhifi": "JB Hi-Fi",
@@ -42,6 +44,18 @@ def send_alerts(conn) -> int:
     token, chat_id = _config()
     if not token or not chat_id:
         return 0
+    if ALERT_EXCLUDE_RETAILERS:
+        # stamp excluded-retailer deals as seen (no Telegram send) so they
+        # don't sit in the queue and crowd out real alerts under the LIMIT 20
+        placeholders = ",".join("?" * len(ALERT_EXCLUDE_RETAILERS))
+        conn.execute(
+            f"""UPDATE deals SET alerted_at = ?
+                WHERE alerted_at IS NULL AND status <> 'expired'
+                  AND product_id IN (
+                    SELECT id FROM products WHERE retailer IN ({placeholders}))""",
+            (datetime.now(timezone.utc).isoformat(timespec="seconds"),
+             *ALERT_EXCLUDE_RETAILERS))
+        conn.commit()
     rows = conn.execute(
         """SELECT d.id, d.price, d.reference_price, d.score,
                   p.title, p.retailer, p.url
