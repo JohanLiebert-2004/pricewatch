@@ -1,19 +1,16 @@
-/* Underpriced — design system v4 "card grid"
-   Chosen from sample A: shopping-site card grid, cool light ground,
-   white cards, red discount badges, green for money saved.
-   High-contrast text: near-black ink, dark slate for secondary. */
-
-/* Palette after bellroy.com: warm white ground, charcoal ink, warm-grey
-   hairlines, one burnt-orange accent. Flat and airy — hairlines over shadows. */
+/* Underpriced — design system v5 "sportsbook-data"
+   Palette after betsapi.com: cool light-grey ground, white cards, crisp
+   hairlines, one confident blue accent for active/primary states.
+   High-contrast text: near-navy ink, slate for secondary. */
 :root{
   color-scheme:light;   /* keep native controls light even in OS dark mode */
-  --paper:#faf9f7; --ink:#33363b; --hair:#e9e6e1; --hair2:#f1efeb;
-  --card:#ffffff; --soft:#f3f1ed;
-  --flag:#d3572b; --flag-soft:rgba(211,87,43,.08);
-  --deal:#4a8a63; --deal-soft:rgba(74,138,99,.09);
-  --muted:#6f7278; --faint:#a6a8ac;
-  --shadow:0 1px 2px rgba(51,54,59,.04);
-  --shadow-lift:0 2px 6px rgba(51,54,59,.06), 0 10px 28px rgba(51,54,59,.08);
+  --paper:#f4f6f9; --ink:#1b2431; --hair:#e2e6ec; --hair2:#edf0f4;
+  --card:#ffffff; --soft:#eef1f6;
+  --flag:#2563eb; --flag-soft:rgba(37,99,235,.08);
+  --deal:#1a9d63; --deal-soft:rgba(26,157,99,.09);
+  --muted:#5b6572; --faint:#9aa3ae;
+  --shadow:0 1px 2px rgba(20,30,45,.05);
+  --shadow-lift:0 2px 6px rgba(20,30,45,.07), 0 10px 28px rgba(20,30,45,.09);
 }
 /* light-only by design — the dark variant was rejected */
 
@@ -43,11 +40,15 @@ a{color:inherit}
 .logo em{font-style:normal;color:var(--flag)}
 .navlinks{display:flex;gap:2px}
 .navlinks a{
+  display:inline-flex;align-items:center;gap:6px;
   font-size:13.5px;font-weight:600;text-decoration:none;color:var(--muted);
   padding:7px 14px;border-radius:99px;transition:color .15s, background .15s;
 }
+.navlinks a svg{flex:none;opacity:.75}
 .navlinks a:hover{color:var(--ink);background:var(--soft)}
-.navlinks a.active{color:var(--paper);background:var(--ink)}
+.navlinks a:hover svg{opacity:1}
+.navlinks a.active{color:#fff;background:var(--flag)}
+.navlinks a.active svg{opacity:1}
 
 /* ---------- hero ---------- */
 .hero{padding:40px 0 26px}
@@ -104,7 +105,7 @@ a{color:inherit}
 }
 .chip:hover{border-color:var(--faint);color:var(--ink)}
 .chip[aria-pressed=true]{
-  background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:700;
+  background:var(--flag);color:#fff;border-color:var(--flag);font-weight:700;
 }
 .chip .n{opacity:.6;margin-left:6px;font-variant-numeric:tabular-nums;font-size:11.5px}
 
@@ -121,7 +122,7 @@ a{color:inherit}
 .pricebar .dash{color:var(--faint);font-weight:600}
 .pricebar button{
   font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;
-  background:var(--ink);color:var(--paper);border:1px solid var(--ink);
+  background:var(--flag);color:#fff;border:1px solid var(--flag);
   border-radius:10px;padding:9px 20px;transition:opacity .15s;
 }
 .pricebar button:hover{opacity:.85}
@@ -260,7 +261,7 @@ input[type=search]:focus{border-color:var(--ink)}
 input[type=search]::placeholder{color:var(--faint)}
 button.go{
   font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
-  background:var(--ink);color:var(--paper);border:1px solid var(--ink);
+  background:var(--flag);color:#fff;border:1px solid var(--flag);
   border-radius:12px;padding:13px 28px;transition:opacity .15s;
 }
 button.go:hover{opacity:.85}
