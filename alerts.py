@@ -24,14 +24,45 @@ from datetime import datetime, timezone
 
 import httpx
 
+from anomaly import BIG_DROP
+from scrapers import REGISTRY
+
 ALERT_MIN_SCORE = 0.0         # any deal the anomaly engine records
 ALERT_MIN_REFERENCE = 0.0     # anomaly.py already gates reference >= $40
 ALERT_EXCLUDE_RETAILERS = {"supercheap"}  # user opted out 2026-07-09 - still
                                           # shown on-site, just no Telegram ping
+VERIFY_TOLERANCE = 0.05       # live-checked price may drift this much and
+                              # still count as confirming the alerted price
 
 RETAILER_LABEL = {"kmart": "Kmart", "bigw": "Big W", "target": "Target",
                   "officeworks": "Officeworks", "jbhifi": "JB Hi-Fi",
                   "goodguys": "The Good Guys", "supercheap": "Supercheap Auto"}
+
+
+def _verify_live(retailer: str, url: str, claimed_price: float) -> bool:
+    """Re-fetch the actual product page for an error-tier deal before
+    alerting on it.
+
+    Some retailers' bulk listing feeds (e.g. Kmart's Constructor.io search
+    index) can go stale for individual SKUs for days at a time while the
+    live storefront has already moved on - which otherwise fires a
+    confident-looking "80%+ off" alert for a price nobody can actually get.
+    Returns False only when the live page clearly disagrees; any fetch
+    failure (blocked, no scraper, page unreadable) fails open so a real
+    alert is never swallowed by a network hiccup.
+    """
+    scraper_cls = REGISTRY.get(retailer)
+    if not scraper_cls:
+        return True
+    try:
+        s = scraper_cls()
+        rec = s.parse_product(url, s.get(url))
+    except Exception as e:
+        print(f"  ? couldn't verify {retailer} price live ({e}); alerting anyway")
+        return True
+    if rec is None or rec.price is None:
+        return True
+    return abs(rec.price - claimed_price) <= max(0.5, claimed_price * VERIFY_TOLERANCE)
 
 
 def _config():
@@ -70,6 +101,13 @@ def send_alerts(conn) -> int:
     sent = 0
     with httpx.Client(timeout=15) as client:
         for r in rows:
+            if r["score"] >= BIG_DROP and not _verify_live(
+                    r["retailer"], r["url"], float(r["price"])):
+                conn.execute("UPDATE deals SET alerted_at=? WHERE id=?", (now, r["id"]))
+                conn.commit()
+                print(f"  - skipped stale error-tier deal (live price disagrees): "
+                      f"{r['title']}")
+                continue
             store = RETAILER_LABEL.get(r["retailer"], r["retailer"])
             text = (f"\U0001F6A8 <b>{round(r['score'] * 100)}% OFF</b> "
                     f"at {store}\n"
