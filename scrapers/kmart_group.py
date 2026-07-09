@@ -124,11 +124,22 @@ class KmartScraper(BaseScraper):
                 if amt > float(price):
                     rrp = amt
         seller = (d.get("Seller") or ["Kmart"])[0]
+        # Some marketplace sellers upload listings with a punctuation-only
+        # placeholder name (observed: literal "." for several Partyrama
+        # SKUs, mirrored verbatim from Kmart's own storefront) - treat that
+        # as no title and fall back rather than showing a near-blank row.
+        raw_title = re.sub(r"[\W_]", "", str(item.get("value") or ""))
+        if raw_title:
+            title = str(item["value"])
+        else:
+            merch = str(d.get("MerchClassName") or "").strip()
+            brand = d.get("Brand")
+            title = merch or (f"{brand} product" if brand else sku)
         return ProductRecord(
             retailer=self.name,
             sku=sku,
             gtin=str(d["apn"]) if d.get("apn") else None,
-            title=str(item.get("value") or d.get("MerchClassName") or sku),
+            title=title,
             brand=d.get("Brand"),
             url="https://www.kmart.com.au" + d.get("url", ""),
             image_url=d.get("image_url"),
