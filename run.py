@@ -13,9 +13,9 @@ import alerts
 import categorize as categorize_mod
 import db
 import watch_alerts
-from anomaly import run as detect
+from anomaly import BIG_DROP, run as detect
 from scrapers import REGISTRY
-from scrapers.base import Blocked
+from scrapers.base import Blocked, verify_price
 
 
 def cmd_scrape(args):
@@ -183,6 +183,18 @@ def cmd_refresh(args):
                 seen += 1
                 if not worth_keeping(rec):
                     continue
+                # Listing feeds can go stale for individual SKUs (see
+                # alerts.py's live-verify for the alert path) - a claimed
+                # 80%+ discount gets a live page check before it's ever
+                # written as current_price, so the site itself doesn't show
+                # a price nobody can actually get.
+                if (rec.price is not None and rec.rrp and rec.rrp > 0
+                        and 1 - rec.price / rec.rrp >= BIG_DROP):
+                    live = verify_price(scraper, rec.url, rec.price)
+                    if live is not None and abs(live - rec.price) > max(0.5, rec.price * 0.05):
+                        print(f"  ~ {name} {rec.sku}: listing said ${rec.price:.2f}, "
+                              f"live page says ${live:.2f} - using live price")
+                        rec.price = live
                 batch.append(rec)
                 kept += 1
                 if len(batch) >= 400:

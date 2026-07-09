@@ -245,6 +245,25 @@ class NotFound(Exception):
     pass
 
 
+def verify_price(scraper: "BaseScraper", url: str, claimed_price: float) -> float | None:
+    """Re-fetch a product's actual page and return its live price.
+
+    Bulk listing feeds (Kmart's Constructor.io index, retailer category
+    pages, etc.) can go stale for individual SKUs for days while the real
+    storefront has moved on - trusting them blindly for a big discount
+    writes a wrong price straight into the DB. Returns None (inconclusive)
+    on any fetch/parse failure; callers should fail open on None rather
+    than treat it as "price is gone", since retailer bot-blocks are routine.
+    """
+    try:
+        rec = scraper.parse_product(url, scraper.get(url))
+    except Exception:
+        return None
+    if rec is None or rec.price is None:
+        return None
+    return rec.price
+
+
 # -- shared utilities -------------------------------------------------------
 def extract_jsonld(html: str) -> list[dict]:
     out = []

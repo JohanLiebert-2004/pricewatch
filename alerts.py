@@ -26,6 +26,7 @@ import httpx
 
 from anomaly import BIG_DROP
 from scrapers import REGISTRY
+from scrapers.base import verify_price
 
 ALERT_MIN_SCORE = 0.0         # any deal the anomaly engine records
 ALERT_MIN_REFERENCE = 0.0     # anomaly.py already gates reference >= $40
@@ -54,15 +55,11 @@ def _verify_live(retailer: str, url: str, claimed_price: float) -> bool:
     scraper_cls = REGISTRY.get(retailer)
     if not scraper_cls:
         return True
-    try:
-        s = scraper_cls()
-        rec = s.parse_product(url, s.get(url))
-    except Exception as e:
-        print(f"  ? couldn't verify {retailer} price live ({e}); alerting anyway")
+    live = verify_price(scraper_cls(), url, claimed_price)
+    if live is None:
+        print(f"  ? couldn't verify {retailer} price live; alerting anyway")
         return True
-    if rec is None or rec.price is None:
-        return True
-    return abs(rec.price - claimed_price) <= max(0.5, claimed_price * VERIFY_TOLERANCE)
+    return abs(live - claimed_price) <= max(0.5, claimed_price * VERIFY_TOLERANCE)
 
 
 def _config():
