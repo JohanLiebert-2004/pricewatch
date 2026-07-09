@@ -88,26 +88,33 @@ function thumbSrc(u){
 }
 
 let STATS = [];           // [{retailer, category, items}]
-let retailer = "all", cat = "all", offset = 0;
+let selRetailers = new Set(), selCats = new Set(), offset = 0;
 let pmin = null, pmax = null;   // price filter ($)
 let q = "";                     // text filter (name/SKU)
 const PAGE = 50;
 
+const matchRet = r => selRetailers.size===0 || selRetailers.has(r);
+const matchCat = c => selCats.size===0 || selCats.has(c);
+
 function count(r, c){
+  // r/c may be "all" (wildcard for that dimension) or a specific key
   return STATS.filter(s =>
-    (r==="all" || s.retailer===r) && (c==="all" || s.category===c))
+    (r==="all" ? matchRet(s.retailer) : s.retailer===r) &&
+    (c==="all" ? matchCat(s.category) : s.category===c))
     .reduce((a,s)=>a+Number(s.items), 0);
 }
 
 function chips(){
   document.getElementById("retailers").innerHTML = RETAILERS.map(([k,label])=>
-    `<button class="chip" data-k="${k}" aria-pressed="${k===retailer}">
+    `<button class="chip" data-k="${k}" aria-pressed="${k==="all" ? selRetailers.size===0 : selRetailers.has(k)}">
        ${label}<span class="n">${fmtN(count(k,"all"))}</span></button>`).join("");
   document.getElementById("cats").innerHTML = CATS.map(([k,label])=>
-    `<button class="chip" data-k="${k}" aria-pressed="${k===cat}">
-       ${label}<span class="n">${fmtN(count(retailer,k))}</span></button>`).join("");
+    `<button class="chip" data-k="${k}" aria-pressed="${k==="all" ? selCats.size===0 : selCats.has(k)}">
+       ${label}<span class="n">${fmtN(count("all",k))}</span></button>`).join("");
   const priced = pmin !== null || pmax !== null || q;
-  const label = `${RETAILER_LABEL[retailer]}${cat!=="all" ? " · "+cat : ""}` +
+  const retailerLabel = selRetailers.size
+    ? [...selRetailers].map(r=>RETAILER_LABEL[r]||r).join(", ") : "All stores";
+  const label = `${retailerLabel}${selCats.size ? " · "+[...selCats].join(", ") : ""}` +
     (pmin !== null || pmax !== null ? ` · $${pmin ?? 0}–${pmax !== null ? "$"+pmax : ""}` : "") +
     (q ? ` · “${esc(q)}”` : "");
   if(priced){
@@ -121,14 +128,14 @@ function chips(){
       });
   }else{
     document.getElementById("total").innerHTML =
-      `${fmtN(count(retailer, cat))} items <span>· ${label}</span>`;
+      `${fmtN(count("all", "all"))} items <span>· ${label}</span>`;
   }
 }
 
 function filterUrl(){
   let u = `${SUPABASE_URL}/rest/v1/product_search?select=*`;
-  if(retailer!=="all") u += `&retailer=eq.${retailer}`;
-  if(cat!=="all") u += `&category=eq.${cat}`;
+  if(selRetailers.size) u += `&retailer=in.(${[...selRetailers].map(encodeURIComponent).join(",")})`;
+  if(selCats.size) u += `&category=in.(${[...selCats].map(encodeURIComponent).join(",")})`;
   if(pmin !== null) u += `&current_price=gte.${pmin}`;
   if(pmax !== null) u += `&current_price=lte.${pmax}`;
   if(q){
@@ -177,16 +184,19 @@ async function loadPage(reset){
   more.hidden = rows.length < PAGE;
 }
 
-function wireBar(id, set){
+function wireBar(id, sel){
   document.getElementById(id).addEventListener("click", e=>{
     const b = e.target.closest(".chip"); if(!b) return;
-    set(b.dataset.k);
+    const val = b.dataset.k;
+    if(val === "all"){ sel.clear(); }
+    else if(sel.has(val)){ sel.delete(val); }
+    else{ sel.add(val); }
     chips();
     loadPage(true);
   });
 }
-wireBar("retailers", v=>retailer=v);
-wireBar("cats", v=>cat=v);
+wireBar("retailers", selRetailers);
+wireBar("cats", selCats);
 document.getElementById("more").addEventListener("click", ()=>loadPage(false));
 
 document.getElementById("pricebar").addEventListener("submit", e=>{

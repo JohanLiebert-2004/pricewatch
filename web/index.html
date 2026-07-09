@@ -114,12 +114,6 @@
              aria-label="Minimum discount percentage">
       <output id="minoffval" for="minoff">any</output>
     </div>
-    <div class="barlabel">Listing Type</div>
-    <div class="bar" id="filters">
-      <button class="chip" data-f="all" aria-pressed="true">All Listings</button>
-      <button class="chip" data-f="err" aria-pressed="false">Error-Tier (80%+ Off)</button>
-      <button class="chip" data-f="mkt" aria-pressed="false">Marketplace</button>
-    </div>
   </div>
   <div class="total" id="total"></div>
   <div class="grid" id="list"><div class="empty">Curating the latest finds…</div></div>
@@ -130,7 +124,7 @@
   <div class="note">
     Prices are captured automatically and can change or sell out fast. Retailers
     may cancel orders placed on genuine pricing errors — always verify the listing
-    before purchasing. Marketplace items are sold by third-party sellers.
+    before purchasing.
     Discounts are measured against the retailer's own RRP, or the highest price
     recorded in the last 90 days where no RRP is published.
     Categories are inferred from product names and may occasionally be misclassified.
@@ -170,17 +164,15 @@ const SORTS = {
 };
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let retailer = "all", cat = "all", filter = "all", minOff = 0, q = "",
+let selRetailers = new Set(), selCats = new Set(), minOff = 0, q = "",
     sort = "deep", pmin = null, pmax = null, fetchSeq = 0;
 
 function feedUrl(){
   let u = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
           `&order=${SORTS[sort]}&limit=${LIMIT}`;
   if(minOff > 0) u += `&pct_off=gte.${minOff}`;
-  if(retailer !== "all") u += `&retailer=eq.${retailer}`;
-  if(cat !== "all") u += `&category=eq.${cat}`;
-  if(filter === "err") u += `&error_tier=is.true`;
-  if(filter === "mkt") u += `&is_marketplace=is.true`;
+  if(selRetailers.size) u += `&retailer=in.(${[...selRetailers].map(encodeURIComponent).join(",")})`;
+  if(selCats.size) u += `&category=in.(${[...selCats].map(encodeURIComponent).join(",")})`;
   if(pmin !== null) u += `&price=gte.${pmin}`;
   if(pmax !== null) u += `&price=lte.${pmax}`;
   if(q){
@@ -214,8 +206,6 @@ function cardHtml(d, i){
     <div class="cbody">
       <div class="cname">${esc(d.title)}</div>
       <div class="ctags">
-        ${d.error_tier?'<span class="pill err">error-tier</span>':''}
-        ${d.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
         <span class="pill">${esc(d.category)}</span>
       </div>
       <div class="cprices"><span class="cnow">${money(d.price)}</span>
@@ -231,8 +221,11 @@ const SORT_LABEL = {deep:"biggest discount", price_asc:"price low→high",
                     price_desc:"price high→low", fresh:"newest drops",
                     arrivals:"new arrivals"};
 function render(rows, total){
-  const label = `${RETAILER_LABEL[retailer]||"All stores"}` +
-    (cat!=="all" ? ` · ${cat}` : "") +
+  const retailerLabel = selRetailers.size
+    ? [...selRetailers].map(r=>RETAILER_LABEL[r]||r).join(", ")
+    : "All stores";
+  const label = `${retailerLabel}` +
+    (selCats.size ? ` · ${[...selCats].join(", ")}` : "") +
     (minOff>0 ? ` · ${minOff}%+ off` : "") +
     (pmin!==null||pmax!==null ? ` · $${pmin??0}–${pmax!==null?"$"+pmax:"any"}` : "") +
     ` · ${SORT_LABEL[sort]}` +
@@ -263,18 +256,22 @@ async function refresh(){
 }
 
 // ---- controls ----------------------------------------------------------
-function wireBar(id, attr, set){
+function wireMultiBar(id, attr, sel){
   document.getElementById(id).addEventListener("click", e=>{
     const b = e.target.closest(".chip"); if(!b) return;
-    set(b.dataset[attr]);
-    document.querySelectorAll(`#${id} .chip`).forEach(c=>
-      c.setAttribute("aria-pressed", c===b));
+    const val = b.dataset[attr];
+    if(val === "all"){ sel.clear(); }
+    else if(sel.has(val)){ sel.delete(val); }
+    else{ sel.add(val); }
+    document.querySelectorAll(`#${id} .chip`).forEach(c=>{
+      const v = c.dataset[attr];
+      c.setAttribute("aria-pressed", v==="all" ? sel.size===0 : sel.has(v));
+    });
     refresh();
   });
 }
-wireBar("retailers","r", v=>retailer=v);
-wireBar("cats","c", v=>cat=v);
-wireBar("filters","f", v=>filter=v);
+wireMultiBar("retailers","r", selRetailers);
+wireMultiBar("cats","c", selCats);
 
 document.getElementById("qbar").addEventListener("submit", e=>{
   e.preventDefault();
