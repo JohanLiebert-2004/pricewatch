@@ -1,4 +1,5 @@
 from .bigw import BigWScraper
+from .chemistwarehouse import ChemistWarehouseScraper
 from .goodguys import GoodGuysScraper
 from .jbhifi import JBHiFiScraper
 from .kmart_group import KmartScraper, TargetScraper
@@ -8,4 +9,5 @@ from .supercheap import SupercheapScraper
 
 REGISTRY = {s.name: s for s in (BigWScraper, KmartScraper, TargetScraper,
                                 OfficeworksScraper, JBHiFiScraper, GoodGuysScraper,
-                                SupercheapScraper, SephoraScraper)}
+                                SupercheapScraper, SephoraScraper,
+                                ChemistWarehouseScraper)}
