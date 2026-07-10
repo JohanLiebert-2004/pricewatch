@@ -47,12 +47,15 @@ jobs:
                                # manual `index supercheap`, like Good Guys's
                                # initial seed); no bot protection seen on
                                # plain requests, full sweep takes ~11 days
+          - retailer: sephora
+            budget: 25        # 16 pages x 500 = full AU catalogue via the
+                               # v2.6 JSON API, plus headroom
     concurrency:
       group: crawl-${{ matrix.retailer }}
       cancel-in-progress: false
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}   # Supabase connection string
-      PROXY_URL: ${{ secrets.PROXY_URL }}         # optional: residential proxy for Akamai retailers (bigw/kmart/target)
+      PROXY_URL: ${{ secrets.PROXY_URL }}         # optional: residential proxy for Akamai retailers (bigw/kmart/target/sephora)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

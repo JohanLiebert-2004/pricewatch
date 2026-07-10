@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Underpriced — Curated Pricing Intelligence for Australian Retail</title>
-<meta name="description" content="Real-time intelligence on price drops and pricing anomalies across Australia's leading retailers — Kmart, Big W, Officeworks, Target, JB Hi-Fi, The Good Guys and Supercheap Auto.">
+<meta name="description" content="Real-time intelligence on price drops and pricing anomalies across Australia's leading retailers — Kmart, Big W, Officeworks, Target, JB Hi-Fi, The Good Guys, Supercheap Auto and Sephora.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -56,7 +56,7 @@
   <div class="stats">
     <div class="stat"><b id="s-deals">–</b><span>live deals, 50%+ off</span></div>
     <div class="stat"><b id="s-items">–</b><span>products under watch</span></div>
-    <div class="stat"><b>7</b><span>retailers covered</span></div>
+    <div class="stat"><b>8</b><span>retailers covered</span></div>
     <div class="stat"><b>24/7</b><span>continuous monitoring</span></div>
   </div>
 </div></header>
@@ -80,6 +80,7 @@
       <button class="chip" data-r="jbhifi" aria-pressed="false">JB Hi-Fi</button>
       <button class="chip" data-r="goodguys" aria-pressed="false">The Good Guys</button>
       <button class="chip" data-r="supercheap" aria-pressed="false">Supercheap Auto</button>
+      <button class="chip" data-r="sephora" aria-pressed="false">Sephora</button>
     </div>
     <div class="barlabel">Category</div>
     <div class="bar" id="cats">
@@ -154,7 +155,7 @@ fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=sku&pct_off=gte.50&limit=1`,
 
 // ---- render ------------------------------------------------------------
 const money = n => "$"+Number(n).toFixed(2).replace(/\.00$/,"");
-const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", supercheap:"Supercheap Auto"};
+const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", supercheap:"Supercheap Auto", sephora:"Sephora"};
 const SORTS = {
   deep:  "pct_off.desc,reference_price.desc",
   price_asc:  "price.asc,pct_off.desc",

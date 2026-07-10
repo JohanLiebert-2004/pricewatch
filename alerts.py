@@ -37,7 +37,8 @@ VERIFY_TOLERANCE = 0.05       # live-checked price may drift this much and
 
 RETAILER_LABEL = {"kmart": "Kmart", "bigw": "Big W", "target": "Target",
                   "officeworks": "Officeworks", "jbhifi": "JB Hi-Fi",
-                  "goodguys": "The Good Guys", "supercheap": "Supercheap Auto"}
+                  "goodguys": "The Good Guys", "supercheap": "Supercheap Auto",
+                  "sephora": "Sephora"}
 
 
 def _verify_live(retailer: str, url: str, claimed_price: float) -> bool:
