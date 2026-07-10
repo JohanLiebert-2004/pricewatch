@@ -211,18 +211,19 @@ def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
     return pid
 
 
-def bulk_upsert(conn, recs: list) -> int:
+def bulk_upsert(conn, recs: list) -> list:
     """Upsert many ProductRecords with few round trips (for listing refreshes).
 
     Snapshots are only written when a product's price actually changed (or on
     first sighting), so frequent refreshes don't bloat price_snapshots.
-    Returns the number of snapshots written.
+    Returns the ProductRecords that actually got a new snapshot written
+    (callers wanting just a count can use len() on the result).
     """
     recs = [r for r in recs if r.price is not None]
     if not recs:
-        return 0
+        return []
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    written = 0
+    changed = []
     for i in range(0, len(recs), 400):
         chunk = recs[i:i + 400]
         # de-dupe within the chunk (same sku can appear in two listings)
@@ -234,17 +235,17 @@ def bulk_upsert(conn, recs: list) -> int:
         chunk = [seen[k] for k in sorted(seen)]
         for attempt in range(3):
             try:
-                written += _upsert_chunk(conn, chunk, now)
+                changed += _upsert_chunk(conn, chunk, now)
                 break
             except Exception:
                 conn.rollback()
                 if attempt == 2:
                     raise
                 time.sleep(random.uniform(0.5, 2.0) * (attempt + 1))
-    return written
+    return changed
 
 
-def _upsert_chunk(conn, chunk, now) -> int:
+def _upsert_chunk(conn, chunk, now) -> list:
     """One transaction: upsert products, snapshot only real price changes."""
     bool_cast = "::boolean" if DATABASE_URL else ""
     # what do we currently know about these products?
@@ -289,20 +290,21 @@ def _upsert_chunk(conn, chunk, now) -> int:
             old.setdefault((row["retailer"], row["sku"], row["region"]),
                            (row["id"], None))
 
-    snaps = []
+    changed = []
     for r in chunk:
         key = (r.retailer, r.sku, r.region or "")
         if key not in old:
             continue
         pid, prev = old[key]
         if prev is None or abs(float(prev) - r.price) > 0.004:
-            snaps.append((pid, r.price, r.rrp, r.in_stock, now))
-    if snaps:
+            changed.append((pid, r))
+    if changed:
         conn.executemany(
             f"INSERT INTO price_snapshots (product_id, price, rrp, in_stock, "
-            f"scraped_at) VALUES (?,?,?,?{bool_cast},?)", snaps)
+            f"scraped_at) VALUES (?,?,?,?{bool_cast},?)",
+            [(pid, r.price, r.rrp, r.in_stock, now) for pid, r in changed])
     conn.commit()
-    return len(snaps)
+    return [r for pid, r in changed]
 
 
 class _PgShim:

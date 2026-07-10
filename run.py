@@ -211,7 +211,10 @@ def cmd_refresh(args):
                 batch.append(rec)
                 kept += 1
                 if len(batch) >= 400:
-                    snaps += db.bulk_upsert(conn, batch)
+                    changed = db.bulk_upsert(conn, batch)
+                    snaps += len(changed)
+                    if name == "jbhifi":
+                        alerts.send_ram_watch(changed)
                     batch = []
                     if seen % 4000 == 0:
                         print(f"  ...{seen} listings, {snaps} price changes")
@@ -221,7 +224,10 @@ def cmd_refresh(args):
             print(f"  refresh error after {seen} listings: "
                   f"{type(e).__name__}: {e}")
             conn.rollback()   # a failed transaction would poison the flush
-        snaps += db.bulk_upsert(conn, batch)
+        changed = db.bulk_upsert(conn, batch)
+        snaps += len(changed)
+        if name == "jbhifi":
+            alerts.send_ram_watch(changed)
         if cat_state is not None:
             conn.execute("INSERT OR IGNORE INTO kv (k, v) VALUES (?,?)",
                          ("bigw_cat_state", "{}"))

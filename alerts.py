@@ -19,6 +19,7 @@ Each deal is stamped (deals.alerted_at) so it only ever fires once.
 """
 import html
 import os
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -27,6 +28,8 @@ import httpx
 from anomaly import BIG_DROP
 from scrapers import REGISTRY
 from scrapers.base import verify_price
+
+RAM_RX = re.compile(r"\b(ram|ddr3|ddr4|ddr5|dimm|so-?dimm)\b", re.I)
 
 ALERT_MIN_SCORE = 0.0         # any deal the anomaly engine records
 ALERT_MIN_REFERENCE = 0.0     # anomaly.py already gates reference >= $40
@@ -127,6 +130,42 @@ def send_alerts(conn) -> int:
                 print(f"  ! telegram send failed ({resp.status_code}): "
                       f"{resp.text[:200]}")
                 break   # bad token/chat id — don't hammer the API
+    return sent
+
+
+def send_ram_watch(recs) -> int:
+    """Ping Telegram for every JB Hi-Fi RAM price change, deal or not.
+
+    User-requested watch (2026-07-10) separate from the deal-detection
+    pipeline above: anomaly.py only records a "deal" at 50%+ off a $40+
+    reference price, which would miss ordinary RAM price moves. `recs` are
+    the ProductRecords db.bulk_upsert actually wrote a new price_snapshots
+    row for, so this only fires on a genuine price change, not every poll.
+    """
+    token, chat_id = _config()
+    if not token or not chat_id:
+        return 0
+    matches = [r for r in recs
+               if r.retailer == "jbhifi" and RAM_RX.search(r.title or "")]
+    if not matches:
+        return 0
+    sent = 0
+    with httpx.Client(timeout=15) as client:
+        for r in matches:
+            rrp_line = f" (RRP ${r.rrp:.2f})" if r.rrp else ""
+            text = (f"\U0001F4E6 <b>RAM price update</b> at JB Hi-Fi\n"
+                    f"{html.escape(r.title or '')}\n"
+                    f"<b>${r.price:.2f}</b>{rrp_line}\n"
+                    f"{r.url}")
+            resp = client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"})
+            if resp.status_code == 200 and resp.json().get("ok"):
+                sent += 1
+            else:
+                print(f"  ! telegram send failed ({resp.status_code}): "
+                      f"{resp.text[:200]}")
+                break
     return sent
 
 
