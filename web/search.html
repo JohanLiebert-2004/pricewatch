@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Price Search — Underpriced</title>
-<meta name="description" content="Look up the latest tracked price of any product, by name or SKU, across Kmart, Big W, Officeworks, Target, JB Hi-Fi, The Good Guys and Supercheap Auto.">
+<meta name="description" content="Look up recent prices by product name or SKU across the Underpriced catalogue.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,10 +24,10 @@
 </div></nav>
 
 <header class="hero compact"><div class="wrap">
-  <div class="eyebrow">any product · latest price · dated</div>
+  <div class="eyebrow">product lookup · latest known price · dated</div>
   <h1 class="display">Price <em>search</em></h1>
-  <p class="sub">Look up any tracked product by name or SKU and see the most
-    recent price captured, with the date it was recorded.</p>
+  <p class="sub">Look up products by name or SKU and see the latest known price,
+    with the date it was recorded.</p>
 </div></header>
 
 <main class="wrap">
@@ -36,16 +36,16 @@
            autocomplete="off" autofocus>
     <button class="go" type="submit">Search</button>
   </form>
-  <div class="hint">matches product titles and SKUs across kmart · big w · officeworks · target · jb hi-fi · the good guys</div>
+  <div class="hint">matches product titles and SKUs across the current catalogue</div>
   <div id="list"><div class="empty">Enter a product name or SKU above to see its latest tracked price.</div></div>
 </main>
 
 <footer><div class="wrap footgrid">
   <div class="fbrand">Under<em>priced</em></div>
   <div class="note">
-    Prices shown reflect the most recent capture by our crawler — always confirm
-    on the retailer's page before purchasing. Marketplace items are sold by
-    third-party sellers.
+    Prices shown reflect the latest known data available to Underpriced. Always
+    confirm on the retailer's page before purchasing. Marketplace items are sold
+    by third-party sellers.
   </div>
 </div></footer>
 
@@ -100,7 +100,7 @@ async function search(q){
   }
   if(!rows.length){
     list.innerHTML = `<div class="empty">No tracked product matches
-      “${esc(q)}”.<br>Our coverage spans Kmart, Big W, Officeworks, Target, JB Hi-Fi, The Good Guys and Supercheap Auto.</div>`;
+      “${esc(q)}”.<br>Try a broader product name, brand or SKU.</div>`;
     return;
   }
   list.innerHTML = rows.map((p,i)=>`<div class="row plain media" style="animation-delay:${Math.min(i*30,300)}ms">

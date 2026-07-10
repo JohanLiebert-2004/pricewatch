@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Catalogue — Underpriced</title>
-<meta name="description" content="Browse the full Underpriced catalogue — every product under watch, by retailer, category and price.">
+<meta name="description" content="Browse the Underpriced catalogue by retailer, category and price.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,9 +24,9 @@
 </div></nav>
 
 <header class="hero compact"><div class="wrap">
-  <div class="eyebrow">full coverage · refreshed continuously</div>
+  <div class="eyebrow">catalogue view · updated regularly</div>
   <h1 class="display">The <em>catalogue</em></h1>
-  <p class="sub">Every product under watch, curated and browsable by retailer, category and price.</p>
+  <p class="sub">Browse current catalogue coverage by retailer, category and price.</p>
 </div></header>
 
 <main class="wrap">
@@ -57,9 +57,9 @@
 <footer><div class="wrap footgrid">
   <div class="fbrand">Under<em>priced</em></div>
   <div class="note">
-    Counts cover products with a captured price. Categories are inferred from
-    product names and may occasionally be misclassified. Coverage varies by
-    retailer and keeps growing over time.
+    Counts cover products with a current known price. Categories are inferred
+    from product names and may occasionally be misclassified. Coverage varies
+    by retailer and changes over time.
   </div>
 </div></footer>
 
@@ -177,7 +177,7 @@ async function loadPage(reset){
   const list = document.getElementById("list");
   if(reset) list.innerHTML = html ||
     `<div class="empty">Nothing here yet for this retailer/category
-     combination.<br>Check back soon — coverage keeps growing.</div>`;
+     combination.<br>Try a broader filter or check again later.</div>`;
   else list.insertAdjacentHTML("beforeend", html);
   offset += rows.length;
   const more = document.getElementById("more");
