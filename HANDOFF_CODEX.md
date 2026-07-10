@@ -96,3 +96,79 @@ bigger piece of that ask and still needs a decision).
   (Mecca, Adore Beauty, Priceline) beyond Sephora/Chemist Warehouse —
   never followed up on.
 - Nightly Postgres backup workflow — discussed, no go-ahead yet.
+
+## Claude Code continuation update - v1.0
+
+Updated: 2026-07-10 22:08:35 AWST (UTC+08:00)
+
+This section was appended for the next Claude Code session. Preserve all
+earlier handover content. The repository is located at:
+
+`C:\Users\tarun\Downloads\pricewatch_4\pricewatch`
+
+### Required reading order
+
+Before changing anything, Claude Code must read:
+
+1. `CLAUDE.md`.
+2. This complete `HANDOFF_CODEX.md` file, including the historical notes above.
+3. Commit `81c6250` using `git show --stat 81c6250` and `git show 81c6250`.
+4. Current state using `git status --short` and `git log -5 --oneline`.
+5. `infra/oci/README.md`, `main.tf`, `variables.tf`,
+   `cloud-init.yaml.tftpl`, and `outputs.tf`.
+
+### Current OCI handover state
+
+- Commit `81c6250` removes runtime crawler secrets from Terraform inputs and
+  prevents routine Postgres connections from running schema DDL.
+- Python compilation and `terraform validate` passed before handover.
+- Do not immediately run `terraform apply`.
+- The latest Terraform plan proposes destroying and recreating the live OCI VM
+  because changing `metadata.user_data` forces replacement. It would also
+  change the public IP. No apply was performed.
+- Obtain the current VM address without exposing secrets with
+  `terraform -chdir=infra/oci output public_ip`.
+- Explain and agree on a non-destructive approach before changing the VM.
+- Do not disable GitHub Actions until OCI completes a healthy full
+  crawl-and-detect cycle. Preserve a working rollback path.
+
+### Password, key, and secret locations
+
+Never display, log, paste into chat, or commit values from these locations.
+Claude may check file existence, ownership, permissions, and secret names only.
+
+1. OCI API configuration: `C:\Users\tarun\.oci\config`.
+2. OCI API private key: `C:\Users\tarun\.oci\oci_api_key.pem`.
+3. SSH private key for VM access: `C:\Users\tarun\.ssh\id_rsa`.
+4. SSH public key: `C:\Users\tarun\.ssh\id_rsa.pub`.
+5. Local Terraform settings:
+   `C:\Users\tarun\Downloads\pricewatch_4\pricewatch\infra\oci\terraform.tfvars`.
+   This file now holds infrastructure settings such as OCIDs, OCI profile,
+   repository, shape, and SSH configuration. Do not add runtime crawler
+   passwords or API keys to it.
+6. Runtime crawler secrets on the OCI VM: `/opt/pricewatch.env`. It should be
+   owned by `root:root` with mode `0600` and contain these variable names:
+   `DATABASE_URL`, `PROXY_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
+   `RESEND_API_KEY`, `RESEND_FROM`, and `SITE_URL`. Do not print their values.
+7. GitHub Actions also holds runtime secret copies under repository
+   Settings > Secrets and variables > Actions. Expected names include
+   `DATABASE_URL`, `PROXY_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
+   `RESEND_API_KEY`, and `RESEND_FROM`. `gh secret list` may be used to inspect
+   names only.
+8. Historical `infra/oci/terraform.tfstate` and
+   `infra/oci/terraform.tfstate.backup` files may still contain older secret
+   values. They are gitignored and must never be printed, committed, pasted,
+   or searched in a way that exposes values.
+
+### First Claude Code report
+
+Before making production changes, report:
+
+- which required files and commit were read;
+- current Git status and commit;
+- whether the VM is reachable;
+- whether `/opt/pricewatch.env` exists with `root:root` ownership and mode
+  `0600`, without showing its contents;
+- whether the Pricewatch systemd timer and service exist;
+- a safe proposal that avoids replacing the VM; and
+- confirmation that no secret values were exposed.
