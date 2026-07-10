@@ -38,6 +38,11 @@ variable "memory_gb" {
   default     = 12
 }
 
+variable "enable_shape_config" {
+  description = "Use shape_config for flexible shapes such as VM.Standard.A1.Flex. Disable for fixed shapes such as VM.Standard.E2.1.Micro."
+  type        = bool
+  default     = true
+}
 variable "ubuntu_version" {
   description = "Ubuntu image version to search for. Override image_ocid if image lookup fails in your region."
   type        = string

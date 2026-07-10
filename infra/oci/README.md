@@ -81,3 +81,20 @@ each retailer and `python run.py detect`.
 - Secrets are written to `/opt/pricewatch.env` on the VM with `0600` permissions.
 - Terraform state stores rendered cloud-init, so local `.tfstate` files are treated as secret and gitignored.
 - If the repo becomes private, switch `repo_url` to a deploy-key or token flow before destroying GitHub Actions.
+## Shape fallback
+
+Sydney often has no free `VM.Standard.A1.Flex` capacity. The Terraform module
+also supports `VM.Standard.E2.1.Micro` by setting:
+
+```hcl
+instance_shape = "VM.Standard.E2.1.Micro"
+enable_shape_config = false
+ocpus = 1
+memory_gb = 1
+```
+
+The cloud-init template creates a 2GB swapfile so dependency installation can
+complete on the micro VM.
+
+Big W is skipped when `PROXY_URL` is blank. Add the Webshare proxy URL to
+`terraform.tfvars` and re-apply before expecting Big W coverage from OCI.

@@ -50,7 +50,12 @@ write_files:
       }
 
       run_retailer officeworks 900 40
-      run_retailer bigw 1600 40
+      if [ -n "$${PROXY_URL:-}" ]; then
+        run_retailer bigw 1600 40
+      else
+        echo "== bigw =="
+        echo "skipping Big W because PROXY_URL is not set on this runner"
+      fi
       run_retailer kmart 1400 40
       run_retailer target 700 40
       run_retailer jbhifi 100 40
@@ -94,6 +99,11 @@ write_files:
       WantedBy=timers.target
 
 runcmd:
+  - fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
   - mkdir -p /opt
   - git clone --branch ${repo_branch} ${repo_url} /opt/pricewatch
   - cd /opt/pricewatch && python3 -m venv .venv
@@ -101,4 +111,4 @@ runcmd:
   - cd /opt/pricewatch && .venv/bin/pip install -r requirements.txt
   - systemctl daemon-reload
   - systemctl enable --now pricewatch-cycle.timer
-  - systemctl start pricewatch-cycle.service
+  - systemctl start --no-block pricewatch-cycle.service

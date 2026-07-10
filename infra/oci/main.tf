@@ -29,16 +29,16 @@ locals {
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[var.availability_domain_index].name
   image_id            = var.image_ocid != "" ? var.image_ocid : data.oci_core_images.ubuntu.images[0].id
   cloud_init = templatefile("${path.module}/cloud-init.yaml.tftpl", {
-    repo_url              = var.repo_url
-    repo_branch           = var.repo_branch
-    database_url          = var.database_url
-    proxy_url             = var.proxy_url
-    telegram_bot_token    = var.telegram_bot_token
-    telegram_chat_id      = var.telegram_chat_id
-    resend_api_key        = var.resend_api_key
-    resend_from           = var.resend_from
-    site_url              = var.site_url
-    crawl_schedule        = var.crawl_schedule
+    repo_url           = var.repo_url
+    repo_branch        = var.repo_branch
+    database_url       = var.database_url
+    proxy_url          = var.proxy_url
+    telegram_bot_token = var.telegram_bot_token
+    telegram_chat_id   = var.telegram_chat_id
+    resend_api_key     = var.resend_api_key
+    resend_from        = var.resend_from
+    site_url           = var.site_url
+    crawl_schedule     = var.crawl_schedule
   })
 }
 
@@ -106,9 +106,12 @@ resource "oci_core_instance" "pricewatch" {
   display_name        = "pricewatch-runner"
   shape               = var.instance_shape
 
-  shape_config {
-    ocpus         = var.ocpus
-    memory_in_gbs = var.memory_gb
+  dynamic "shape_config" {
+    for_each = var.enable_shape_config ? [1] : []
+    content {
+      ocpus         = var.ocpus
+      memory_in_gbs = var.memory_gb
+    }
   }
 
   create_vnic_details {
