@@ -34,7 +34,10 @@ class SephoraScraper(BaseScraper):
     needs_impersonation = True
     impersonate = "chrome124"   # validated against Sephora's Akamai tier
     warmup_url = "https://www.sephora.com.au/"
-    use_proxy = True   # Akamai-fronted; see CLAUDE.md "Proxy policy"
+    use_proxy = False  # already crawls cleanly direct from GitHub Actions
+                        # runner IPs (in production since launch) - proxy
+                        # bandwidth is reserved for bigw, which is fully
+                        # blocked without it.
 
     # per-request rather than session headers: base.get() replaces the whole
     # session on a blocked-retry, and losing X-Site-Country wouldn't error -

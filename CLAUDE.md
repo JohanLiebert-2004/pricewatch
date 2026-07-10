@@ -69,21 +69,32 @@ python run.py detect
 - Politeness is non-negotiable: do not lower scraper delays below 1.75s for
   Akamai-protected retailers (owner-approved floor, July 2026; revert to 2s+
   if blocks increase); do not parallelize requests to one retailer.
-- **Proxy policy (updated 2026-07-08):** residential/rotating proxies are
-  permitted for Akamai-fronted retailers (Big W, Kmart, Target) to reduce
-  datacenter-IP flags, now that the site is meant to run as a real
-  production service rather than a hobby Vercel deployment. Config is
-  already wired: `scrapers/base.py` reads `PROXY_URL` (format
+- **Proxy policy (updated 2026-07-10):** residential/rotating proxies are
+  permitted for Akamai-fronted retailers to reduce datacenter-IP flags.
+  Config: `scrapers/base.py` reads `PROXY_URL` (format
   `http://user:pass@host:port`) and routes any scraper with `use_proxy =
   True` through it via curl_cffi; unset, everything runs exactly as before
-  (direct GitHub Actions runner IP). The human still needs to sign up with
-  a provider (e.g. Bright Data, Oxylabs, Smartproxy, IPRoyal) and run
-  `gh secret set PROXY_URL` — do not attempt that signup yourself. This
-  does NOT relax the delay floors or concurrency rule above; it only adds
-  a proxy option on top of the existing politeness budget. Scope is
-  intentionally limited to the three Akamai retailers, not the whole
-  no-evasion stance (Bunnings' Cloudflare fingerprinting stays ruled out
-  unless the human decides otherwise).
+  (direct GitHub Actions runner IP). A Webshare residential plan (1GB/month,
+  AU-geo rotating endpoint) is live as of 2026-07-10, scoped to **bigw
+  only** — tested findings:
+  - **Big W**: direct requests are blocked outright (403 on request #1).
+    Residential proxy + `chrome99_android` impersonation + homepage warmup
+    passes cleanly (~2/3 of attempts; the rest get a plain 403, handled by
+    the existing Blocked-mid-refresh fallback). `bigw.py` self-tracks
+    cumulative bytes sent through the proxy per calendar month
+    (`PROXY_MONTHLY_BYTE_CAP`, stored in the `bigw_cat_state` kv row) and
+    stops the bulk sweep once spent, so it can never exceed the plan.
+  - **Kmart / Target**: the proxy does *not* help. Their block is a
+    behavioral Akamai JS-challenge (curl_cffi can't execute JS), not an
+    IP-reputation block — residential IPs get the same challenge
+    interstitial as datacenter IPs. `use_proxy = False` on both; don't
+    re-enable without new evidence it works.
+  - **Sephora**: already crawls cleanly direct (not Akamai-gated the same
+    way) — `use_proxy = False` to leave the full budget for Big W.
+  The human still needs to manage the Webshare account/billing directly —
+  do not attempt signup or plan changes yourself. This does NOT relax the
+  delay floors or concurrency rule above. Bunnings' Cloudflare
+  fingerprinting stays ruled out unless the human decides otherwise.
 - SQLite is the local dev DB; setting DATABASE_URL switches everything to
   Postgres. Never commit pricewatch.db or any .env file (see .gitignore).
 - Retailers block datacenter IPs intermittently; a Blocked exception is

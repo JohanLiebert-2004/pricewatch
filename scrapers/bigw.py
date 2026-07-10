@@ -14,9 +14,20 @@ page carries the full ~4k-node category tree for enumeration.
 import html as htmllib
 import json
 import re
+from datetime import datetime, timezone
 
 from db import ProductRecord
 from .base import BaseScraper, Blocked
+
+# Direct (non-proxy) requests are blocked outright here, so every category
+# page in refresh_listings goes through the residential proxy - each page is
+# ~2.5MB of __NEXT_DATA__ JSON, which would blow through a 1GB/month plan in
+# well under a day of half-hourly cron runs. Cap cumulative bytes-through-
+# proxy per calendar month (tracked in the bigw_cat_state kv row, same place
+# category sweep progress already lives) well under the purchased 1GB,
+# leaving headroom for measurement error - `len(text)` is the *decompressed*
+# size, bigger than what Webshare actually bills for a gzip response.
+PROXY_MONTHLY_BYTE_CAP = 700 * 1024 * 1024
 
 
 class BigWScraper(BaseScraper):
@@ -27,7 +38,9 @@ class BigWScraper(BaseScraper):
                   # 2.5s + 3-hourly sweeps is the proven-stable rate
     needs_impersonation = True
     warmup_url = "https://www.bigw.com.au/"
-    use_proxy = True   # Akamai-fronted; see CLAUDE.md "Proxy policy"
+    use_proxy = True   # Akamai-fronted; direct requests are blocked outright
+                        # (see PROXY_MONTHLY_BYTE_CAP above for the tradeoff
+                        # this brings)
 
     def parse_product(self, url, raw):
         rec = super().parse_product(url, raw)
@@ -46,6 +59,7 @@ class BigWScraper(BaseScraper):
 
     def _next_data(self, url):
         html = self.get(url)
+        self._proxy_bytes_run = getattr(self, "_proxy_bytes_run", 0) + len(html.encode("utf-8"))
         m = re.search(r'<script id="__NEXT_DATA__" type="application/json">'
                       r"(.*?)</script>", html, re.S)
         if not m:
@@ -79,27 +93,54 @@ class BigWScraper(BaseScraper):
         """Yield ProductRecords from category listing pages (144/page).
 
         `state` maps category path -> ISO timestamp of its last completed
-        sweep. Categories are visited stalest-first and the dict is mutated
-        in place as each one completes, so a run that gets blocked mid-way
-        doesn't make the next run re-sweep the same head categories while
-        the tail starves — clearance drops anywhere in the store get seen
-        within a few runs.
+        sweep, plus `_proxy_month`/`_proxy_bytes` tracking cumulative bytes
+        sent through the proxy this calendar month (see
+        PROXY_MONTHLY_BYTE_CAP). Categories are visited stalest-first and
+        the dict is mutated in place as each one completes, so a run that
+        gets blocked or budget-capped mid-way doesn't make the next run
+        re-sweep the same head categories while the tail starves —
+        clearance drops anywhere in the store get seen within a few runs.
         """
-        from datetime import datetime, timezone
         state = state if state is not None else {}
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+        if state.get("_proxy_month") != month:
+            state["_proxy_month"] = month
+            state["_proxy_bytes"] = 0
+        self._proxy_bytes_run = 0
+
+        def _spent():
+            return state.get("_proxy_bytes", 0) + self._proxy_bytes_run
+
+        def _sync():
+            state["_proxy_bytes"] = _spent()
+
+        if self.use_proxy and _spent() >= PROXY_MONTHLY_BYTE_CAP:
+            print(f"  {self.name}: proxy byte budget spent for {month}, "
+                  "skipping bulk refresh until next month")
+            return
         used = 0
         try:
             paths = self._category_paths()
         except Blocked:
+            _sync()
             raise
         used += 1
         paths.sort(key=lambda p: state.get(p, ""))
         for path in paths:
             page = 0
             while used < budget:
+                if self.use_proxy and _spent() >= PROXY_MONTHLY_BYTE_CAP:
+                    _sync()
+                    print(f"  {self.name}: proxy byte budget reached mid-run "
+                          f"({_spent()//1024//1024}MB), stopping")
+                    return
                 url = (f"https://www.bigw.com.au{path}"
                        f"?page={page}&perPage={self.per_page}")
-                data = self._next_data(url)
+                try:
+                    data = self._next_data(url)
+                except Blocked:
+                    _sync()
+                    raise
                 used += 1
                 org = (data["props"]["pageProps"].get("results") or {}) \
                     .get("organic") or {}
@@ -115,7 +156,9 @@ class BigWScraper(BaseScraper):
                         timespec="seconds")
                     break
             if used >= budget:
+                _sync()
                 return
+        _sync()
 
     def _record_from_listing(self, item) -> ProductRecord | None:
         code = item.get("code")

@@ -31,7 +31,11 @@ class KmartScraper(BaseScraper):
     delay = 2.5
     needs_impersonation = True
     warmup_url = "https://www.kmart.com.au/"
-    use_proxy = True   # Akamai-fronted; see CLAUDE.md "Proxy policy"
+    use_proxy = False  # tested 2026-07-10: residential proxy still gets the
+                        # Akamai JS-challenge interstitial on product pages
+                        # (behavioral, not IP-reputation - a proxy can't
+                        # solve it). Bulk refresh doesn't need it anyway
+                        # (goes via Constructor.io, not kmart.com.au).
 
     # -- fast listing refresh via Constructor.io ---------------------------
     api_delay = 0.6           # polite pause between API calls (not Akamai)
@@ -157,7 +161,10 @@ class TargetScraper(BaseScraper):
     delay = 2.5
     needs_impersonation = True
     warmup_url = "https://www.target.com.au/"
-    use_proxy = True   # Akamai-fronted; see CLAUDE.md "Proxy policy"
+    use_proxy = False  # tested 2026-07-10: residential proxy still gets the
+                        # Akamai JS-challenge interstitial on listing pages
+                        # (behavioral, not IP-reputation - a proxy can't
+                        # solve it).
 
     per_page = 48  # fixed by the site
     all_products_path = "/c/all-products/AP01"

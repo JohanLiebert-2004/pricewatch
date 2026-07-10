@@ -58,9 +58,8 @@
   <div class="fbrand">Under<em>priced</em></div>
   <div class="note">
     Counts cover products with a captured price. Categories are inferred from
-    product names and may occasionally be misclassified. Retailers with limited
-    coverage so far (Big W, Target) remain in active crawling — retailers block
-    automated requests intermittently, so coverage builds over successive runs.
+    product names and may occasionally be misclassified. Coverage varies by
+    retailer and keeps growing over time.
   </div>
 </div></footer>
 
@@ -177,8 +176,8 @@ async function loadPage(reset){
   </div>`).join("");
   const list = document.getElementById("list");
   if(reset) list.innerHTML = html ||
-    `<div class="empty">Nothing here yet — this retailer/category combination
-     hasn't been fully crawled.<br>Coverage builds every half hour.</div>`;
+    `<div class="empty">Nothing here yet for this retailer/category
+     combination.<br>Check back soon — coverage keeps growing.</div>`;
   else list.insertAdjacentHTML("beforeend", html);
   offset += rows.length;
   const more = document.getElementById("more");
