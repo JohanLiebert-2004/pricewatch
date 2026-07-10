@@ -15,7 +15,7 @@ import db
 import watch_alerts
 from anomaly import BIG_DROP, run as detect
 from scrapers import REGISTRY
-from scrapers.base import Blocked, verify_price
+from scrapers.base import Blocked, NotFound, verify_price
 
 
 def cmd_scrape(args):
@@ -127,6 +127,15 @@ MIN_KEEP_PRICE = 40.0   # don't ingest NEW items normally under this - deals
                         # in the DB always stay refreshed so a big price DROP
                         # on an expensive item (even to $5) is still captured.
 
+MISSING_CHECK_BUDGET = 15   # fast listing feeds (esp. JB Hi-Fi's "25k most
+                            # recently published" window) don't cover every
+                            # tracked SKU every sweep, so "not seen this
+                            # sweep" alone doesn't mean delisted. Bounded so a
+                            # long tail outside the feed's window can't blow
+                            # the politeness budget on confirmatory fetches;
+                            # it self-heals over successive runs (crawl.yml
+                            # runs every 30 min).
+
 
 def cmd_refresh(args):
     """Fast bulk price refresh via listing pages / retailer APIs.
@@ -142,8 +151,10 @@ def cmd_refresh(args):
             print(f"== {name}: no fast refresh path, skipping ==")
             continue
         print(f"== {name}: bulk refresh (budget {args.budget} requests) ==")
-        known = {r["sku"] for r in conn.execute(
-            "SELECT sku FROM products WHERE retailer=?", (name,))}
+        known_urls = {r["sku"]: r["url"] for r in conn.execute(
+            "SELECT sku, url FROM products WHERE retailer=? AND current_price IS NOT NULL "
+            "ORDER BY COALESCE(price_updated_at, '1970-01-01') ASC", (name,))}
+        known = set(known_urls)
         kwargs = {}
         if name == "officeworks":
             # bulk API needs a SKU list: items worth watching (>=$50 or not
@@ -170,6 +181,7 @@ def cmd_refresh(args):
         kept = 0
         snaps = 0
         batch = []
+        seen_skus = set()
 
         def worth_keeping(rec):
             if rec.sku in known:
@@ -181,6 +193,7 @@ def cmd_refresh(args):
         try:
             for rec in scraper.refresh_listings(budget=args.budget, **kwargs):
                 seen += 1
+                seen_skus.add(rec.sku)
                 if not worth_keeping(rec):
                     continue
                 # Listing feeds can go stale for individual SKUs (see
@@ -216,7 +229,35 @@ def cmd_refresh(args):
                          (json.dumps(cat_state), "bigw_cat_state"))
             conn.commit()
         print(f"  -> {seen} listings seen, {kept} kept (>= ${MIN_KEEP_PRICE:.0f} "
-              f"or already tracked), {snaps} snapshots written\n")
+              f"or already tracked), {snaps} snapshots written")
+
+        missing = [sku for sku in known_urls if sku not in seen_skus][:MISSING_CHECK_BUDGET]
+        delisted = 0
+        for sku in missing:
+            url = known_urls[sku]
+            try:
+                rec = scraper.parse_product(url, scraper.get(url))
+            except NotFound:
+                # confirmed HTTP 404 - not a bot-block, the listing is genuinely
+                # gone (product delisted/discontinued). Stop showing it as a
+                # live deal/link rather than leaving a stale price forever.
+                conn.execute(
+                    "UPDATE products SET current_price=NULL WHERE retailer=? AND sku=?",
+                    (name, sku))
+                conn.execute(
+                    "UPDATE deals SET status='expired' WHERE status <> 'expired' "
+                    "AND product_id = (SELECT id FROM products WHERE retailer=? AND sku=?)",
+                    (name, sku))
+                conn.commit()
+                delisted += 1
+                print(f"  x {name} {sku}: confirmed delisted (404), hidden from site")
+            except Exception:
+                continue   # inconclusive (blocked, network hiccup, page moved) - fail open
+        if missing:
+            print(f"  {len(missing)} previously-tracked SKU(s) missing from this sweep "
+                  f"checked directly, {delisted} confirmed delisted\n")
+        else:
+            print()
 
 
 def cmd_url(args):
