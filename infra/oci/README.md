@@ -48,11 +48,15 @@ Edit `infra\oci\terraform.tfvars` and fill in:
 
 - `tenancy_ocid`
 - `compartment_ocid` - use tenancy OCID if you are not using a separate compartment
-- `database_url`
-- `proxy_url` for Webshare, if Big W should continue using it
-- optional Telegram/Resend values
 
-`terraform.tfvars` is gitignored because it contains secrets.
+Runtime secrets are not managed by Terraform. Put them only in
+`/opt/pricewatch.env` on the VM:
+
+```bash
+sudoedit /opt/pricewatch.env
+sudo chmod 600 /opt/pricewatch.env
+sudo chown root:root /opt/pricewatch.env
+```
 
 ## Deploy
 
@@ -79,7 +83,7 @@ each retailer and `python run.py detect`.
 - The VM only exposes SSH. No public app/API port is opened.
 - Replace `ssh_allowed_cidr = "0.0.0.0/0"` with your current public IP plus `/32` after setup.
 - Secrets are written to `/opt/pricewatch.env` on the VM with `0600` permissions.
-- Terraform state stores rendered cloud-init, so local `.tfstate` files are treated as secret and gitignored.
+- Terraform cloud-init does not include crawler secrets. Local `.tfstate` files are still gitignored.
 - If the repo becomes private, switch `repo_url` to a deploy-key or token flow before destroying GitHub Actions.
 ## Shape fallback
 
@@ -97,4 +101,4 @@ The cloud-init template creates a 2GB swapfile so dependency installation can
 complete on the micro VM.
 
 Big W is skipped when `PROXY_URL` is blank. Add the Webshare proxy URL to
-`terraform.tfvars` and re-apply before expecting Big W coverage from OCI.
+`/opt/pricewatch.env` before expecting Big W coverage from OCI.

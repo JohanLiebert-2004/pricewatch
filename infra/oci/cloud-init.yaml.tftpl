@@ -12,17 +12,6 @@ packages:
   - util-linux
 
 write_files:
-  - path: /opt/pricewatch.env
-    owner: root:root
-    permissions: '0600'
-    content: |
-      DATABASE_URL=${database_url}
-      PROXY_URL=${proxy_url}
-      TELEGRAM_BOT_TOKEN=${telegram_bot_token}
-      TELEGRAM_CHAT_ID=${telegram_chat_id}
-      RESEND_API_KEY=${resend_api_key}
-      RESEND_FROM=${resend_from}
-      SITE_URL=${site_url}
 
   - path: /opt/pricewatch-run-cycle.sh
     owner: root:root
@@ -105,6 +94,21 @@ runcmd:
   - swapon /swapfile
   - echo '/swapfile none swap sw 0 0' >> /etc/fstab
   - mkdir -p /opt
+  - |
+    if [ ! -f /opt/pricewatch.env ]; then
+      install -m 0600 -o root -g root /dev/null /opt/pricewatch.env
+      cat > /opt/pricewatch.env <<'EOF'
+DATABASE_URL=
+PROXY_URL=
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+RESEND_API_KEY=
+RESEND_FROM=
+SITE_URL=${site_url}
+EOF
+    fi
+  - chmod 600 /opt/pricewatch.env
+  - chown root:root /opt/pricewatch.env
   - git clone --branch ${repo_branch} ${repo_url} /opt/pricewatch
   - cd /opt/pricewatch && python3 -m venv .venv
   - cd /opt/pricewatch && .venv/bin/pip install --upgrade pip

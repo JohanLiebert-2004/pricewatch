@@ -10,6 +10,7 @@ from pathlib import Path
 DB_PATH = Path(__file__).parent / "pricewatch.db"
 # If DATABASE_URL is set (e.g. Supabase Postgres), use it; else local SQLite.
 DATABASE_URL = os.environ.get("DATABASE_URL")
+APPLY_SCHEMA_ON_CONNECT = os.environ.get("APPLY_SCHEMA_ON_CONNECT") == "1"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS products (
@@ -156,15 +157,17 @@ def _connect_postgres():
     # survives to the next call on the same client connection.
     conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=False,
                             prepare_threshold=None)
-    # translate the SQLite schema to Postgres on first connect
-    pg_schema = (SCHEMA
-                 .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
-                 .replace("INTEGER", "BIGINT"))
-    with conn.cursor() as cur:
-        cur.execute(pg_schema)
-    conn.commit()
     shim = _PgShim(conn)
-    _migrate(shim)
+    if APPLY_SCHEMA_ON_CONNECT:
+        # Schema setup takes table locks. Keep it out of routine parallel
+        # crawler/detect jobs; run it deliberately with APPLY_SCHEMA_ON_CONNECT=1.
+        pg_schema = (SCHEMA
+                     .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+                     .replace("INTEGER", "BIGINT"))
+        with conn.cursor() as cur:
+            cur.execute(pg_schema)
+        conn.commit()
+        _migrate(shim)
     return shim
 
 

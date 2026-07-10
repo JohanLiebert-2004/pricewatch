@@ -78,41 +78,6 @@ variable "repo_branch" {
   default = "master"
 }
 
-variable "database_url" {
-  description = "Supabase/Postgres connection string used by the crawler. Stored on the VM and in local Terraform state."
-  type        = string
-  sensitive   = true
-}
-
-variable "proxy_url" {
-  description = "Optional residential proxy URL. Stored on the VM and in local Terraform state."
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "telegram_bot_token" {
-  type      = string
-  sensitive = true
-  default   = ""
-}
-
-variable "telegram_chat_id" {
-  type      = string
-  sensitive = true
-  default   = ""
-}
-
-variable "resend_api_key" {
-  type      = string
-  sensitive = true
-  default   = ""
-}
-
-variable "resend_from" {
-  type    = string
-  default = ""
-}
 
 variable "site_url" {
   type    = string
