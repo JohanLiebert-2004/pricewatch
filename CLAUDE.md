@@ -65,6 +65,24 @@ python run.py scrape officeworks --limit 5   # live scrape smoke test
 python run.py detect
 ```
 
+## Crawler infra (2026-07-10): GitHub Actions is primary, not OCI
+- `.github/workflows/crawl.yml` (cron every 30 min) is the **sole active**
+  crawl-and-detect pipeline. The repo is public specifically for unlimited
+  free Actions minutes, so there's no capacity reason to move off it.
+- An OCI VM exists (`infra/oci/`, Terraform-managed, IP via
+  `terraform -chdir=infra/oci output public_ip`) from an earlier
+  experiment to run the crawler on a systemd timer instead. Its
+  `pricewatch-cycle.timer` has been **stopped and disabled** — do not
+  re-enable it without fixing, first: (a) `PROXY_URL` is blank in its
+  `/opt/pricewatch.env`, so Big W is skipped there; (b) a full cycle takes
+  ~110 min, right at the systemd unit's `TimeoutStartSec=6600`, so it can
+  get killed before reaching `python run.py detect`; (c) running it
+  alongside GitHub Actions on the same 30-min schedule caused
+  `psycopg.errors.DeadlockDetected` from both hitting Postgres schema DDL
+  concurrently (fixed in commit `81c6250`, but only matters if both run
+  at once again). The VM itself is left provisioned (not destroyed) in
+  case OCI is revisited later.
+
 ## Project conventions
 - Politeness is non-negotiable: do not lower scraper delays below 1.75s for
   Akamai-protected retailers (owner-approved floor, July 2026; revert to 2s+

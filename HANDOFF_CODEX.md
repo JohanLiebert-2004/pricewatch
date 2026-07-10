@@ -172,3 +172,31 @@ Before making production changes, report:
 - whether the Pricewatch systemd timer and service exist;
 - a safe proposal that avoids replacing the VM; and
 - confirmation that no secret values were exposed.
+
+## Resolution (2026-07-10, later same day)
+
+Investigated per the checklist above (read-only: SSH'd into the VM, checked
+`journalctl`, `git log`, no `terraform apply`, no secrets shown). Found real
+problems, not just a "verify and report" situation:
+
+- `81c6250` and `b87e281` existed only in the local repo, 2 commits ahead of
+  `origin/master` — neither GitHub Actions nor the OCI VM had them. Pushed
+  now (fast-forward, no force).
+- GitHub Actions and the OCI VM were both crawling on the same 30-min cron
+  against the same Supabase DB, causing `psycopg.errors.DeadlockDetected`
+  in the VM's logs (both hitting schema DDL from `db.py` concurrently —
+  the old unconditional-on-connect version, since fixed in `81c6250`).
+- OCI's `/opt/pricewatch.env` had `PROXY_URL` blank, so Big W was silently
+  skipped on every OCI cycle.
+- A full OCI cycle takes ~110 minutes, right at `TimeoutStartSec=6600`; one
+  observed cycle got killed before reaching `python run.py detect`.
+
+Decision: **GitHub Actions stays primary** (the repo's public specifically
+for unlimited free Actions minutes, so there was no capacity reason to have
+moved to OCI in the first place). `pricewatch-cycle.timer` on the OCI VM was
+stopped and disabled (`systemctl stop` + `disable`) so it no longer fires.
+The VM itself and its Terraform state were left alone — not destroyed, in
+case OCI is worth revisiting later with the timeout/proxy/concurrency issues
+actually fixed. See `CLAUDE.md`'s "Crawler infra" section for the terse
+version of this. Don't re-enable the OCI timer without addressing all three
+issues above and coordinating so only one pipeline runs at a time.
