@@ -7,3 +7,11 @@ local_refresh.log
 supabase/.temp/
 
 .vercel
+# Terraform / OCI local state and secrets
+infra/oci/.terraform/
+infra/oci/.terraform.lock.hcl
+infra/oci/terraform.tfvars
+infra/oci/*.tfstate
+infra/oci/*.tfstate.*
+infra/oci/crash.log
+infra/oci/crash.*.log

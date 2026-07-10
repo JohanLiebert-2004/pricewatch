@@ -1,0 +1,27 @@
+# Copy to terraform.tfvars and fill values. Do not commit terraform.tfvars.
+
+tenancy_ocid     = "ocid1.tenancy.oc1..replace_me"
+compartment_ocid = "ocid1.tenancy.oc1..replace_me"
+oci_profile      = "DEFAULT"
+
+# Optional but recommended after first boot: your public IP /32.
+ssh_allowed_cidr = "0.0.0.0/0"
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+
+# Current public repo. If you make the repo private later, use a deploy key or token-based URL.
+repo_url    = "https://github.com/JohanLiebert-2004/pricewatch.git"
+repo_branch = "master"
+
+# Secrets used by the crawler. These are stored in local Terraform state and on the VM.
+database_url = "postgresql://replace_me"
+proxy_url    = "http://replace_me"
+
+telegram_bot_token = ""
+telegram_chat_id   = ""
+resend_api_key     = ""
+resend_from        = ""
+site_url           = "https://web-pi-blush-48.vercel.app"
+
+# Always Free A1 total limit after trial: <= 2 OCPUs and <= 12 GB memory.
+ocpus     = 2
+memory_gb = 12

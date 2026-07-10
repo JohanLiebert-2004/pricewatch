@@ -1,0 +1,104 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+packages:
+  - git
+  - python3
+  - python3-venv
+  - python3-pip
+  - ca-certificates
+  - curl
+  - jq
+  - util-linux
+
+write_files:
+  - path: /opt/pricewatch.env
+    owner: root:root
+    permissions: '0600'
+    content: |
+      DATABASE_URL=${database_url}
+      PROXY_URL=${proxy_url}
+      TELEGRAM_BOT_TOKEN=${telegram_bot_token}
+      TELEGRAM_CHAT_ID=${telegram_chat_id}
+      RESEND_API_KEY=${resend_api_key}
+      RESEND_FROM=${resend_from}
+      SITE_URL=${site_url}
+
+  - path: /opt/pricewatch-run-cycle.sh
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+      exec 9>/var/lock/pricewatch-cycle.lock
+      flock -n 9 || exit 0
+
+      cd /opt/pricewatch
+      git fetch --quiet origin ${repo_branch}
+      git checkout --quiet ${repo_branch}
+      git pull --quiet --ff-only origin ${repo_branch}
+      source /opt/pricewatch.env
+      source /opt/pricewatch/.venv/bin/activate
+
+      run_retailer() {
+        local name="$1"
+        local budget="$2"
+        local batch="$3"
+        echo "== $name =="
+        python run.py refresh "$name" --budget "$budget" || true
+        python run.py crawl "$name" --batch "$batch" || true
+      }
+
+      run_retailer officeworks 900 40
+      run_retailer bigw 1600 40
+      run_retailer kmart 1400 40
+      run_retailer target 700 40
+      run_retailer jbhifi 100 40
+      run_retailer goodguys 50 500
+      run_retailer supercheap 50 1000
+      run_retailer sephora 25 40
+      run_retailer chemistwarehouse 50 500
+      python run.py detect || true
+
+  - path: /etc/systemd/system/pricewatch-cycle.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Pricewatch crawl and detect cycle
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      User=root
+      WorkingDirectory=/opt/pricewatch
+      EnvironmentFile=/opt/pricewatch.env
+      ExecStart=/opt/pricewatch-run-cycle.sh
+      TimeoutStartSec=6600
+      Nice=5
+
+  - path: /etc/systemd/system/pricewatch-cycle.timer
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Run Pricewatch crawl and detect cycle
+
+      [Timer]
+      OnCalendar=${crawl_schedule}
+      Persistent=true
+      RandomizedDelaySec=120
+
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+  - mkdir -p /opt
+  - git clone --branch ${repo_branch} ${repo_url} /opt/pricewatch
+  - cd /opt/pricewatch && python3 -m venv .venv
+  - cd /opt/pricewatch && .venv/bin/pip install --upgrade pip
+  - cd /opt/pricewatch && .venv/bin/pip install -r requirements.txt
+  - systemctl daemon-reload
+  - systemctl enable --now pricewatch-cycle.timer
+  - systemctl start pricewatch-cycle.service
