@@ -30,8 +30,10 @@ from scrapers.base import verify_price
 
 ALERT_MIN_SCORE = 0.0         # any deal the anomaly engine records
 ALERT_MIN_REFERENCE = 0.0     # anomaly.py already gates reference >= $40
-ALERT_EXCLUDE_RETAILERS = {"supercheap"}  # user opted out 2026-07-09 - still
-                                          # shown on-site, just no Telegram ping
+ALERT_EXCLUDE_RETAILERS = {"supercheap", "sephora"}  # user opted out of
+                                          # supercheap 2026-07-09 and sephora
+                                          # 2026-07-10 - still shown on-site,
+                                          # just no Telegram ping
 VERIFY_TOLERANCE = 0.05       # live-checked price may drift this much and
                               # still count as confirming the alerted price
 
