@@ -34,11 +34,12 @@
   .gbar .r-jbhifi{background:#8a5cd6}
   .gbar .r-goodguys{background:#d3572b}
   .gbar .r-supercheap{background:#2f9e6e}
+  .gbar .r-sephora{background:#d64072}
   .gmeta{font-size:11.5px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
   .gmeta b{color:var(--ink);font-weight:600}
   .dotk{color:#d3572b} .dotb{color:#3d7bd9}
   .doto{color:var(--deal)} .dott{color:#c9a227} .dotj{color:#8a5cd6}
-  .dotg{color:#d3572b} .dots{color:#2f9e6e}
+  .dotg{color:#d3572b} .dots{color:#2f9e6e} .dotse{color:#d64072}
   .gnums{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   .gnums .plus{font-weight:650;font-size:19px;color:var(--deal);letter-spacing:-.01em}
   .gnums .cum{font-family:"Spline Sans Mono",monospace;font-size:10px;
@@ -95,8 +96,8 @@ const HDRS = {apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KE
 
 const fmtN = n => Number(n).toLocaleString("en-AU");
 const RETAILERS = ["kmart","bigw","officeworks","target","jbhifi","goodguys","supercheap","sephora"];
-const RLAB = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", supercheap:"Supercheap Auto"};
-const DOT = {kmart:"dotk", bigw:"dotb", officeworks:"doto", target:"dott", jbhifi:"dotj", goodguys:"dotg", supercheap:"dots"};
+const RLAB = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", supercheap:"Supercheap Auto", sephora:"Sephora"};
+const DOT = {kmart:"dotk", bigw:"dotb", officeworks:"doto", target:"dott", jbhifi:"dotj", goodguys:"dotg", supercheap:"dots", sephora:"dotse"};
 
 function fmtDay(iso){
   const d = new Date(iso + "T00:00:00Z");
