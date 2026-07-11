@@ -38,10 +38,14 @@ Before changing anything:
 ### Production data correction
 
 Big W SKU `41041` (Harry Potter Hufflepuff skirt) was corrected directly in
-Supabase: current price is `$11.00`, reference price is `$35.80`, and its
-deal score is `69.27%` (not a false `$3,580` reference / 99.69% deal). The
-materialized `discount_feed` was refreshed. The parser now converts Big W
-product-page JSON-LD cent values for both price and RRP.
+Supabase: current price is `$11.00`, reference price is `$35.80` (not a false
+`$3,580`). The materialized `discount_feed` was refreshed. The parser now
+converts Big W product-page JSON-LD cent values for both price and RRP.
+Verified 11 July (later session): product row and snapshots are clean, zero
+other Big W rows with rrp > 50x price, and the skirt is **correctly absent**
+from the deals feed - its true $35.80 reference is under the feed's $40
+floor. Its earlier appearance was purely an artifact of the cents bug; do
+not "fix" its absence.
 
 ### Notification decisions
 
