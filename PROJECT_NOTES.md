@@ -75,7 +75,7 @@ drift plans a full VM replacement.
 | Supercheap Auto | Full product sitemap (104 `sitemap_N-product.xml` files, ~518k URLs) + JSON-LD & GA4 dataLayer per product page | Salesforce Commerce Cloud; no bot protection; **full catalogue**, indexed 2026-07-08 after empirical storage testing showed it fits the free tier (~518k rows × ~336 bytes ≈ 166MB added, 292MB total DB); crawl_batch raised to 1000/cycle (~11-day first sweep); was-price = price + dataLayer `discount`; images via demandware.static. (SKUs are alphanumeric, e.g. `SPO81491` — the product URL regex must allow letters, not just digits, or most sitemap files silently match zero URLs.) |
 | Sephora      | Storefront JSON:API (`/api/v2.6/products`, 500/page, ~16 requests for full AU catalogue) | shared Asia-Pacific backend behind Akamai — needs curl_cffi impersonation *and* `X-Platform: Web` + `X-Site-Country: AU` headers, or it silently serves a stale/wrong-country price book (observed PHP-peso catalogues, wrong prices) with no error; prices are integer cents; opted out of Telegram pings (too noisy) |
 | Chemist Warehouse | Next.js `__NEXT_DATA__` per product page, seeded from products sitemap (~26k URLs) | commercetools backend; no bot challenge on impersonated requests; no fast listing path at all (robots.txt disallows `/api/`, category pages aren't SSR'd) so coverage is 100% crawl-queue lane, crawl_batch 500 (~26h first sweep); prescription items are skipped outright (PBS pricing isn't a "deal", and advertising Rx medicine prices is restricted in Australia) |
-| Myer         | Sitemap (`sitemap_20251_N.xml.gz`, ~154k URLs) + schema.org JSON-LD per product page | Salesforce Commerce Cloud-style; no bot protection seen; sitemaps are served as **literal gzip bytes**, not an HTTP Content-Encoding, so the base scraper's text sitemap walker couldn't read them — added `BaseScraper.get_bytes()` + gzip-aware `discover()`/`discover_all()` overrides in `myer.py`; RRP comes from an embedded `"listPrice":N` field the existing `_find_rrp` fallback already matches, no `parse_product` override needed; crawl_batch 1000 (~3-day first sweep); added 2026-07-11 |
+| Myer         | Sitemap (`sitemap_20251_N.xml.gz`, ~154k URLs) + schema.org JSON-LD per product page | Salesforce Commerce Cloud-style; no bot protection seen; sitemaps are served as **literal gzip bytes**, not an HTTP Content-Encoding, so the base scraper's text sitemap walker couldn't read them — added `BaseScraper.get_bytes()` + gzip-aware `discover()`/`discover_all()` overrides in `myer.py`; RRP comes from an embedded `"listPrice":N` field the existing `_find_rrp` fallback already matches, no `parse_product` override needed; crawl_batch 1000; first CI batch measured ~4.7s/URL end-to-end (politeness delay + Supabase round-trip), so the full first sweep is ~5-6 days, with ~94% of URLs storing a product (rest are stale sitemap entries); **sold-out items carry `price:"0"` in their JSON-LD** — 14 got ingested on day one and showed as fake "-100%" deals until $0 prices were rejected at parser/db/view level (commit 72e495f); added 2026-07-11 |
 
 **Bunnings — investigated and ruled out** (July 2026): robots.txt disallows
 `/api/` and `/apis/` (where any bulk endpoint would live), no product-level
@@ -240,10 +240,13 @@ not just IP reputation) — this proxy allowance doesn't reopen that.
       user said "later").
 - [ ] Target via Commission Factory (waiting on user account).
 - [ ] Big W and Target product images (media fields not yet extracted).
-- [ ] Watch Myer's first full crawl sweep (~3 days at crawl_batch 1000) for
-      any blocking — none seen in testing (sitemap fetches + a live scrape
-      of 6 products), but that's a thin evidence base compared to the
-      other unprotected retailers; keep an eye on it early on.
+- [ ] Myer first sweep in progress (~5-6 days at real CI pace, ~4.7s/URL):
+      first batch healthy — ~94% store rate, individual failures only (no
+      block pattern), $0 sold-out placeholders now rejected. Nothing to do
+      unless the store rate drops sharply on later batches.
+- [ ] User to test the Telegram bot end-to-end: open @underp22bot via a
+      product page's subscribe button (I can't message the bot as them).
+      Bot service is polling and healthy; only the human tap is unverified.
 - [ ] Watch JB Hi-Fi's GitHub Actions runs for Cloudflare blocking of
       datacenter IPs (fallback: run it in the local task instead).
 - [ ] Officeworks full SKU sweep continues incrementally via Actions.
