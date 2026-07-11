@@ -129,7 +129,9 @@ function chips(){
     `<button class="chip" data-k="${k}" aria-pressed="${k==="all" ? selRetailers.size===0 : selRetailers.has(k)}">
        ${label}<span class="n">${fmtN(count(k,"all"))}</span></button>`).join("");
   document.getElementById("cats").innerHTML = catChips();
-  const priced = pmin !== null || pmax !== null || q;
+  // subcategory picks also force the exact-count path: the local stats
+  // cache only knows retailer x category totals
+  const priced = pmin !== null || pmax !== null || q || selSubcats.size;
   const retailerLabel = selRetailers.size
     ? [...selRetailers].map(r=>RETAILER_LABEL[r]||r).join(", ") : "All stores";
   const label = `${retailerLabel}${selCats.size ? " · "+[...selCats].join(", ") : ""}` +
