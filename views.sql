@@ -206,3 +206,42 @@ end;
 $$;
 revoke all on function cancel_watch(text) from public;
 grant execute on function cancel_watch(text) to anon;
+
+-- Trending searches: anonymous term counting, no visitor identity of any
+-- kind (term + timestamp only). search.html fires log_search() on every
+-- query (fire-and-forget) and shows trending_searches as suggestion chips.
+-- Same anon-write pattern as create_watch: no table grants, a narrow
+-- SECURITY DEFINER RPC is the only door, server-side sanitation inside it.
+-- detect prunes rows older than 30 days; the table itself is in schema.sql.
+
+create or replace function log_search(p_term text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  t text;
+begin
+  t := lower(btrim(coalesce(p_term, '')));
+  -- printable, short, non-empty; drop anything else silently
+  if t = '' or length(t) > 60 or t !~ '^[[:print:]]+$' then
+    return;
+  end if;
+  insert into search_terms (term) values (t);
+end;
+$$;
+revoke all on function log_search(text) from public;
+grant execute on function log_search(text) to anon;
+
+drop view if exists trending_searches;
+create view trending_searches as
+select term, count(*) as searches
+from search_terms
+where searched_at > now() - interval '7 days'
+group by term
+having count(*) >= 2          -- one person's typo isn't a trend
+order by searches desc
+limit 12;
+revoke all on trending_searches from anon, authenticated;
+grant select on trending_searches to anon;

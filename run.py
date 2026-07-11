@@ -7,6 +7,7 @@
   python run.py deals                           show current deals
 """
 import argparse
+from datetime import datetime, timedelta, timezone
 import json
 import time
 
@@ -319,6 +320,14 @@ def cmd_detect(args):
     subbed = categorize_mod.backfill_subcategories(conn)
     if subbed:
         print(f"subcategorised {subbed} products (title-rule retailers)")
+    try:
+        # anonymous search-term log only feeds a 7-day trending view; no
+        # reason to keep anything older than 30 days
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        conn.execute("DELETE FROM search_terms WHERE searched_at < ?", (cutoff,))
+        conn.commit()
+    except Exception:
+        conn.rollback()   # table absent (local SQLite dev DB)
     deals = detect(conn)
     if not deals:
         print("No new anomalies (need RRP gaps, price history, or GTIN overlap).")

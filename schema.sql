@@ -60,6 +60,14 @@ CREATE TABLE IF NOT EXISTS watches (
 );
 CREATE INDEX IF NOT EXISTS idx_watches_unfired ON watches(product_id)
     WHERE fired_at IS NULL AND cancelled_at IS NULL;
+-- Anonymous search terms only: powers 7-day trending suggestion chips. No
+-- visitor identity, IP address, cookie, or account data is stored.
+CREATE TABLE IF NOT EXISTS search_terms (
+    id BIGSERIAL PRIMARY KEY,
+    term TEXT NOT NULL,
+    searched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_search_terms_recent ON search_terms (searched_at);
 
 -- Telegram bot subscriptions (services/telegram_bot.py on the OCI VM writes
 -- these; alerts.py fans deal/price pings out to them from GitHub Actions).
@@ -99,6 +107,7 @@ ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crawl_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kv ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telegram_subs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE search_terms ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON products FROM anon, authenticated;
 REVOKE ALL ON price_snapshots FROM anon, authenticated;
 REVOKE ALL ON deals FROM anon, authenticated;
@@ -106,5 +115,7 @@ REVOKE ALL ON crawl_queue FROM anon, authenticated;
 REVOKE ALL ON kv FROM anon, authenticated;
 REVOKE ALL ON telegram_subs FROM anon, authenticated;
 REVOKE ALL ON SEQUENCE telegram_subs_id_seq FROM anon, authenticated;
+REVOKE ALL ON search_terms FROM anon, authenticated;
+REVOKE ALL ON SEQUENCE search_terms_id_seq FROM anon, authenticated;
 -- watches' RLS + anon policies are set up in views.sql, next to the
 -- cancel_watch() RPC they depend on.

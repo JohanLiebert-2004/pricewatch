@@ -126,6 +126,18 @@ function asOf(iso){
   return d.toLocaleDateString("en-AU", {day:"numeric", month:"short", year:"numeric"});
 }
 
+
+function rememberViewed(p){
+  try{
+    const key = "underpriced_recent";
+    const old = JSON.parse(localStorage.getItem(key) || "[]");
+    const items = Array.isArray(old) ? old : [];
+    const item = {retailer:p.retailer, sku:p.sku, title:p.title, category:p.category,
+      image_url:p.image_url, current_price:p.current_price};
+    const next = [item, ...items.filter(x=>!(x && x.retailer===item.retailer && x.sku===item.sku))].slice(0,12);
+    localStorage.setItem(key, JSON.stringify(next));
+  }catch(e){}
+}
 const params = new URLSearchParams(location.search);
 // /p/<retailer>/<sku> is the crawler/share form of this page (served with
 // server-side meta tags via a Vercel rewrite) — same page, path-style params
@@ -276,6 +288,7 @@ async function load(){
   const ninetyLow = recent.length ? Math.min(...recent) : allLow;
   const store = RETAILER_LABEL[p.retailer] || p.retailer;
   const points = rows.map(r=>({x: new Date(r.scraped_at), y: Number(r.price)}));
+  rememberViewed(p);
 
   main.innerHTML = `
     <div class="pblock">

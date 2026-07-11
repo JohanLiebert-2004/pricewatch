@@ -40,6 +40,7 @@
     <button class="go" type="submit">Search</button>
   </form>
   <div class="hint">matches product titles and SKUs across the current catalogue</div>
+  <div class="bar" id="trending" style="margin-top:14px"></div>
   <div id="list"><div class="empty">Enter a product name or SKU above to see its latest tracked price.</div></div>
 </main>
 
@@ -135,8 +136,34 @@ async function search(q){
 document.getElementById("f").addEventListener("submit", e=>{
   e.preventDefault();
   const q = document.getElementById("q").value;
-  if(q.trim()) search(q);
+  if(q.trim()){
+    search(q);
+    // anonymous trending counter - just the term, fire-and-forget
+    fetch(`${SUPABASE_URL}/rest/v1/rpc/log_search`, {
+      method:"POST",
+      headers:{apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}`,
+               "Content-Type":"application/json"},
+      body: JSON.stringify({p_term: q.trim().slice(0,60)})
+    }).catch(()=>{});
+  }
 });
+
+// trending chips (7-day anonymous counts; hidden until there's real volume)
+fetch(`${SUPABASE_URL}/rest/v1/trending_searches?select=*`,
+      {headers:{apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}`}})
+  .then(r=>r.json())
+  .then(rows=>{
+    if(!Array.isArray(rows) || !rows.length) return;
+    document.getElementById("trending").innerHTML =
+      `<span class="hint" style="margin:0 6px 0 0">trending:</span>` +
+      rows.slice(0,8).map(t=>`<button class="chip" type="button"
+        data-t="${esc(t.term)}">${esc(t.term)}</button>`).join("");
+    document.getElementById("trending").addEventListener("click", e=>{
+      const b = e.target.closest(".chip"); if(!b) return;
+      document.getElementById("q").value = b.dataset.t;
+      search(b.dataset.t);
+    });
+  }).catch(()=>{});
 </script>
 </body>
 </html>

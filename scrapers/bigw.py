@@ -47,6 +47,14 @@ class BigWScraper(BaseScraper):
         if not rec:
             return None
         text = htmllib.unescape(raw)
+        # BIG W product JSON-LD serialises Offer.price in whole cents (e.g.
+        # 3580 for a $35.80 skirt), while category listings already divide it.
+        # Convert product-page price and RRP fields too, including legitimate
+        # $1,000+ items (their source amounts are 100x larger as well).
+        if rec.price is not None:
+            rec.price /= 100.0
+        if rec.rrp is not None:
+            rec.rrp /= 100.0
         if rec.rrp is None:
             rec.rrp = self._was_price(text, rec.price)
         if not rec.is_marketplace:
@@ -201,12 +209,15 @@ class BigWScraper(BaseScraper):
             r'"was[A-Za-z]*"\s*:\s*\{[^}]*?"?(?:value|amount)"?\s*:\s*"?([\d.]+)',
             r'"wasPrice"\s*:\s*"?([\d.]+)"?',
         )
-        for pat in pats:
+        for i, pat in enumerate(pats):
             for m in re.finditer(pat, text, re.I):
                 try:
                     v = float(m.group(1).replace(",", ""))
                 except ValueError:
                     continue
+                # Displayed dollar text is already decimal; JSON state is cents.
+                if i >= 2:
+                    v /= 100.0
                 if v > price:
                     return v
         return None
