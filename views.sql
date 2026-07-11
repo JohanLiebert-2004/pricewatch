@@ -98,8 +98,21 @@ revoke all on subcategory_stats from anon, authenticated;
 grant select on subcategory_stats to anon;
 
 -- Growth page: per-day new products and price changes (UTC days).
-drop view if exists growth_daily;
-create view growth_daily as
+-- Precompute this scan: price_snapshots is large enough that calculating it per
+-- browser visit can exceed Supabase's statement timeout.
+do $$
+declare kind "char";
+begin
+  select c.relkind into kind
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relname = 'growth_daily';
+  if kind = 'v' then
+    execute 'drop view growth_daily';
+  elsif kind = 'm' then
+    execute 'drop materialized view growth_daily';
+  end if;
+end $$;
+create materialized view growth_daily as
 with np as (
   select (first_seen at time zone 'utc')::date::text as day,
          retailer, count(*) as new_products
@@ -116,6 +129,7 @@ select coalesce(np.day, sn.day) as day,
        coalesce(np.new_products, 0) as new_products,
        coalesce(sn.price_checks, 0) as price_checks
 from np full outer join sn on np.day = sn.day and np.retailer = sn.retailer;
+create unique index growth_daily_pk on growth_daily (day, retailer);
 revoke all on growth_daily from anon, authenticated;
 grant select on growth_daily to anon;
 

@@ -342,13 +342,15 @@ def cmd_detect(args):
     if watched:
         print(f"resend: {watched} watch alert(s) sent")
     if db.DATABASE_URL:
-        # keep the website's precomputed discount feed current (cheap: ~0.5s)
-        try:
-            conn.execute("refresh materialized view concurrently discount_feed")
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            print(f"  ! discount_feed refresh failed: {e}")
+        # Keep the website's precomputed aggregate feeds current. Running these
+        # scans during detect keeps public page loads fast and reliable.
+        for view in ("discount_feed", "growth_daily"):
+            try:
+                conn.execute(f"refresh materialized view concurrently {view}")
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                print(f"  ! {view} refresh failed: {e}")
 
 
 def cmd_deals(args):

@@ -32,6 +32,7 @@ Before changing anything:
 | Commit | Outcome |
 |---|---|
 | `daf6dd7` | Main deals grid capped at 60; private localStorage recently-viewed and category-based "For you" sections; anonymous trending-search schema/RPC/view; Big W cents parser fixed. |
+| 11 July growth fix | `growth_daily` is now a materialized view with a unique index and is refreshed by each detect run. The live public endpoint returned data after the migration. |
 | `ef6df9e` | Removed the obsolete local Big W scheduled task and script; made price tracking visible and moved the tracking panel above the chart. |
 | `40302cb` / `5d5aeb6` | Retailer-native category chips and correct item counts. |
 
