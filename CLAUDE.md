@@ -3,6 +3,14 @@
 This project is an AU retail price-anomaly tracker. Your job when asked to
 "deploy" or "set this up" is to automate the full free-tier deployment:
 GitHub (repo + Actions agents) -> Supabase (Postgres) -> Vercel (website).
+## Shared agent coordination
+
+Codex and Claude do not share private chat history. The repository is the handoff mechanism:
+
+1. Read `AGENT_STATE.md` and `AGENT_PROTOCOL.md` immediately after this file.
+2. Check `git status -sb` and claim an unowned task in `AGENT_STATE.md` before editing.
+3. Do not touch a task/files claimed by the other agent; use focused commits and record the result before handing off.
+4. `HANDOFF_CODEX.md` is historical. Use `AGENT_STATE.md` for current state.
 
 ## What the human must do themselves (do not attempt these)
 - Log in to accounts: `gh auth login`, `vercel login`, and creating a
