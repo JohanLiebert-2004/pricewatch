@@ -75,13 +75,27 @@ revoke all on product_search from anon, authenticated;
 grant select on product_search to anon;
 
 -- Catalogue page chip counts.
-drop view if exists catalogue_stats;
-create view catalogue_stats as
+-- Precomputed so the homepage header never has to aggregate the full products
+-- table before showing its product total.
+do $$
+declare kind "char";
+begin
+  select c.relkind into kind
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relname = 'catalogue_stats';
+  if kind = 'v' then
+    execute 'drop view catalogue_stats';
+  elsif kind = 'm' then
+    execute 'drop materialized view catalogue_stats';
+  end if;
+end $$;
+create materialized view catalogue_stats as
 select retailer, coalesce(nullif(category,''),'other') as category,
        count(*) as items
 from products
 where current_price is not null
 group by 1, 2;
+create unique index catalogue_stats_pk on catalogue_stats (retailer, category);
 revoke all on catalogue_stats from anon, authenticated;
 grant select on catalogue_stats to anon;
 
