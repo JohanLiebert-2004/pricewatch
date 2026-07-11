@@ -78,6 +78,10 @@ class ChemistWarehouseScraper(BaseScraper):
             title=prod.get("name") or sku,
             brand=brand,
             category=_TYPE_CAT.get(str(prod.get("type") or "").lower()),
+            # their type doubles as a clean per-store chip ("skincare" ->
+            # "Skincare", "personal_care" -> "Personal Care")
+            subcategory=(str(prod.get("type")).replace("_", " ").title()
+                         if prod.get("type") else None),
             url=url.split("?")[0],
             image_url=(images[0].get("url") if images else None),
             price=float(price),

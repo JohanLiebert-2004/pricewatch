@@ -85,17 +85,7 @@
       <button class="chip" data-r="chemistwarehouse" aria-pressed="false">Chemist Warehouse</button>
     </div>
     <div class="barlabel">Category</div>
-    <div class="bar" id="cats">
-      <button class="chip" data-c="all" aria-pressed="true">All</button>
-      <button class="chip" data-c="tech" aria-pressed="false">Tech</button>
-      <button class="chip" data-c="home" aria-pressed="false">Home</button>
-      <button class="chip" data-c="kitchen" aria-pressed="false">Kitchen</button>
-      <button class="chip" data-c="toys" aria-pressed="false">Toys &amp; Baby</button>
-      <button class="chip" data-c="clothing" aria-pressed="false">Clothing</button>
-      <button class="chip" data-c="beauty" aria-pressed="false">Beauty</button>
-      <button class="chip" data-c="books" aria-pressed="false">Books &amp; Stationery</button>
-      <button class="chip" data-c="other" aria-pressed="false">Other</button>
-    </div>
+    <div class="bar" id="cats"></div>
     <div class="barlabel">Sort &amp; Price Range</div>
     <form class="pricebar" id="pbar">
       <select id="sort" aria-label="Sort deals">
@@ -166,8 +156,39 @@ const SORTS = {
 };
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let selRetailers = new Set(), selCats = new Set(), minOff = 0, q = "",
-    sort = "deep", pmin = null, pmax = null, fetchSeq = 0;
+let selRetailers = new Set(), selCats = new Set(), selSubcats = new Set(),
+    minOff = 0, q = "", sort = "deep", pmin = null, pmax = null, fetchSeq = 0;
+const SHARED_CATS = [["tech","Tech"],["home","Home"],["kitchen","Kitchen"],
+  ["toys","Toys & Baby"],["clothing","Clothing"],["beauty","Beauty"],
+  ["books","Books & Stationery"],["other","Other"]];
+let SUBSTATS = {};   // retailer -> [subcategory labels] desc by item count
+fetch(`${SUPABASE_URL}/rest/v1/subcategory_stats?select=*&order=items.desc`,
+      {headers:HDRS})
+  .then(r=>r.json())
+  .then(rows=>{
+    for(const row of rows){
+      if((SUBSTATS[row.retailer] = SUBSTATS[row.retailer] || []).length < 12)
+        SUBSTATS[row.retailer].push(row.subcategory);
+    }
+    renderCats();
+  }).catch(()=>{});
+
+function renderCats(){
+  // one store selected -> that store's own sections as chips
+  const solo = selRetailers.size===1 ? [...selRetailers][0] : null;
+  const subs = solo && SUBSTATS[solo];
+  const el = document.getElementById("cats");
+  if(subs && subs.length){
+    el.innerHTML = `<button class="chip" data-c="all" aria-pressed="${selSubcats.size===0}">All</button>` +
+      subs.map(s=>`<button class="chip" data-c="${esc(s)}" data-mode="sub"
+        aria-pressed="${selSubcats.has(s)}">${esc(s)}</button>`).join("");
+  }else{
+    el.innerHTML = `<button class="chip" data-c="all" aria-pressed="${selCats.size===0}">All</button>` +
+      SHARED_CATS.map(([k,label])=>`<button class="chip" data-c="${k}"
+        aria-pressed="${selCats.has(k)}">${label}</button>`).join("");
+  }
+}
+renderCats();
 
 function feedUrl(){
   let u = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
@@ -175,6 +196,8 @@ function feedUrl(){
   if(minOff > 0) u += `&pct_off=gte.${minOff}`;
   if(selRetailers.size) u += `&retailer=in.(${[...selRetailers].map(encodeURIComponent).join(",")})`;
   if(selCats.size) u += `&category=in.(${[...selCats].map(encodeURIComponent).join(",")})`;
+  if(selSubcats.size) u += `&subcategory=in.(${[...selSubcats]
+    .map(s=>encodeURIComponent(`"${s}"`)).join(",")})`;   // quoted: labels contain & and spaces
   if(pmin !== null) u += `&price=gte.${pmin}`;
   if(pmax !== null) u += `&price=lte.${pmax}`;
   if(q){
@@ -210,7 +233,7 @@ function cardHtml(d, i){
     <div class="cbody">
       <div class="cname">${esc(d.title)}</div>
       <div class="ctags">
-        <span class="pill">${esc(d.category)}</span>
+        <span class="pill">${esc(d.subcategory || d.category)}</span>
       </div>
       <div class="cprices"><span class="cnow">${money(d.price)}</span>
         <span class="cwas">${money(d.reference_price)}</span></div>
@@ -230,6 +253,7 @@ function render(rows, total){
     : "All stores";
   const label = `${retailerLabel}` +
     (selCats.size ? ` · ${[...selCats].join(", ")}` : "") +
+    (selSubcats.size ? ` · ${[...selSubcats].map(esc).join(", ")}` : "") +
     (minOff>0 ? ` · ${minOff}%+ off` : "") +
     (pmin!==null||pmax!==null ? ` · $${pmin??0}–${pmax!==null?"$"+pmax:"any"}` : "") +
     ` · ${SORT_LABEL[sort]}` +
@@ -260,22 +284,32 @@ async function refresh(){
 }
 
 // ---- controls ----------------------------------------------------------
-function wireMultiBar(id, attr, sel){
-  document.getElementById(id).addEventListener("click", e=>{
-    const b = e.target.closest(".chip"); if(!b) return;
-    const val = b.dataset[attr];
-    if(val === "all"){ sel.clear(); }
-    else if(sel.has(val)){ sel.delete(val); }
-    else{ sel.add(val); }
-    document.querySelectorAll(`#${id} .chip`).forEach(c=>{
-      const v = c.dataset[attr];
-      c.setAttribute("aria-pressed", v==="all" ? sel.size===0 : sel.has(v));
-    });
-    refresh();
+document.getElementById("retailers").addEventListener("click", e=>{
+  const b = e.target.closest(".chip"); if(!b) return;
+  const val = b.dataset.r;
+  if(val === "all"){ selRetailers.clear(); }
+  else if(selRetailers.has(val)){ selRetailers.delete(val); }
+  else{ selRetailers.add(val); }
+  document.querySelectorAll("#retailers .chip").forEach(c=>{
+    const v = c.dataset.r;
+    c.setAttribute("aria-pressed", v==="all" ? selRetailers.size===0 : selRetailers.has(v));
   });
-}
-wireMultiBar("retailers","r", selRetailers);
-wireMultiBar("cats","c", selCats);
+  // the category row changes shape with the store selection - stale picks
+  // would silently keep filtering
+  selCats.clear(); selSubcats.clear();
+  renderCats();
+  refresh();
+});
+document.getElementById("cats").addEventListener("click", e=>{
+  const b = e.target.closest(".chip"); if(!b) return;
+  const sel = b.dataset.mode === "sub" ? selSubcats : selCats;
+  const val = b.dataset.c;
+  if(val === "all"){ selCats.clear(); selSubcats.clear(); }
+  else if(sel.has(val)){ sel.delete(val); }
+  else{ sel.add(val); }
+  renderCats();
+  refresh();
+});
 
 document.getElementById("qbar").addEventListener("submit", e=>{
   e.preventDefault();

@@ -316,6 +316,9 @@ def cmd_detect(args):
     tagged = categorize_mod.backfill(conn)
     if tagged:
         print(f"categorised {tagged} new products")
+    subbed = categorize_mod.backfill_subcategories(conn)
+    if subbed:
+        print(f"subcategorised {subbed} products (title-rule retailers)")
     deals = detect(conn)
     if not deals:
         print("No new anomalies (need RRP gaps, price history, or GTIN overlap).")

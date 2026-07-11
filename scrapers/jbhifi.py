@@ -27,6 +27,20 @@ _TYPE_CAT = {
     "MOVIES": "other", "MUSIC": "other",
 }
 
+# JB product_type -> store-specific chip labels (products.subcategory)
+_TYPE_SUBCAT = {
+    "COMPUTERS": "Computers & Tablets", "IT": "Computers & Tablets",
+    "COMMUNICATIONS": "Phones", "TELCO SERVICES": "Phones",
+    "VISUAL": "TVs & Home Cinema", "HOME TECH": "Smart Home",
+    "AUDIO": "Audio & Headphones", "CAMERAS": "Cameras & Drones",
+    "GAMES HARDWARE": "Gaming", "GAMES SOFTWARE": "Gaming",
+    "SMALL APPLIANCES": "Appliances", "WHITEGOODS": "Appliances",
+    "HEALTH & BEAUTY": "Health & Beauty",
+    "MOVIES": "Movies & Music", "MUSIC": "Movies & Music",
+    "WEARABLES & OUTDOOR": "Wearables & Outdoor",
+    "ACCESSORIES": "Accessories",
+}
+
 PAGE_SIZE = 250
 MAX_PAGES = 100          # Shopify refuses page*limit > 25,000
 
@@ -78,6 +92,7 @@ class JBHiFiScraper(BaseScraper):
             title=item.get("title") or str(item["id"]),
             brand=item.get("vendor"),
             category=_TYPE_CAT.get((item.get("product_type") or "").upper()),
+            subcategory=_TYPE_SUBCAT.get((item.get("product_type") or "").upper()),
             url=f"https://www.jbhifi.com.au/products/{item['handle']}",
             image_url=(images[0].get("src") if images else None),
             price=price,

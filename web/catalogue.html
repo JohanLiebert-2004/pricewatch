@@ -90,7 +90,8 @@ function thumbSrc(u){
 }
 
 let STATS = [];           // [{retailer, category, items}]
-let selRetailers = new Set(), selCats = new Set(), offset = 0;
+let SUBSTATS = {};        // retailer -> [{subcategory, items}] desc (per-store chips)
+let selRetailers = new Set(), selCats = new Set(), selSubcats = new Set(), offset = 0;
 let pmin = null, pmax = null;   // price filter ($)
 let q = "";                     // text filter (name/SKU)
 const PAGE = 50;
@@ -106,17 +107,33 @@ function count(r, c){
     .reduce((a,s)=>a+Number(s.items), 0);
 }
 
+function catChips(){
+  // one store selected and we know its own sections -> that store's chips
+  const solo = selRetailers.size===1 ? [...selRetailers][0] : null;
+  const subs = solo && SUBSTATS[solo];
+  if(subs && subs.length){
+    return `<button class="chip" data-k="all" data-mode="sub" aria-pressed="${selSubcats.size===0}">
+        All<span class="n">${fmtN(count(solo,"all"))}</span></button>` +
+      subs.map(s=>
+        `<button class="chip" data-k="${esc(s.subcategory)}" data-mode="sub"
+           aria-pressed="${selSubcats.has(s.subcategory)}">
+           ${esc(s.subcategory)}<span class="n">${fmtN(s.items)}</span></button>`).join("");
+  }
+  return CATS.map(([k,label])=>
+    `<button class="chip" data-k="${k}" aria-pressed="${k==="all" ? selCats.size===0 : selCats.has(k)}">
+       ${label}<span class="n">${fmtN(count("all",k))}</span></button>`).join("");
+}
+
 function chips(){
   document.getElementById("retailers").innerHTML = RETAILERS.map(([k,label])=>
     `<button class="chip" data-k="${k}" aria-pressed="${k==="all" ? selRetailers.size===0 : selRetailers.has(k)}">
        ${label}<span class="n">${fmtN(count(k,"all"))}</span></button>`).join("");
-  document.getElementById("cats").innerHTML = CATS.map(([k,label])=>
-    `<button class="chip" data-k="${k}" aria-pressed="${k==="all" ? selCats.size===0 : selCats.has(k)}">
-       ${label}<span class="n">${fmtN(count("all",k))}</span></button>`).join("");
+  document.getElementById("cats").innerHTML = catChips();
   const priced = pmin !== null || pmax !== null || q;
   const retailerLabel = selRetailers.size
     ? [...selRetailers].map(r=>RETAILER_LABEL[r]||r).join(", ") : "All stores";
   const label = `${retailerLabel}${selCats.size ? " · "+[...selCats].join(", ") : ""}` +
+    (selSubcats.size ? " · "+[...selSubcats].map(esc).join(", ") : "") +
     (pmin !== null || pmax !== null ? ` · $${pmin ?? 0}–${pmax !== null ? "$"+pmax : ""}` : "") +
     (q ? ` · “${esc(q)}”` : "");
   if(priced){
@@ -138,6 +155,8 @@ function filterUrl(){
   let u = `${SUPABASE_URL}/rest/v1/product_search?select=*`;
   if(selRetailers.size) u += `&retailer=in.(${[...selRetailers].map(encodeURIComponent).join(",")})`;
   if(selCats.size) u += `&category=in.(${[...selCats].map(encodeURIComponent).join(",")})`;
+  if(selSubcats.size) u += `&subcategory=in.(${[...selSubcats]
+    .map(s=>encodeURIComponent(`"${s}"`)).join(",")})`;   // quoted: labels contain & and spaces
   if(pmin !== null) u += `&current_price=gte.${pmin}`;
   if(pmax !== null) u += `&current_price=lte.${pmax}`;
   if(q){
@@ -164,7 +183,7 @@ async function loadPage(reset){
         <a class="history-link" href="product.html?retailer=${p.retailer}&sku=${encodeURIComponent(p.sku)}">history</a></div>
       <div class="meta">
         <span class="pill">${RETAILER_LABEL[p.retailer]||esc(p.retailer)}</span>
-        <span class="pill">${esc(p.category||"other")}</span>
+        <span class="pill">${esc(p.subcategory||p.category||"other")}</span>
         <span>SKU ${esc(p.sku)}</span>
         ${p.brand?`<span>${esc(p.brand)}</span>`:''}
         ${p.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
@@ -186,19 +205,28 @@ async function loadPage(reset){
   more.hidden = rows.length < PAGE;
 }
 
-function wireBar(id, sel){
-  document.getElementById(id).addEventListener("click", e=>{
-    const b = e.target.closest(".chip"); if(!b) return;
-    const val = b.dataset.k;
-    if(val === "all"){ sel.clear(); }
-    else if(sel.has(val)){ sel.delete(val); }
-    else{ sel.add(val); }
-    chips();
-    loadPage(true);
-  });
-}
-wireBar("retailers", selRetailers);
-wireBar("cats", selCats);
+document.getElementById("retailers").addEventListener("click", e=>{
+  const b = e.target.closest(".chip"); if(!b) return;
+  const val = b.dataset.k;
+  if(val === "all"){ selRetailers.clear(); }
+  else if(selRetailers.has(val)){ selRetailers.delete(val); }
+  else{ selRetailers.add(val); }
+  // the category row is about to change shape - stale picks would silently
+  // filter a store that doesn't even show those chips
+  selCats.clear(); selSubcats.clear();
+  chips();
+  loadPage(true);
+});
+document.getElementById("cats").addEventListener("click", e=>{
+  const b = e.target.closest(".chip"); if(!b) return;
+  const sel = b.dataset.mode === "sub" ? selSubcats : selCats;
+  const val = b.dataset.k;
+  if(val === "all"){ sel.clear(); }
+  else if(sel.has(val)){ sel.delete(val); }
+  else{ sel.add(val); }
+  chips();
+  loadPage(true);
+});
 document.getElementById("more").addEventListener("click", ()=>loadPage(false));
 
 document.getElementById("pricebar").addEventListener("submit", e=>{
@@ -230,9 +258,22 @@ document.getElementById("qclear").addEventListener("click", ()=>{
   loadPage(true);
 });
 
-fetch(`${SUPABASE_URL}/rest/v1/catalogue_stats?select=*`, {headers:HDRS})
-  .then(r=>r.json())
-  .then(s=>{ STATS = s; chips(); return loadPage(true); })
+Promise.all([
+  fetch(`${SUPABASE_URL}/rest/v1/catalogue_stats?select=*`, {headers:HDRS})
+    .then(r=>r.json()),
+  fetch(`${SUPABASE_URL}/rest/v1/subcategory_stats?select=*&order=items.desc`,
+        {headers:HDRS}).then(r=>r.json()).catch(()=>[]),
+])
+  .then(([s, subs])=>{
+    STATS = s;
+    for(const row of subs){
+      // cap the chip row - a store's long tail isn't a useful filter
+      if((SUBSTATS[row.retailer] = SUBSTATS[row.retailer] || []).length < 12)
+        SUBSTATS[row.retailer].push(row);
+    }
+    chips();
+    return loadPage(true);
+  })
   .catch(()=>{document.getElementById("list").innerHTML =
     `<div class="empty">We couldn't load the catalogue — please try again shortly.</div>`;});
 </script>

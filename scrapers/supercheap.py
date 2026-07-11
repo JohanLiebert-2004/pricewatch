@@ -52,12 +52,18 @@ class SupercheapScraper(BaseScraper):
         discount = item.get("discount") or 0
         rrp = round(price + discount, 2) if discount > 0 else None
         img = re.search(r'property="og:image"\s+content="([^"]+)"', html)
+        # item_category is the nav root ("Shop by Category"); item_category2
+        # is the real department (e.g. "Car Care", "Tools", "Oils & Fluids")
+        subcat = item.get("item_category2") or None
+        if subcat == "Shop by Category":
+            subcat = None
         return ProductRecord(
             retailer=self.name,
             sku=item.get("item_id") or url.rstrip("/").split("/")[-1].removesuffix(".html"),
             gtin=None,
             title=item.get("item_name") or "",
             brand=_brand(item.get("item_brand")),
+            subcategory=subcat,
             url=url,
             image_url=unescape(img.group(1)) if img else None,
             price=price,

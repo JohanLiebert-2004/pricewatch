@@ -81,12 +81,23 @@ class BigWScraper(BaseScraper):
                  for c in cats
                  if isinstance(c, dict) and c.get("id")
                  and c.get("e") and not c.get("h")}
+        titles = {str(c["id"]): str(c.get("t") or "")
+                  for c in cats if isinstance(c, dict) and c.get("id")}
         ids = sorted(nodes)
+        # ids nest by prefix, so a leaf's top-level section = the shortest
+        # id in the tree that prefixes it (its department, e.g. Toys / Home)
+        top_ids = sorted({str(c["id"]) for c in cats
+                          if isinstance(c, dict) and c.get("id")}, key=len)
+        def _top_title(cid):
+            for t in top_ids:
+                if cid.startswith(t):
+                    return titles.get(t) or None
+            return None
         leaves = []
         for i, cid in enumerate(ids):
             nxt = ids[i + 1] if i + 1 < len(ids) else ""
             if not nxt.startswith(cid):    # sorted order puts children next
-                leaves.append(f"/{nodes[cid]}/c/{cid}")
+                leaves.append((f"/{nodes[cid]}/c/{cid}", _top_title(cid)))
         return leaves
 
     def refresh_listings(self, budget: int = 1600, state: dict | None = None):
@@ -125,8 +136,8 @@ class BigWScraper(BaseScraper):
             _sync()
             raise
         used += 1
-        paths.sort(key=lambda p: state.get(p, ""))
-        for path in paths:
+        paths.sort(key=lambda p: state.get(p[0], ""))
+        for path, subcat in paths:
             page = 0
             while used < budget:
                 if self.use_proxy and _spent() >= PROXY_MONTHLY_BYTE_CAP:
@@ -146,7 +157,7 @@ class BigWScraper(BaseScraper):
                     .get("organic") or {}
                 results = org.get("results") or []
                 for item in results:
-                    rec = self._record_from_listing(item)
+                    rec = self._record_from_listing(item, subcat)
                     if rec:
                         yield rec
                 page += 1
@@ -160,7 +171,7 @@ class BigWScraper(BaseScraper):
                 return
         _sync()
 
-    def _record_from_listing(self, item) -> ProductRecord | None:
+    def _record_from_listing(self, item, subcat=None) -> ProductRecord | None:
         code = item.get("code")
         derived = item.get("derived") or {}
         info = item.get("information") or {}
@@ -174,6 +185,7 @@ class BigWScraper(BaseScraper):
             gtin=str(idents.get("gtin") or idents.get("ean") or "") or None,
             title=info.get("name") or str(code),
             brand=info.get("brand"),
+            subcategory=subcat,
             url=f"https://www.bigw.com.au/product/p/{code}",
             price=float(amount) / 100.0,
             rrp=None,

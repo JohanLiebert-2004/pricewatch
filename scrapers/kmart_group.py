@@ -49,30 +49,44 @@ class KmartScraper(BaseScraper):
             params={"key": KMART_CONSTRUCTOR_KEY, "i": "pricewatch", "s": "1",
                     "c": "ciojs-client-2.35.2"})
 
+    # Level-2 group -> site chip label. Merchandising pseudo-groups (Brands,
+    # Clearance, Back To School, Winter, ...) overlap the real taxonomy and
+    # would otherwise randomly overwrite it, so they map to None (their
+    # products still get swept for prices; COALESCE keeps any existing tag).
+    SECTION_LABEL = {
+        "Home & Living": "Home & Living", "Entertainment": "Entertainment",
+        "Toys": "Toys", "Sport & Outdoor": "Sport & Outdoor",
+        "Beauty": "Beauty", "Womens": "Women", "Mens": "Men",
+        "Kids & Baby": "Kids & Baby", "Tech & Gaming": "Tech & Gaming",
+    }
+
     def _leaf_groups(self, client):
-        """Yield (group_id, name, count) for groups small enough to paginate.
+        """Yield (group_id, name, count, section) for pageable groups.
 
         Constructor caps the paging window (~10k items), so descend into
-        children until each group is under the cap.
+        children until each group is under the cap. `section` is the
+        level-2 ancestor's display name (child of the "All" root) - the
+        granularity the site's per-store category chips use.
         """
         r = client.get("https://ac.cnstrc.com/browse/groups")
         r.raise_for_status()
         roots = r.json().get("response", {}).get("groups", [])
 
-        def walk(g):
+        def walk(g, section):
             count = g.get("count")
             kids = g.get("children") or []
             if count is not None and count <= 9800:
                 if count:
-                    yield g["group_id"], g.get("display_name", ""), count
+                    yield g["group_id"], g.get("display_name", ""), count, section
             elif kids:
                 for k in kids:
-                    yield from walk(k)
+                    yield from walk(k, section)
             else:  # unknown or oversized leaf: page until empty (capped)
-                yield g["group_id"], g.get("display_name", ""), None
+                yield g["group_id"], g.get("display_name", ""), None, section
 
-        for root in roots:
-            yield from walk(root)
+        for root in roots:                      # single "All" root
+            for lvl2 in (root.get("children") or [root]):
+                yield from walk(lvl2, lvl2.get("display_name", ""))
 
     def refresh_listings(self, budget: int = 1400):
         """Yield ProductRecords for the whole catalogue via the browse API.
@@ -86,7 +100,8 @@ class KmartScraper(BaseScraper):
             except Exception as e:
                 raise Blocked(f"kmart: constructor groups fetch failed: {e}")
             used += 1
-            for gid, gname, count in groups:
+            for gid, gname, count, section in groups:
+                subcat = self.SECTION_LABEL.get(section)
                 max_window = 9800 // self.per_page
                 pages = (min((count + self.per_page - 1) // self.per_page,
                              max_window) if count else max_window)
@@ -103,13 +118,13 @@ class KmartScraper(BaseScraper):
                         break
                     results = (r.json().get("response") or {}).get("results") or []
                     for item in results:
-                        rec = self._record_from_api(item)
+                        rec = self._record_from_api(item, subcat)
                         if rec:
                             yield rec
                     if len(results) < self.per_page:
                         break
 
-    def _record_from_api(self, item) -> ProductRecord | None:
+    def _record_from_api(self, item, subcat=None) -> ProductRecord | None:
         d = item.get("data") or {}
         price = d.get("price")
         if price is None:
@@ -145,6 +160,7 @@ class KmartScraper(BaseScraper):
             gtin=str(d["apn"]) if d.get("apn") else None,
             title=title,
             brand=d.get("Brand"),
+            subcategory=subcat,
             url="https://www.kmart.com.au" + d.get("url", ""),
             image_url=d.get("image_url"),
             price=float(price),

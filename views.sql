@@ -41,6 +41,7 @@ with hist as (
 )
 select p.retailer, p.sku, p.title, p.brand,
        coalesce(nullif(p.category,''),'other') as category,
+       p.subcategory,
        p.url, p.image_url, p.is_marketplace,
        p.current_price as price,
        greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)) as reference_price,
@@ -65,7 +66,7 @@ grant select on discount_feed to anon;
 -- Search page: latest price + date for any tracked product.
 drop view if exists product_search;
 create view product_search as
-select p.retailer, p.sku, p.title, p.brand, p.category, p.url,
+select p.retailer, p.sku, p.title, p.brand, p.category, p.subcategory, p.url,
        p.image_url, p.is_marketplace, p.current_price, p.current_rrp,
        coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at
 from products p
@@ -83,6 +84,18 @@ where current_price is not null
 group by 1, 2;
 revoke all on catalogue_stats from anon, authenticated;
 grant select on catalogue_stats to anon;
+
+-- Per-store category chips: each retailer's own (native or title-derived)
+-- subcategory labels with item counts, so the site can render a store's chip
+-- row from real data and skip empty chips.
+drop view if exists subcategory_stats;
+create view subcategory_stats as
+select retailer, subcategory, count(*) as items
+from products
+where current_price is not null and subcategory is not null
+group by 1, 2;
+revoke all on subcategory_stats from anon, authenticated;
+grant select on subcategory_stats to anon;
 
 -- Growth page: per-day new products and price changes (UTC days).
 drop view if exists growth_daily;

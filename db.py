@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS products (
     title TEXT,
     brand TEXT,
     category TEXT,
+    subcategory TEXT,
     url TEXT,
     image_url TEXT,
     is_marketplace INTEGER DEFAULT 0,
@@ -90,6 +91,7 @@ class ProductRecord:
     gtin: str | None = None
     brand: str | None = None
     category: str | None = None
+    subcategory: str | None = None   # retailer-native category (per-store chips)
     image_url: str | None = None
     in_stock: bool | None = None
     is_marketplace: bool = False
@@ -126,7 +128,8 @@ def _migrate(conn):
         have = {r["name"] for r in conn.execute(
             "PRAGMA table_info(products)").fetchall()}
     for col, typ in (("current_price", "REAL"), ("current_rrp", "REAL"),
-                     ("price_updated_at", "TEXT"), ("image_url", "TEXT")):
+                     ("price_updated_at", "TEXT"), ("image_url", "TEXT"),
+                     ("subcategory", "TEXT")):
         if col in have:
             continue
         try:
@@ -181,19 +184,22 @@ def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
     # SQLite doesn't understand "::type" casts, so only apply it under Postgres.
     bool_cast = "::boolean" if DATABASE_URL else ""
     conn.execute(
-        f"""INSERT INTO products (retailer, sku, gtin, title, brand, category, url,
+        f"""INSERT INTO products (retailer, sku, gtin, title, brand, category,
+                                 subcategory, url,
                                  image_url, is_marketplace, region, first_seen,
                                  last_seen, current_price, current_rrp,
                                  price_updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?{bool_cast},?,?,?,?,?,?)
+           VALUES (?,?,?,?,?,?,?,?,?,?{bool_cast},?,?,?,?,?,?)
            ON CONFLICT(retailer, sku, region) DO UPDATE SET
              gtin=COALESCE(excluded.gtin, products.gtin), title=excluded.title,
              brand=COALESCE(excluded.brand, products.brand), url=excluded.url,
+             subcategory=COALESCE(excluded.subcategory, products.subcategory),
              image_url=COALESCE(excluded.image_url, products.image_url),
              is_marketplace=excluded.is_marketplace{bool_cast}, last_seen=excluded.last_seen,
              current_price=excluded.current_price, current_rrp=excluded.current_rrp,
              price_updated_at=excluded.price_updated_at""",
         (rec.retailer, rec.sku, rec.gtin, rec.title, rec.brand, rec.category,
+         rec.subcategory,
          rec.url, rec.image_url, rec.is_marketplace, rec.region or "", now, now,
          rec.price, rec.rrp, now),
     )
@@ -262,19 +268,21 @@ def _upsert_chunk(conn, chunk, now) -> list:
 
     conn.executemany(
         f"""INSERT INTO products (retailer, sku, gtin, title, brand, category,
-                url, image_url, is_marketplace, region, first_seen, last_seen,
-                current_price, current_rrp, price_updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?{bool_cast},?,?,?,?,?,?)
+                subcategory, url, image_url, is_marketplace, region, first_seen,
+                last_seen, current_price, current_rrp, price_updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?{bool_cast},?,?,?,?,?,?)
             ON CONFLICT(retailer, sku, region) DO UPDATE SET
               gtin=COALESCE(excluded.gtin, products.gtin), title=excluded.title,
               brand=COALESCE(excluded.brand, products.brand), url=excluded.url,
+              subcategory=COALESCE(excluded.subcategory, products.subcategory),
               image_url=COALESCE(excluded.image_url, products.image_url),
               is_marketplace=excluded.is_marketplace{bool_cast},
               last_seen=excluded.last_seen,
               current_price=excluded.current_price,
               current_rrp=excluded.current_rrp,
               price_updated_at=excluded.price_updated_at""",
-        [(r.retailer, r.sku, r.gtin, r.title, r.brand, r.category, r.url,
+        [(r.retailer, r.sku, r.gtin, r.title, r.brand, r.category,
+          r.subcategory, r.url,
           r.image_url, r.is_marketplace, r.region or "", now, now,
           r.price, r.rrp, now) for r in chunk])
 

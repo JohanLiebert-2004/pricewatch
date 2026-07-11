@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS products (
     title TEXT,
     brand TEXT,
     category TEXT,
+    subcategory TEXT,      -- retailer-native category (per-store site chips)
     url TEXT,
     image_url TEXT,
     is_marketplace BOOLEAN DEFAULT FALSE,
