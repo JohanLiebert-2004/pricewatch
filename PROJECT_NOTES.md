@@ -1,6 +1,6 @@
 # Underpriced (Pricewatch) — project notes
 
-*Last updated: 8 July 2026*
+*Last updated: 11 July 2026*
 
 An AU retail price-anomaly tracker. Crawlers watch retailer catalogues,
 an anomaly engine flags big price drops, and a public website shows the
@@ -33,7 +33,7 @@ Vercel static site (web/ folder, no build step)  +  Telegram alerts
   domain support — no need to migrate off Vercel for this, it's free either
   way. Nothing to do until the user picks a name.
 
-## Retailers covered (7)
+## Retailers covered (10)
 
 | Retailer     | Method                                              | Notes |
 |--------------|-----------------------------------------------------|-------|
@@ -41,9 +41,12 @@ Vercel static site (web/ folder, no build step)  +  Telegram alerts
 | Big W        | `__NEXT_DATA__` category listings                   | Akamai; 2.5s delay after July soft-flag (owner floor 1.75s); no images yet |
 | Officeworks  | Bulk price API by SKU list + sitemap                | images captured (s3 PIM) |
 | Target       | Category listings                                   | Akamai; no images yet |
-| JB Hi-Fi     | Shopify `/products.json` (250/page, 100-page cap = 25k most recent) | no bot protection; 1.0s delay; images via Shopify CDN |
-| The Good Guys| Product sitemap (`product_sitemap_1-4.xml`, 8,629 URLs) + schema.org JSON-LD per page | headless Shopify Hydrogen, no `/products.json`; no bot protection; no RRP field anywhere (relies on 90-day history fallback); crawl batch raised to 500/run (vs default 40) since it's unprotected — first full sweep ≈9h instead of ~4.5 days |
+| JB Hi-Fi     | Shopify `/products.json` (250/page, 100-page cap = 25k most recent) | no bot protection; 1.0s delay; images via Shopify CDN; RAM/DDR/DIMM listings also get an independent Telegram ping on every price change (`alerts.send_ram_watch`), not just anomaly-engine deals |
+| The Good Guys| Product sitemap (`product_sitemap_1-4.xml`, 8,629 URLs) + schema.org JSON-LD per page | headless Shopify Hydrogen, no `/products.json`; no bot protection; no RRP field anywhere (relies on 90-day history fallback); crawl batch raised to 500/run (vs default 40) since it's unprotected |
 | Supercheap Auto | Full product sitemap (104 `sitemap_N-product.xml` files, ~518k URLs) + JSON-LD & GA4 dataLayer per product page | Salesforce Commerce Cloud; no bot protection; **full catalogue**, indexed 2026-07-08 after empirical storage testing showed it fits the free tier (~518k rows × ~336 bytes ≈ 166MB added, 292MB total DB); crawl_batch raised to 1000/cycle (~11-day first sweep); was-price = price + dataLayer `discount`; images via demandware.static. (SKUs are alphanumeric, e.g. `SPO81491` — the product URL regex must allow letters, not just digits, or most sitemap files silently match zero URLs.) |
+| Sephora      | Storefront JSON:API (`/api/v2.6/products`, 500/page, ~16 requests for full AU catalogue) | shared Asia-Pacific backend behind Akamai — needs curl_cffi impersonation *and* `X-Platform: Web` + `X-Site-Country: AU` headers, or it silently serves a stale/wrong-country price book (observed PHP-peso catalogues, wrong prices) with no error; prices are integer cents; opted out of Telegram pings (too noisy) |
+| Chemist Warehouse | Next.js `__NEXT_DATA__` per product page, seeded from products sitemap (~26k URLs) | commercetools backend; no bot challenge on impersonated requests; no fast listing path at all (robots.txt disallows `/api/`, category pages aren't SSR'd) so coverage is 100% crawl-queue lane, crawl_batch 500 (~26h first sweep); prescription items are skipped outright (PBS pricing isn't a "deal", and advertising Rx medicine prices is restricted in Australia) |
+| Myer         | Sitemap (`sitemap_20251_N.xml.gz`, ~154k URLs) + schema.org JSON-LD per product page | Salesforce Commerce Cloud-style; no bot protection seen; sitemaps are served as **literal gzip bytes**, not an HTTP Content-Encoding, so the base scraper's text sitemap walker couldn't read them — added `BaseScraper.get_bytes()` + gzip-aware `discover()`/`discover_all()` overrides in `myer.py`; RRP comes from an embedded `"listPrice":N` field the existing `_find_rrp` fallback already matches, no `parse_product` override needed; crawl_batch 1000 (~3-day first sweep); added 2026-07-11 |
 
 **Bunnings — investigated and ruled out** (July 2026): robots.txt disallows
 `/api/` and `/apis/` (where any bulk endpoint would live), no product-level
@@ -84,12 +87,18 @@ not just IP reputation) — this proxy allowance doesn't reopen that.
 ### Scraper pattern (`scrapers/`)
 - `base.py` — `BaseScraper`: generic sitemap discovery (`discover`/
   `discover_all`) + generic schema.org JSON-LD `parse_product`. Retailers
-  without JSON-LD (Officeworks, Big W, Kmart/Target's Constructor.io feed)
-  override `parse_product`; those with a bulk listing API (JB Hi-Fi) add
-  `refresh_listings`. The Good Guys is the first retailer to use the base
-  class's default JSON-LD parsing almost as-is (small override just to fix
-  the `is_marketplace` seller-name substring check and add `image_url`,
-  which the base default doesn't set).
+  without JSON-LD (Officeworks, Big W, Kmart/Target's Constructor.io feed,
+  Chemist Warehouse's `__NEXT_DATA__`) override `parse_product`; those with
+  a bulk listing API (JB Hi-Fi) add `refresh_listings`. The Good Guys and
+  Myer both use the base class's default JSON-LD parsing almost as-is
+  (Good Guys needed a small override to fix the `is_marketplace`
+  seller-name substring check; Myer needed none at all — its embedded
+  `"listPrice"` field is already covered by the base `_find_rrp` fallback).
+- `get_bytes()` — added 2026-07-11 for Myer: some retailers' sitemap files
+  are literal gzip bytes rather than an HTTP Content-Encoding, so `get()`'s
+  text decoding mangles them. Retailers with `.gz` sitemaps should override
+  `discover`/`discover_all` to fetch via `get_bytes()` + `gzip.decompress()`
+  (see `myer.py`) rather than relying on the base text-based walker.
 - `Blocked` exception = bot protection triggered; expected, not a bug.
 
 ### Database (schema.sql + views.sql)
@@ -108,7 +117,7 @@ not just IP reputation) — this proxy allowance doesn't reopen that.
 
 ### Website (`web/`, static, Vercel)
 - `index.html` — **deal feed, redesigned as a card grid** (v4, see Design
-  system below): search bar, store chips (incl. Good Guys), category chips,
+  system below): search bar, store chips (all 10 retailers), category chips,
   sort dropdown (biggest discount / price asc / price desc / newest drops),
   price min/max filter, 0–99% discount slider, Everything/Error-tier/
   Marketplace type chips — all server-side via PostgREST, all composable.
@@ -145,10 +154,25 @@ not just IP reputation) — this proxy allowance doesn't reopen that.
 
 ### CI (`.github/workflows/crawl.yml`)
 - Matrix: one refresh + crawl job pair per retailer, batch size for the
-  crawl lane is per-retailer (`matrix.crawl_batch || 40`). Runs every 30
-  min. Detect job follows with Telegram secrets. First-run catalogue index
-  line stays commented out (`index` was run once per retailer manually
-  against Supabase instead, including Good Guys's 8,629-URL seed).
+  crawl lane is per-retailer (`matrix.crawl_batch || 40`; raised for the
+  four retailers with no bulk listing API and no bot protection — Good
+  Guys 500, Chemist Warehouse 500, Supercheap 1000, Myer 1000). Runs every
+  30 min. Detect job follows with Telegram secrets. First-run catalogue
+  index line stays commented out (`index` was run once per retailer
+  manually against Supabase instead — Good Guys 8,629 URLs, Chemist
+  Warehouse ~26k, Supercheap ~518k, Myer ~154k).
+- **Delisting confirmation reliability (2026-07-11):** `cmd_refresh`'s
+  missing-SKU reconciliation (confirms a stale-looking product is really
+  gone via a direct 404 before hiding it from the site) runs right after
+  a retailer's bulk-listing budget is already spent, making it the part of
+  the run most likely to hit a transient rate limit. A `Blocked` response
+  there used to be treated identically to "inconclusive" and just skipped
+  — so a genuinely delisted item (confirmed via a real 404, not a bot
+  block) could sit on the public site indefinitely if every confirmation
+  attempt happened to land on a rate limit. Found via a live bug report
+  (a JB Hi-Fi RAM listing showing as a "76% off" deal after JB delisted
+  it). Fixed with one retry-after-backoff before falling back to
+  fail-open in `run.py`'s missing-SKU loop.
 
 ## Key decisions
 
@@ -187,11 +211,18 @@ not just IP reputation) — this proxy allowance doesn't reopen that.
       user said "later").
 - [ ] Target via Commission Factory (waiting on user account).
 - [ ] Big W and Target product images (media fields not yet extracted).
-- [ ] Watch Good Guys's first full crawl sweep (~9h at the raised batch
-      size) for any blocking — none seen in testing, but unverified at
-      full scale/CI network egress.
+- [ ] Watch Myer's first full crawl sweep (~3 days at crawl_batch 1000) for
+      any blocking — none seen in testing (sitemap fetches + a live scrape
+      of 6 products), but that's a thin evidence base compared to the
+      other unprotected retailers; keep an eye on it early on.
 - [ ] Watch JB Hi-Fi's GitHub Actions runs for Cloudflare blocking of
       datacenter IPs (fallback: run it in the local task instead).
 - [ ] Officeworks full SKU sweep continues incrementally via Actions.
 - [ ] Telegram mailing-list/channel mode if the site gets an audience.
 - [ ] Revisit Bunnings if a non-robots-disallowed data source appears.
+- [ ] Consider whether `MISSING_CHECK_BUDGET` (15/run) is still enough
+      headroom now that JB Hi-Fi has 700-1800 stale-tracked SKUs at any
+      time (backlog roughly break-even with the check rate) — the
+      2026-07-11 retry fix addresses false-negatives, not throughput;
+      only worth revisiting if delisted items are still lingering days
+      after being confirmed gone.
