@@ -131,27 +131,58 @@ not just IP reputation) — this proxy allowance doesn't reopen that.
 - `Blocked` exception = bot protection triggered; expected, not a bug.
 
 ### Database (schema.sql + views.sql)
-- Tables: `products` (incl. `image_url`, `category`, `current_rrp`,
-  `price_updated_at`), `price_snapshots` (only on change), `deals`
-  (incl. `alerted_at`), `crawl_queue`, `kv`.
+- Tables: `products` (incl. `image_url`, `category`, `subcategory`,
+  `current_rrp`, `price_updated_at`), `price_snapshots` (only on change),
+  `deals` (incl. `alerted_at`), `crawl_queue`, `kv`, `telegram_subs`.
 - Anon read views (canonical SQL in `views.sql`, re-run after DDL changes,
   grants must be re-issued after a drop):
   - `deal_feed` — anomaly-engine deals (50%+), reference ≥ $40.
   - `discount_feed` — **materialized** view of every discounted product at
     any depth (reference = max(RRP, 90-day snapshot high), ≥$40 floor,
-    seen in last 10 days). Unique index on (retailer, sku); refreshed
-    concurrently by every `detect`. Was a plain view but anon ilike queries
-    hit Supabase's statement timeout re-aggregating 126k snapshots.
-  - `product_search`, `catalogue_stats`, `growth_daily`.
+    price > 0, seen in last 10 days). Unique index on (retailer, sku);
+    refreshed concurrently by every `detect`. Was a plain view but anon
+    ilike queries hit Supabase's statement timeout re-aggregating 126k
+    snapshots.
+  - `product_search`, `catalogue_stats`, `growth_daily`,
+    `subcategory_stats` (per-store chip labels + counts).
+
+### Categories: shared buckets + per-store sections (2026-07-11)
+Two-level system. `products.category` keeps the 8 shared title-guessed
+buckets (tech/home/kitchen/toys/clothing/beauty/books/other) used for
+all-stores browsing. `products.subcategory` holds **each store's own
+sections**, which the site shows as the category chip row whenever exactly
+one retailer is selected:
+- **Native data** (populated inside the scraper, overwritten each sweep):
+  Kmart = Constructor level-2 groups via `SECTION_LABEL` (merch
+  pseudo-groups Brands/Clearance/Back To School/etc. map to None so they
+  can't clobber real sections); Big W = category-tree top level (leaf paths
+  now travel as `(path, top_title)` tuples); JB Hi-Fi = `product_type` via
+  `_TYPE_SUBCAT`; Supercheap = GA4 `item_category2` (`item_category` is the
+  useless "Shop by Category" root); Chemist Warehouse = product `type`,
+  prettified.
+- **Title rules** (`categorize.SUBCAT_RULES`, backfilled every `detect` via
+  `backfill_subcategories`) for stores with no per-product category
+  anywhere in their source: Myer, Good Guys, Officeworks, Target, Sephora.
+  ~11.4k tagged at launch.
+- PostgREST filter uses double-quoted `in.()` values because labels contain
+  `&`/spaces: `subcategory=in.("Fridges %26 Freezers",...)`.
+- Coverage note: native retailers only pick up tags as sweeps touch
+  products — Kmart/JB fill within a run or two, Big W over days,
+  Supercheap/Chemist Warehouse as their crawl queues recycle (~11d/instant
+  respectively at next crawl). UI simply hides chips that have no data yet.
 
 ### Website (`web/`, static, Vercel)
-- `index.html` — **deal feed, redesigned as a card grid** (v4, see Design
-  system below): search bar, store chips (all 10 retailers), category chips,
-  sort dropdown (biggest discount / price asc / price desc / newest drops),
-  price min/max filter, 0–99% discount slider, Everything/Error-tier/
-  Marketplace type chips — all server-side via PostgREST, all composable.
-- `catalogue.html` — browse everything tracked; store/category/price
-  filters + text search, exact counts via `Prefer: count=exact`.
+- `index.html` — **deal feed as a card grid**: search bar, store chips (all
+  10 retailers), category chips (dynamic: one store selected → that store's
+  own sections from `subcategory_stats`, top 12; else shared buckets), sort
+  dropdown, price min/max filter, 0–99% discount slider — all server-side
+  via PostgREST, all composable. Card pills prefer `subcategory` over
+  `category`. Retailer clicks clear both category selections (the chip row
+  changes shape underneath them).
+- `catalogue.html` — browse everything tracked; same dynamic per-store
+  category chips (with counts), store/price filters + text search, exact
+  counts via `Prefer: count=exact` (also forced whenever a subcategory chip
+  is active, since the local stats cache only knows retailer×category).
 - `search.html` — latest tracked price + "as of" date for any product by
   name/SKU. Runs **one query per retailer in parallel** (not one shared
   query) so a store with 100k+ products can't crowd smaller stores out of
@@ -159,16 +190,15 @@ not just IP reputation) — this proxy allowance doesn't reopen that.
   Kmart because the old single-query/recency-order approach starved JB
   Hi-Fi's matches.
 - `growth.html` — per-day new products and price checks per retailer.
-- `style.css` — **design system v4** ("Bellroy palette", July 2026):
-  light-only (no dark mode — an earlier dark variant was explicitly
-  rejected; `color-scheme: light` forces native controls light too), warm
-  off-white ground (`#faf9f7`), charcoal ink, burnt-orange accent
-  (`#d3572b`), flat hairline borders (no heavy shadows), Figtree font.
-  Chosen by building 3 live sample pages (card grid / dark terminal /
-  warm editorial) and letting the user pick, rather than guessing —
-  see the design-preferences memory for why that approach works better
-  here. v1–v3 (serif+grain, then cool-neutral dark-capable) were both
-  superseded; don't resurrect dark mode without asking again.
+- `style.css` — current design (commit `f7f810d`, 9 July 2026): **BetsAPI-
+  inspired blue palette** with nav icons — white cards, blue accent
+  `#2563eb`, Figtree font, light-only (`color-scheme: light`; dark mode was
+  explicitly rejected — never reintroduce without asking). This superseded
+  the earlier "Bellroy" warm/orange v4, which superseded two rejected
+  designs; the card-grid *layout* has been stable throughout, only the
+  palette churns. The user redirects palettes by linking a reference site —
+  ask for one before any visual work, and check `git log -- web/style.css`
+  before trusting any doc/memory's claim about the current palette.
 - Thumbnails are downsized at render time (`thumbSrc()`): Shopify
   `?width=200/300/400`, Officeworks `JPEG_300x300`, Kmart
   `width:200,height:250`. Good Guys images are on `cdn.shopify.com` too,
@@ -247,6 +277,16 @@ not just IP reputation) — this proxy allowance doesn't reopen that.
 - [ ] User to test the Telegram bot end-to-end: open @underp22bot via a
       product page's subscribe button (I can't message the bot as them).
       Bot service is polling and healthy; only the human tap is unverified.
+- [ ] Personalization (user asked 2026-07-11 "use cookies to show things
+      based on browsing history"): recommended NO tracking cookies —
+      instead (a) localStorage recently-viewed row + category-weighted
+      deal ordering, all client-side, and/or (b) anonymous server-side
+      "trending searches" counts. User was asked which to build; **no
+      answer yet** — don't start until they pick.
+- [ ] Watch native subcategory fill-rates: Kmart/JB should be tagged after
+      their next 1-2 CI sweeps, Big W within days, Supercheap/Chemist
+      Warehouse as crawl queues recycle. If a store's chips look thin
+      after that window, check its scraper's subcategory plumbing.
 - [ ] Watch JB Hi-Fi's GitHub Actions runs for Cloudflare blocking of
       datacenter IPs (fallback: run it in the local task instead).
 - [ ] Officeworks full SKU sweep continues incrementally via Actions.
