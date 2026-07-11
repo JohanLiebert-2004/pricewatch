@@ -56,7 +56,7 @@
   <div class="stats">
     <div class="stat"><b id="s-deals">–</b><span>live deals, 50%+ off</span></div>
     <div class="stat"><b id="s-items">–</b><span>products under watch</span></div>
-    <div class="stat"><b>9</b><span>retailers covered</span></div>
+    <div class="stat"><b>10</b><span>retailers covered</span></div>
     <div class="stat"><b>Daily</b><span>frequent updates</span></div>
   </div>
 </div></header>
@@ -79,6 +79,7 @@
       <button class="chip" data-r="target" aria-pressed="false">Target</button>
       <button class="chip" data-r="jbhifi" aria-pressed="false">JB Hi-Fi</button>
       <button class="chip" data-r="goodguys" aria-pressed="false">The Good Guys</button>
+      <button class="chip" data-r="myer" aria-pressed="false">Myer</button>
       <button class="chip" data-r="supercheap" aria-pressed="false">Supercheap Auto</button>
       <button class="chip" data-r="sephora" aria-pressed="false">Sephora</button>
       <button class="chip" data-r="chemistwarehouse" aria-pressed="false">Chemist Warehouse</button>
@@ -155,7 +156,7 @@ fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=sku&pct_off=gte.50&limit=1`,
 
 // ---- render ------------------------------------------------------------
 const money = n => "$"+Number(n).toFixed(2).replace(/\.00$/,"");
-const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse"};
+const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse"};
 const SORTS = {
   deep:  "pct_off.desc,reference_price.desc",
   price_asc:  "price.asc,pct_off.desc",

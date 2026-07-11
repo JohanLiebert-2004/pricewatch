@@ -33,6 +33,7 @@
   .gbar .r-target{background:#c9a227}
   .gbar .r-jbhifi{background:#8a5cd6}
   .gbar .r-goodguys{background:#d3572b}
+  .gbar .r-myer{background:#7a1f3d}
   .gbar .r-supercheap{background:#2f9e6e}
   .gbar .r-sephora{background:#d64072}
   .gbar .r-chemistwarehouse{background:#e0a812}
@@ -41,6 +42,7 @@
   .dotk{color:#d3572b} .dotb{color:#3d7bd9}
   .doto{color:var(--deal)} .dott{color:#c9a227} .dotj{color:#8a5cd6}
   .dotg{color:#d3572b} .dots{color:#2f9e6e} .dotse{color:#d64072} .dotc{color:#e0a812}
+  .dotm{color:#7a1f3d}
   .gnums{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   .gnums .plus{font-weight:650;font-size:19px;color:var(--deal);letter-spacing:-.01em}
   .gnums .cum{font-family:"Spline Sans Mono",monospace;font-size:10px;
@@ -94,9 +96,9 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const HDRS = {apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}`};
 
 const fmtN = n => Number(n).toLocaleString("en-AU");
-const RETAILERS = ["kmart","bigw","officeworks","target","jbhifi","goodguys","supercheap","sephora","chemistwarehouse"];
-const RLAB = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse"};
-const DOT = {kmart:"dotk", bigw:"dotb", officeworks:"doto", target:"dott", jbhifi:"dotj", goodguys:"dotg", supercheap:"dots", sephora:"dotse", chemistwarehouse:"dotc"};
+const RETAILERS = ["kmart","bigw","officeworks","target","jbhifi","goodguys","myer","supercheap","sephora","chemistwarehouse"];
+const RLAB = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse"};
+const DOT = {kmart:"dotk", bigw:"dotb", officeworks:"doto", target:"dott", jbhifi:"dotj", goodguys:"dotg", myer:"dotm", supercheap:"dots", sephora:"dotse", chemistwarehouse:"dotc"};
 
 function fmtDay(iso){
   const d = new Date(iso + "T00:00:00Z");

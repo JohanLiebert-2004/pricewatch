@@ -130,6 +130,36 @@ class BaseScraper:
         r = self.session.get(url)
         return r.status_code, r.text
 
+    def get_bytes(self, url: str) -> bytes:
+        """Like get(), but returns raw response bytes instead of decoded text -
+        for endpoints whose body is itself a binary file (e.g. retailers like
+        Myer that publish sitemap_N.xml.gz as the literal HTTP body, not as a
+        gzip Content-Encoding httpx/curl_cffi would auto-decode)."""
+        if self.warmup_url and not self._warmed:
+            self._warmed = True
+            try:
+                self._request(self.warmup_url)
+                time.sleep(self.delay)
+            except Exception:
+                pass
+        time.sleep(self.delay + random.uniform(0, 0.5))
+        status, content = self._request_bytes(url)
+        if status in (403, 429, 503):
+            raise Blocked(f"{self.name}: HTTP {status} for {url} - bot protection. "
+                           "Otherwise lower the rate or use an official feed.")
+        if status == 404:
+            raise NotFound(url)
+        if status >= 400:
+            raise RuntimeError(f"HTTP {status} for {url}")
+        return content
+
+    def _request_bytes(self, url: str):
+        if self._cffi:
+            r = self.session.get(url, timeout=25, allow_redirects=True)
+            return r.status_code, r.content
+        r = self.session.get(url)
+        return r.status_code, r.content
+
     # -- Discovery ---------------------------------------------------------
     def discover(self, limit: int = 50) -> list[str]:
         """Return up to `limit` product URLs from the retailer's sitemap(s).

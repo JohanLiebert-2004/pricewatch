@@ -8,6 +8,7 @@
 """
 import argparse
 import json
+import time
 
 import alerts
 import categorize as categorize_mod
@@ -242,7 +243,18 @@ def cmd_refresh(args):
         for sku in missing:
             url = known_urls[sku]
             try:
-                rec = scraper.parse_product(url, scraper.get(url))
+                try:
+                    rec = scraper.parse_product(url, scraper.get(url))
+                except Blocked:
+                    # This check runs right after the bulk listing sweep has
+                    # already burned its request budget, so it's the part of
+                    # the run most likely to catch a transient rate limit -
+                    # without a retry, a real 404 reads as "inconclusive"
+                    # every single time and a delisted item never clears.
+                    # Worth one patient retry since this loop is small (<=
+                    # MISSING_CHECK_BUDGET items).
+                    time.sleep(10)
+                    rec = scraper.parse_product(url, scraper.get(url))
             except NotFound:
                 # confirmed HTTP 404 - not a bot-block, the listing is genuinely
                 # gone (product delisted/discontinued). Stop showing it as a
