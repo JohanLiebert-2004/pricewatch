@@ -87,15 +87,24 @@ Politeness is non-negotiable: no delays below the owner-approved floors,
 no parallel requests to one retailer. `Blocked` exceptions are expected
 (datacenter IPs), not bugs — batches resume next run.
 
-**Proxy policy (updated 2026-07-08):** residential/rotating proxies are now
-allowed for the three Akamai-fronted retailers (Big W, Kmart, Target) to
-cut down on datacenter-IP flags, since the goal is a real production
-service rather than a hobby deployment. `scrapers/base.py` supports a
-`PROXY_URL` env var + per-scraper `use_proxy` flag (all three already set);
-still needs a provider account + `gh secret set PROXY_URL` before it does
-anything. Delay floors and the one-request-at-a-time rule above are
-unchanged. Bunnings stays ruled out for now (Cloudflare fingerprinting,
-not just IP reputation) — this proxy allowance doesn't reopen that.
+**Proxy (updated 2026-07-11):** a Webshare residential plan (1GB/mo) is
+live, scoped to **Big W only** (`use_proxy = True` on bigw alone — Kmart/
+Target's Akamai JS-challenge isn't IP-based so a proxy doesn't help them;
+see CLAUDE.md). Current working `PROXY_URL` form:
+`http://<user>-AU-rotate:<pass>@p.webshare.io:80` (AU-geo rotating), set in
+local `.env`, the GitHub secret, and the VM's `/opt/pricewatch.env`.
+**Ops lessons from the 2026-07-11 outage:** Webshare rotates the proxy
+*username* when a plan changes — a stale credential gets HTTP 402
+("payment required") on every CONNECT even while the dashboard shows the
+plan active; and because `Blocked`/parse errors are tolerated by design,
+Big W crawling can silently stall for days while every CI job still shows
+"success". Diagnostics: suspiciously low GB usage on the Webshare
+dashboard is a red flag, and the correct credentials can always be fetched
+from the Webshare API (`WEBSHARE_API_KEY` in local `.env`;
+`GET https://proxy.webshare.io/api/v2/proxy/config/`) rather than
+eyeballing the dashboard. Delay floors and the one-request-at-a-time rule
+are unchanged. Bunnings stays ruled out (Cloudflare fingerprinting, not
+just IP reputation) — the proxy allowance doesn't reopen that.
 
 ## What's built
 
