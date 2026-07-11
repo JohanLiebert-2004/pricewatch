@@ -57,11 +57,12 @@ const money = n => "$"+Number(n).toFixed(2);
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse"};
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const IMG_PROXY = "https://159-13-59-184.sslip.io/img";  // OCI image cache
 function thumbSrc(u){
-  if(u.includes("cdn.shopify.com")) return u + (u.includes("?")?"&":"?") + "width=200";
-  if(u.includes("JPEG_1000x1000")) return u.replace("JPEG_1000x1000","JPEG_300x300");
-  if(u.includes("assets.kmart.com.au")) return u.replace(/width:\d+,height:\d+/,"width:200,height:250");
-  return u;
+  if(u.includes("cdn.shopify.com")) u = u + (u.includes("?")?"&":"?") + "width=200";
+  else if(u.includes("JPEG_1000x1000")) u = u.replace("JPEG_1000x1000","JPEG_300x300");
+  else if(u.includes("assets.kmart.com.au")) u = u.replace(/width:\d+,height:\d+/,"width:200,height:250");
+  return `${IMG_PROXY}?u=${encodeURIComponent(u)}`;
 }
 
 function asOf(iso){

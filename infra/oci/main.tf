@@ -77,6 +77,27 @@ resource "oci_core_security_list" "public" {
     }
   }
 
+  # Public web: SSR preview pages + image proxy (nginx, TLS via sslip.io)
+  ingress_security_rules {
+    protocol = "6"
+    source   = "0.0.0.0/0"
+
+    tcp_options {
+      min = 80
+      max = 80
+    }
+  }
+
+  ingress_security_rules {
+    protocol = "6"
+    source   = "0.0.0.0/0"
+
+    tcp_options {
+      min = 443
+      max = 443
+    }
+  }
+
   egress_security_rules {
     protocol    = "all"
     destination = "0.0.0.0/0"
@@ -123,5 +144,13 @@ resource "oci_core_instance" "pricewatch" {
   metadata = {
     ssh_authorized_keys = file(pathexpand(var.ssh_public_key_path))
     user_data           = base64encode(local.cloud_init)
+  }
+
+  lifecycle {
+    # user_data only runs at first boot; the live VM has since been configured
+    # by hand (secrets in /opt/pricewatch.env were deliberately removed from
+    # Terraform state). Without this, any cloud-init template drift forces a
+    # full instance replacement - destroying the provisioned VM and its IP.
+    ignore_changes = [metadata]
   }
 }

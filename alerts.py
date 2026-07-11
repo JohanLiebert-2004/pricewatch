@@ -42,7 +42,8 @@ VERIFY_TOLERANCE = 0.05       # live-checked price may drift this much and
 
 RETAILER_LABEL = {"kmart": "Kmart", "bigw": "Big W", "target": "Target",
                   "officeworks": "Officeworks", "jbhifi": "JB Hi-Fi",
-                  "goodguys": "The Good Guys", "supercheap": "Supercheap Auto",
+                  "goodguys": "The Good Guys", "myer": "Myer",
+                  "supercheap": "Supercheap Auto",
                   "sephora": "Sephora", "chemistwarehouse": "Chemist Warehouse"}
 
 
@@ -73,30 +74,56 @@ def _config():
             os.environ.get("TELEGRAM_CHAT_ID"))
 
 
+def _retailer_subs(conn) -> dict:
+    """retailer -> [chat_ids] subscribed to that store's deals via the bot."""
+    try:
+        rows = conn.execute(
+            "SELECT chat_id, retailer FROM telegram_subs WHERE sku IS NULL"
+        ).fetchall()
+    except Exception:
+        conn.rollback()   # table not present (fresh local SQLite dev DB)
+        return {}
+    out = {}
+    for r in rows:
+        out.setdefault(r["retailer"], []).append(r["chat_id"])
+    return out
+
+
+def _item_subs(conn) -> dict:
+    """(retailer, sku) -> [chat_ids] watching that specific product."""
+    try:
+        rows = conn.execute(
+            "SELECT chat_id, retailer, sku FROM telegram_subs "
+            "WHERE sku IS NOT NULL").fetchall()
+    except Exception:
+        conn.rollback()
+        return {}
+    out = {}
+    for r in rows:
+        out.setdefault((r["retailer"], r["sku"]), []).append(r["chat_id"])
+    return out
+
+
 def send_alerts(conn) -> int:
-    """Alert on not-yet-alerted qualifying deals. Returns alerts sent."""
+    """Alert on not-yet-alerted qualifying deals. Returns alerts sent.
+
+    Two audiences per deal: the owner's personal chat (TELEGRAM_CHAT_ID,
+    skipping ALERT_EXCLUDE_RETAILERS), and any bot subscribers watching
+    that retailer (services/telegram_bot.py writes telegram_subs) - the
+    owner's retailer opt-outs deliberately do NOT apply to subscribers,
+    who asked for that store explicitly.
+    """
     token, chat_id = _config()
-    if not token or not chat_id:
+    if not token:
         return 0
-    if ALERT_EXCLUDE_RETAILERS:
-        # stamp excluded-retailer deals as seen (no Telegram send) so they
-        # don't sit in the queue and crowd out real alerts under the LIMIT 20
-        placeholders = ",".join("?" * len(ALERT_EXCLUDE_RETAILERS))
-        conn.execute(
-            f"""UPDATE deals SET alerted_at = ?
-                WHERE alerted_at IS NULL AND status <> 'expired'
-                  AND product_id IN (
-                    SELECT id FROM products WHERE retailer IN ({placeholders}))""",
-            (datetime.now(timezone.utc).isoformat(timespec="seconds"),
-             *ALERT_EXCLUDE_RETAILERS))
-        conn.commit()
+    subs = _retailer_subs(conn)
     rows = conn.execute(
         """SELECT d.id, d.price, d.reference_price, d.score,
                   p.title, p.retailer, p.url
            FROM deals d JOIN products p ON p.id = d.product_id
            WHERE d.alerted_at IS NULL AND d.status <> 'expired'
              AND d.score >= ? AND COALESCE(d.reference_price, 0) >= ?
-           ORDER BY d.score DESC LIMIT 20""",
+           ORDER BY d.score DESC LIMIT 30""",
         (ALERT_MIN_SCORE, ALERT_MIN_REFERENCE)).fetchall()
     if not rows:
         return 0
@@ -104,6 +131,17 @@ def send_alerts(conn) -> int:
     sent = 0
     with httpx.Client(timeout=15) as client:
         for r in rows:
+            recipients = []
+            if chat_id and r["retailer"] not in ALERT_EXCLUDE_RETAILERS:
+                recipients.append(chat_id)
+            recipients += subs.get(r["retailer"], [])
+            if not recipients:
+                # nobody wants this one - stamp it seen without the cost of
+                # a live verification fetch
+                conn.execute("UPDATE deals SET alerted_at=? WHERE id=?",
+                             (now, r["id"]))
+                conn.commit()
+                continue
             if r["score"] >= BIG_DROP and not _verify_live(
                     r["retailer"], r["url"], float(r["price"])):
                 conn.execute("UPDATE deals SET alerted_at=? WHERE id=?", (now, r["id"]))
@@ -118,18 +156,56 @@ def send_alerts(conn) -> int:
                     f"<b>${r['price']:.2f}</b> — normally "
                     f"${r['reference_price']:.2f}\n"
                     f"{r['url']}")
-            resp = client.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"})
-            if resp.status_code == 200 and resp.json().get("ok"):
-                conn.execute("UPDATE deals SET alerted_at=? WHERE id=?",
-                             (now, r["id"]))
-                conn.commit()
-                sent += 1
-            else:
-                print(f"  ! telegram send failed ({resp.status_code}): "
-                      f"{resp.text[:200]}")
-                break   # bad token/chat id — don't hammer the API
+            delivered = 0
+            for rcpt in recipients:
+                resp = client.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    json={"chat_id": rcpt, "text": text, "parse_mode": "HTML"})
+                if resp.status_code == 200 and resp.json().get("ok"):
+                    delivered += 1
+                else:
+                    # a blocked/deleted subscriber chat must not stall the
+                    # owner's alerts or other subscribers
+                    print(f"  ! telegram send failed for {rcpt} "
+                          f"({resp.status_code}): {resp.text[:200]}")
+            conn.execute("UPDATE deals SET alerted_at=? WHERE id=?",
+                         (now, r["id"]))
+            conn.commit()
+            sent += delivered
+    return sent
+
+
+def send_item_watch(conn, recs) -> int:
+    """Ping bot subscribers watching a specific product, on any price change.
+
+    `recs` are ProductRecords that actually got a new price snapshot (from
+    bulk_upsert's changed-list in the refresh lane, or the crawl lane's own
+    old-vs-new comparison), so this fires on genuine moves only.
+    """
+    token, _ = _config()
+    if not token or not recs:
+        return 0
+    subs = _item_subs(conn)
+    if not subs:
+        return 0
+    sent = 0
+    with httpx.Client(timeout=15) as client:
+        for r in recs:
+            for rcpt in subs.get((r.retailer, str(r.sku)), []):
+                store = RETAILER_LABEL.get(r.retailer, r.retailer)
+                rrp_line = f" (RRP ${r.rrp:.2f})" if r.rrp else ""
+                text = (f"\U0001F514 <b>Price update</b> at {store}\n"
+                        f"{html.escape(r.title or '')}\n"
+                        f"<b>${r.price:.2f}</b>{rrp_line}\n"
+                        f"{r.url}")
+                resp = client.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    json={"chat_id": rcpt, "text": text, "parse_mode": "HTML"})
+                if resp.status_code == 200 and resp.json().get("ok"):
+                    sent += 1
+                else:
+                    print(f"  ! telegram send failed for {rcpt} "
+                          f"({resp.status_code}): {resp.text[:200]}")
     return sent
 
 

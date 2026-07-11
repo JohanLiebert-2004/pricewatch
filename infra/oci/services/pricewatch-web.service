@@ -1,0 +1,22 @@
+[Unit]
+Description=Pricewatch SSR previews + image proxy (uvicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+EnvironmentFile=/opt/pricewatch.env
+Environment=SELF_URL=https://159-13-59-184.sslip.io
+WorkingDirectory=/opt/pricewatch/services
+ExecStart=/opt/pricewatch-venv/bin/uvicorn preview_app:app --host 127.0.0.1 --port 8300 --workers 1
+Restart=always
+RestartSec=5
+# 1GB-RAM VM shared with nginx + the bot - keep this box's biggest process bounded
+MemoryMax=300M
+CacheDirectory=pricewatch-img
+Environment=IMG_CACHE_DIR=/var/cache/pricewatch-img
+
+[Install]
+WantedBy=multi-user.target

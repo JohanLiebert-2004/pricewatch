@@ -1,0 +1,18 @@
+[Unit]
+Description=Pricewatch Telegram subscription bot (long polling)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+EnvironmentFile=/opt/pricewatch.env
+WorkingDirectory=/opt/pricewatch/services
+ExecStart=/opt/pricewatch-venv/bin/python telegram_bot.py
+Restart=always
+RestartSec=10
+MemoryMax=150M
+
+[Install]
+WantedBy=multi-user.target

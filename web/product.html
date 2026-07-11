@@ -109,11 +109,12 @@ const money = n => "$"+Number(n).toFixed(2);
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse"};
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const IMG_PROXY = "https://159-13-59-184.sslip.io/img";  // OCI image cache
 function thumbSrc(u){
-  if(u.includes("cdn.shopify.com")) return u + (u.includes("?")?"&":"?") + "width=300";
-  if(u.includes("JPEG_1000x1000")) return u.replace("JPEG_1000x1000","JPEG_300x300");
-  if(u.includes("assets.kmart.com.au")) return u.replace(/width:\d+,height:\d+/,"width:300,height:375");
-  return u;
+  if(u.includes("cdn.shopify.com")) u = u + (u.includes("?")?"&":"?") + "width=300";
+  else if(u.includes("JPEG_1000x1000")) u = u.replace("JPEG_1000x1000","JPEG_300x300");
+  else if(u.includes("assets.kmart.com.au")) u = u.replace(/width:\d+,height:\d+/,"width:300,height:375");
+  return `${IMG_PROXY}?u=${encodeURIComponent(u)}`;
 }
 function asOf(iso){
   if(!iso) return "";
@@ -123,9 +124,13 @@ function asOf(iso){
 }
 
 const params = new URLSearchParams(location.search);
-const retailer = params.get("retailer");
-const sku = params.get("sku");
+// /p/<retailer>/<sku> is the crawler/share form of this page (served with
+// server-side meta tags via a Vercel rewrite) — same page, path-style params
+const pathMatch = location.pathname.match(/\/p\/([a-z]+)\/([^/]+)$/);
+const retailer = params.get("retailer") || (pathMatch && pathMatch[1]);
+const sku = params.get("sku") || (pathMatch && decodeURIComponent(pathMatch[2]));
 const cancelToken = params.get("cancel");
+const TG_BOT = "underp22bot";
 
 function sparkline(points){
   // points: [{x: Date, y: price}], oldest first. Returns an SVG string.
@@ -207,6 +212,23 @@ function watchPanelHtml(productId){
       <div id="cancelresult"></div>
     </div>`;
   }
+  // Telegram deep-link payloads only allow [A-Za-z0-9_-]; every current
+  // retailer's SKUs fit, but hide the button rather than break if not
+  const tgOk = /^[A-Za-z0-9_-]{1,48}$/.test(sku);
+  const store = RETAILER_LABEL[retailer] || retailer;
+  const tg = `<div class="barlabel">Telegram alerts</div>
+    <div class="watchnote" style="margin-top:0">Instant pings in Telegram — no email needed.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+      ${tgOk ? `<a href="https://t.me/${TG_BOT}?start=i_${retailer}_${encodeURIComponent(sku)}"
+        target="_blank" rel="noopener" style="font-size:13px;font-weight:700;
+        text-decoration:none;background:#2AABEE;color:#fff;border-radius:10px;
+        padding:10px 20px">🔔 Every price change for this item</a>` : ``}
+      <a href="https://t.me/${TG_BOT}?start=s_${retailer}"
+        target="_blank" rel="noopener" style="font-size:13px;font-weight:700;
+        text-decoration:none;background:var(--card);color:var(--ink);
+        border:1px solid var(--hair);border-radius:10px;
+        padding:10px 20px">All ${esc(store)} deals</a>
+    </div>`;
   return `<div class="watchpanel">
     <div class="barlabel" style="margin-top:0">Watch this price</div>
     <form class="watchbar" id="wform" onsubmit="submitWatch(${productId}, event)">
@@ -217,6 +239,7 @@ function watchPanelHtml(productId){
     <div class="watchnote">One email, the first time the price drops to your target
       or below. No account needed — unsubscribe from the link in that email.</div>
     <div id="wresult"></div>
+    ${tg}
   </div>`;
 }
 

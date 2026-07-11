@@ -69,6 +69,10 @@ jobs:
       cancel-in-progress: false
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}   # Supabase connection string
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}  # item-watch pings fire from the
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}      # refresh/crawl lanes (send_item_watch
+                                                   # + the jbhifi RAM watch, which silently
+                                                   # never fired from CI before these were here)
       PROXY_URL: ${{ secrets.PROXY_URL }}         # residential proxy (Webshare, 1GB/mo) - bigw only;
                                                    # direct requests to bigw.com.au are blocked outright.
                                                    # kmart/target/sephora don't use it: proxy doesn't

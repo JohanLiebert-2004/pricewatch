@@ -1,4 +1,10 @@
 {
+  "rewrites": [
+    {
+      "source": "/p/:retailer/:sku",
+      "destination": "https://159-13-59-184.sslip.io/p/:retailer/:sku"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

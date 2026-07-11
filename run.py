@@ -80,6 +80,7 @@ def cmd_crawl(args):
         print(f"queue empty - run: python run.py index {args.retailer}")
         return
     ok = 0
+    watch_hits = []   # already-tracked products whose price moved this batch
     for r in rows:
         url = r["url"]
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -104,7 +105,18 @@ def cmd_crawl(args):
             conn.execute("UPDATE crawl_queue SET last_scraped=?, fails=0 "
                          "WHERE retailer=? AND url=?", (now, args.retailer, url))
             if rec:
+                # the crawl lane always snapshots, so detect real moves here
+                # for bot item-watchers (refresh lane gets this for free from
+                # bulk_upsert's changed-list)
+                old = conn.execute(
+                    "SELECT current_price FROM products "
+                    "WHERE retailer=? AND sku=? AND region=?",
+                    (args.retailer, rec.sku, rec.region or "")).fetchone()
                 db.upsert(conn, rec)
+                if (old and old["current_price"] is not None
+                        and rec.price is not None
+                        and abs(float(old["current_price"]) - rec.price) > 0.005):
+                    watch_hits.append(rec)
                 ok += 1
             else:
                 conn.execute("UPDATE crawl_queue SET fails=fails+1 "
@@ -119,6 +131,8 @@ def cmd_crawl(args):
             conn.execute("UPDATE crawl_queue SET fails=fails+1 "
                          "WHERE retailer=? AND url=?", (args.retailer, url))
             conn.commit()
+    if watch_hits:
+        alerts.send_item_watch(conn, watch_hits)
     print(f"batch done: {ok}/{len(rows)} products stored "
           f"(rerun to continue through the queue)")
 
@@ -216,6 +230,7 @@ def cmd_refresh(args):
                     snaps += len(changed)
                     if name == "jbhifi":
                         alerts.send_ram_watch(changed)
+                    alerts.send_item_watch(conn, changed)
                     batch = []
                     if seen % 4000 == 0:
                         print(f"  ...{seen} listings, {snaps} price changes")
@@ -229,6 +244,7 @@ def cmd_refresh(args):
         snaps += len(changed)
         if name == "jbhifi":
             alerts.send_ram_watch(changed)
+        alerts.send_item_watch(conn, changed)
         if cat_state is not None:
             conn.execute("INSERT OR IGNORE INTO kv (k, v) VALUES (?,?)",
                          ("bigw_cat_state", "{}"))
