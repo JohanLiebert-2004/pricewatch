@@ -66,6 +66,9 @@
   .watchok{font-size:13px;color:var(--deal);font-weight:600;margin-top:12px;line-height:1.7}
   .watcherr{font-size:13px;color:var(--flag);font-weight:600;margin-top:12px}
 </style>
+  <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
+  <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
 
@@ -230,7 +233,7 @@ function watchPanelHtml(productId){
         padding:10px 20px">All ${esc(store)} deals</a>
     </div>`;
   return `<div class="watchpanel">
-    <div class="barlabel" style="margin-top:0">Watch this price</div>
+    <div class="barlabel" style="margin-top:0">🔔 Track this product — email me when it drops</div>
     <form class="watchbar" id="wform" onsubmit="submitWatch(${productId}, event)">
       <input type="email" id="wemail" placeholder="you@example.com" required>
       <input type="number" id="wtarget" placeholder="target $" min="0" step="0.01" required>
@@ -304,9 +307,9 @@ async function load(){
       <div class="stat"><b>${money(ninetyLow)}</b><span>90-day low</span></div>
     </div>
 
-    <div class="chartwrap">${sparkline(points)}</div>
-
     ${watchPanelHtml(p.product_id)}
+
+    <div class="chartwrap">${sparkline(points)}</div>
   `;
 }
 

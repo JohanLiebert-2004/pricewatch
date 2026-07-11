@@ -288,7 +288,10 @@ one retailer is selected:
       Warehouse as crawl queues recycle. If a store's chips look thin
       after that window, check its scraper's subcategory plumbing.
 - [ ] Watch JB Hi-Fi's GitHub Actions runs for Cloudflare blocking of
-      datacenter IPs (fallback: run it in the local task instead).
+      datacenter IPs (if it starts, fall back to the OCI VM — NOT a local
+      scheduled task: the old "Pricewatch BigW refresh" Windows task was
+      removed 2026-07-11 at the user's request, local_refresh.ps1 deleted;
+      nothing may crawl from the user's PC).
 - [ ] Officeworks full SKU sweep continues incrementally via Actions.
 - [ ] Telegram mailing-list/channel mode if the site gets an audience.
 - [ ] Revisit Bunnings if a non-robots-disallowed data source appears.

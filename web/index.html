@@ -34,6 +34,9 @@
     padding:18px 20px 20px;margin-top:26px;box-shadow:var(--shadow)}
   .panel .barlabel:first-child{margin-top:0}
 </style>
+  <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
+  <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
 
@@ -239,7 +242,7 @@ function cardHtml(d, i){
         <span class="cwas">${money(d.reference_price)}</span></div>
       <div class="cfoot"><span>${RETAILER_LABEL[d.retailer]||esc(d.retailer)}</span>
         <span class="save">save ${money(save)}</span></div>
-      <a class="history-link" href="${histUrl}">Price history &amp; watch alert →</a>
+      <a class="track-btn" href="${histUrl}">🔔 Track price &amp; get alerts</a>
     </div>
   </div>`;
 }
