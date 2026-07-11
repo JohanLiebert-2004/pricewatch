@@ -20,7 +20,36 @@ Supabase Postgres (Sydney, ap-southeast-2)
         │  PostgREST (anon key, read-only)
         ▼
 Vercel static site (web/ folder, no build step)  +  Telegram alerts
+        │  /p/* rewrite + <img> loads
+        ▼
+OCI free-tier VM 159.13.59.184 (https://159-13-59-184.sslip.io, nginx + LE)
+   pricewatch-web:  /p/<retailer>/<sku> SSR previews + /img proxy cache
+   pricewatch-bot:  @underp22bot subscriptions (long polling)
 ```
+
+**OCI VM services (added 2026-07-11):** the previously-parked VM now hosts
+three always-on pieces GitHub Actions can't:
+- **Telegram subscriptions** — visitors tap "Telegram alerts" on any product
+  page → `t.me/underp22bot?start=i_<retailer>_<sku>` (every price change for
+  that item) or `s_<retailer>` (every new deal at that store). The bot
+  (`services/telegram_bot.py`, long polling — owns getUpdates, so `alerts.py
+  whoami` conflicts while it runs) writes `telegram_subs`; fan-out runs in
+  the existing Actions pipeline (`alerts.send_item_watch` in both crawl
+  lanes + retailer subs inside `send_alerts`). Adding TELEGRAM_* secrets to
+  the crawl matrix also fixed the jbhifi RAM watch, which had silently never
+  fired from CI (its job had no token).
+- **SSR previews** — `/p/<retailer>/<sku>` (Vercel rewrite → OCI) serves
+  product.html with real title/OG/Twitter meta for crawlers and link
+  previews; humans get the identical page (its JS also parses path params).
+  The SSR template is the VM's repo clone of web/product.html — after
+  changing it, `git pull` + restart `pricewatch-web` on the VM.
+- **Image proxy** — `/img?u=` (host-whitelisted, 8MB cap, disk cache in
+  /var/cache/pricewatch-img); every page's `thumbSrc()` routes through it.
+Ops notes: services run as www-data off `/opt/pricewatch.env` (root:www-data
+640); cert renewals via certbot.timer; VM iptables needed 80/443 opened
+separately from the OCI security list (Oracle images REJECT-all by default);
+Terraform now lifecycle-ignores instance `metadata` — without it, cloud-init
+drift plans a full VM replacement.
 
 - Local dev uses SQLite (`pricewatch.db`); setting `DATABASE_URL` switches
   every module to Postgres via the psycopg shim in `db.py`.
