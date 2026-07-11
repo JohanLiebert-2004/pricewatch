@@ -65,7 +65,7 @@ not "fix" its absence.
 |---|---|---|---|---|
 | P1 | Verify Vercel Analytics receives first real visitor data | Unassigned | Waiting for traffic | Vercel dashboard only; do not add another analytics vendor. |
 | P2 | Test Telegram subscription end-to-end from a real user account | User | Waiting for user action | User must press Start in Telegram. |
-| P3 | Monitor Big W proxy quota / 402 response | Unassigned | Investigate before changing | Local probe on 11 July got proxy HTTP 402. Check GitHub secret/provider account without exposing `PROXY_URL`. |
+| P3 | Big W proxy 402 | Claude | **Resolved 11 July** | Root cause: stale proxy *username* (password was current) - Webshare rotated it; every CONNECT got 402 from both CI and local, so Big W silently stopped crawling right after setup (dashboard's 0.02GB usage corroborates). Fixed via the Webshare API (key in local .env as WEBSHARE_API_KEY; user should rotate it - it was pasted in chat): PROXY_URL now `<user>-AU-rotate@p.webshare.io:80`, updated in local .env + GitHub secret + VM env. Also fixed daf6dd7's cents regression (JSON-LD price is DOLLARS; only page-state wasPrice is cents - commit 96a5175); no bad rows were written because the proxy was down the whole time. Verified live: SKU 41041 parses $11.00 / rrp $35.80 through the proxy. Workflow run 29147446498 kicked to confirm in CI. |
 | P4 | Consider browser push alerts | Unassigned | Proposed | Build only if user asks; no cookies or third-party tracker. |
 | P5 | Custom domain and Resend sender setup | User | Waiting | Needs a domain choice/purchase and external verification. |
 
