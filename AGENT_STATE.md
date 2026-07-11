@@ -17,8 +17,10 @@ Before changing anything:
 ## Current production state
 
 - **Live site:** https://web-pi-blush-48.vercel.app
-- **Production branch/commit:** `master` at `daf6dd7` — pushed and deployed
-  on 11 July 2026.
+- **Production branch/commit:** `master` at `3406c45` — pushed on 11 July
+  2026. The Vercel static frontend remains deployed from `daf6dd7`; newer
+  commits only change the scheduled backend and Supabase views, which were
+  applied directly to production.
 - **Hosting:** static `web/` on Vercel. Web Analytics is enabled; its
   cookie-free tracking script is installed on every public page. Dashboard
   reports will only contain visits from after enablement.
