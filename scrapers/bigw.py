@@ -47,16 +47,20 @@ class BigWScraper(BaseScraper):
         if not rec:
             return None
         text = htmllib.unescape(raw)
-        # BIG W product JSON-LD serialises Offer.price in whole cents (e.g.
-        # 3580 for a $35.80 skirt), while category listings already divide it.
-        # Convert product-page price and RRP fields too, including legitimate
-        # $1,000+ items (their source amounts are 100x larger as well).
-        if rec.price is not None:
-            rec.price /= 100.0
-        if rec.rrp is not None:
-            rec.rrp /= 100.0
-        if rec.rrp is None:
-            rec.rrp = self._was_price(text, rec.price)
+        # Units differ by source on the SAME page (verified live on SKU
+        # 41041): JSON-LD Offer.price is plain dollars ("price": 11 for an
+        # $11.00 skirt), while the page-state wasPrice flag is integer cents
+        # ("wasPrice":3580 = $35.80). The price therefore needs no conversion,
+        # but the base class's generic _find_rrp fallback reads that same
+        # cents field as dollars - always recompute rrp with the units-aware
+        # _was_price, and drop a base-supplied rrp that is provably the raw
+        # cents artifact.
+        was = self._was_price(text, rec.price)
+        if was is not None:
+            rec.rrp = was
+        elif (rec.rrp is not None and rec.rrp == int(rec.rrp)
+                and f'"wasPrice":{int(rec.rrp)}' in text):
+            rec.rrp = None
         if not rec.is_marketplace:
             rec.is_marketplace = "/marketplace/sellers" in text
         return rec
