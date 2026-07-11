@@ -22,14 +22,44 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 import httpx
 
 from anomaly import BIG_DROP
 from scrapers import REGISTRY
-from scrapers.base import verify_price
+from scrapers.base import NotFound, verify_price
+SITE_URL = os.environ.get("SITE_URL", "https://web-pi-blush-48.vercel.app").rstrip("/")
 
+
+def _history_url(retailer: str, sku: object) -> str:
+    """Stable product page for alert links; retailer listings can disappear."""
+    return f"{SITE_URL}/p/{quote(retailer, safe='')}/{quote(str(sku), safe='')}"
+
+
+def _confirm_live_price(retailer: str, url: str, claimed_price: float) -> bool:
+    """Confirm an alert product still has a real storefront page and price.
+
+    This is deliberately strict for the special RAM watch: a notification is
+    useful only when a shopper can actually open and buy the item. A transient
+    verification problem suppresses that one alert rather than risking a stale
+    catalogue-feed price.
+    """
+    scraper_cls = REGISTRY.get(retailer)
+    if not scraper_cls:
+        return False
+    try:
+        scraper = scraper_cls()
+        record = scraper.parse_product(url, scraper.get(url))
+    except NotFound:
+        return False
+    except Exception:
+        return False
+    if record is None or record.price is None:
+        return False
+    return abs(float(record.price) - claimed_price) <= max(0.5, claimed_price * VERIFY_TOLERANCE)
 RAM_RX = re.compile(r"\b(ram|ddr3|ddr4|ddr5|dimm|so-?dimm)\b", re.I)
+
 
 ALERT_MIN_SCORE = 0.0         # any deal the anomaly engine records
 ALERT_MIN_REFERENCE = 0.0     # anomaly.py already gates reference >= $40
@@ -119,7 +149,7 @@ def send_alerts(conn) -> int:
     subs = _retailer_subs(conn)
     rows = conn.execute(
         """SELECT d.id, d.price, d.reference_price, d.score,
-                  p.title, p.retailer, p.url
+                  p.title, p.retailer, p.sku, p.url
            FROM deals d JOIN products p ON p.id = d.product_id
            WHERE d.alerted_at IS NULL AND d.status <> 'expired'
              AND d.score >= ? AND COALESCE(d.reference_price, 0) >= ?
@@ -155,7 +185,8 @@ def send_alerts(conn) -> int:
                     f"{html.escape(r['title'] or '')}\n"
                     f"<b>${r['price']:.2f}</b> — normally "
                     f"${r['reference_price']:.2f}\n"
-                    f"{r['url']}")
+                    f"<a href=\"{html.escape(_history_url(r['retailer'], r['sku']), quote=True)}\">"
+                    f"Open price history</a>")
             delivered = 0
             for rcpt in recipients:
                 resp = client.post(
@@ -197,7 +228,8 @@ def send_item_watch(conn, recs) -> int:
                 text = (f"\U0001F514 <b>Price update</b> at {store}\n"
                         f"{html.escape(r.title or '')}\n"
                         f"<b>${r.price:.2f}</b>{rrp_line}\n"
-                        f"{r.url}")
+                        f"<a href=\"{html.escape(_history_url(r.retailer, r.sku), quote=True)}\">"
+                        f"Open price history</a>")
                 resp = client.post(
                     f"https://api.telegram.org/bot{token}/sendMessage",
                     json={"chat_id": rcpt, "text": text, "parse_mode": "HTML"})
@@ -228,11 +260,16 @@ def send_ram_watch(recs) -> int:
     sent = 0
     with httpx.Client(timeout=15) as client:
         for r in matches:
+            if not _confirm_live_price(r.retailer, r.url, float(r.price)):
+                print(f"  - skipped stale RAM alert: {r.title}")
+                continue
+
             rrp_line = f" (RRP ${r.rrp:.2f})" if r.rrp else ""
             text = (f"\U0001F4E6 <b>RAM price update</b> at JB Hi-Fi\n"
                     f"{html.escape(r.title or '')}\n"
                     f"<b>${r.price:.2f}</b>{rrp_line}\n"
-                    f"{r.url}")
+                    f"<a href=\"{html.escape(_history_url(r.retailer, r.sku), quote=True)}\">"
+                    f"Open price history</a>")
             resp = client.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"})
