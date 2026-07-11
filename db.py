@@ -173,8 +173,8 @@ def _connect_postgres():
 
 def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
     """Insert/refresh product and append a price snapshot. Returns product id."""
-    if rec.price is None:
-        return None
+    if rec.price is None or rec.price <= 0:
+        return None      # $0 = sold-out placeholder, not a price
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     # Postgres' pooler negotiates parameter types from the unnamed portal and
     # sometimes guesses booleans as smallint; an explicit cast sidesteps that.
@@ -219,7 +219,7 @@ def bulk_upsert(conn, recs: list) -> list:
     Returns the ProductRecords that actually got a new snapshot written
     (callers wanting just a count can use len() on the result).
     """
-    recs = [r for r in recs if r.price is not None]
+    recs = [r for r in recs if r.price is not None and r.price > 0]
     if not recs:
         return []
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")

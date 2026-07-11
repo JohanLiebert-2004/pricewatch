@@ -223,7 +223,10 @@ class BaseScraper:
             if isinstance(offer, list):
                 offer = offer[0] if offer else {}
             price = _num(offer.get("price") or offer.get("lowPrice"))
-            if price is None:
+            if price is None or price <= 0:
+                # $0/negative = sold-out or placeholder listing (Myer marks
+                # unavailable items price:"0"), never a real shelf price -
+                # ingesting it fabricates a "-100%" deal
                 continue
             seller = (offer.get("seller") or {})
             seller_name = seller.get("name", "") if isinstance(seller, dict) else ""

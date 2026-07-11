@@ -53,6 +53,7 @@ select p.retailer, p.sku, p.title, p.brand,
 from products p
 left join hist h on h.product_id = p.id
 where p.current_price is not null
+  and p.current_price > 0     -- $0 = sold-out placeholder, not a 100% discount
   and greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)) >= 40
   and greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)) > p.current_price
   and p.last_seen > now() - interval '10 days'
