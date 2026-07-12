@@ -30,7 +30,11 @@ def build_match_groups(conn) -> dict:
     (low confidence) only when 2+ retailers share it, to avoid false clusters.
     """
     groups, gtin_map, sig_map = {}, {}, {}
-    for p in conn.execute("SELECT id, retailer, gtin, brand, title FROM products"):
+    # delisted rows (current_price NULL) can't be deal candidates and never
+    # contribute peer prices (_cross_peers only maps non-NULL prices), so
+    # skip shipping them out of the DB at all
+    for p in conn.execute("SELECT id, retailer, gtin, brand, title "
+                          "FROM products WHERE current_price IS NOT NULL"):
         if p["gtin"]:
             gtin_map.setdefault(f"gtin:{p['gtin']}", []).append(p)
         else:

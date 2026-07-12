@@ -167,10 +167,13 @@ def cmd_refresh(args):
             print(f"== {name}: no fast refresh path, skipping ==")
             continue
         print(f"== {name}: bulk refresh (budget {args.budget} requests) ==")
-        known_urls = {r["sku"]: r["url"] for r in conn.execute(
-            "SELECT sku, url FROM products WHERE retailer=? AND current_price IS NOT NULL "
-            "ORDER BY COALESCE(price_updated_at, '1970-01-01') ASC", (name,))}
-        known = set(known_urls)
+        # sku-only: pulling every URL too shipped ~10MB per cycle out of
+        # Supabase across the matrix (egress quota); the <= MISSING_CHECK_BUDGET
+        # URLs the delisting check needs are fetched individually below
+        known_skus = [r["sku"] for r in conn.execute(
+            "SELECT sku FROM products WHERE retailer=? AND current_price IS NOT NULL "
+            "ORDER BY COALESCE(price_updated_at, '1970-01-01') ASC", (name,))]
+        known = set(known_skus)
         kwargs = {}
         if name == "officeworks":
             # bulk API needs a SKU list: items worth watching (>=$50 or not
@@ -255,10 +258,16 @@ def cmd_refresh(args):
         print(f"  -> {seen} listings seen, {kept} kept (>= ${MIN_KEEP_PRICE:.0f} "
               f"or already tracked), {snaps} snapshots written")
 
-        missing = [sku for sku in known_urls if sku not in seen_skus][:MISSING_CHECK_BUDGET]
+        missing = [sku for sku in known_skus if sku not in seen_skus][:MISSING_CHECK_BUDGET]
+        missing_urls = {r["sku"]: r["url"] for r in conn.execute(
+            f"SELECT sku, url FROM products WHERE retailer=? "
+            f"AND sku IN ({','.join('?' * len(missing))})",
+            (name, *missing)).fetchall()} if missing else {}
         delisted = 0
         for sku in missing:
-            url = known_urls[sku]
+            url = missing_urls.get(sku)
+            if not url:
+                continue
             try:
                 try:
                     rec = scraper.parse_product(url, scraper.get(url))

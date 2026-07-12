@@ -14,7 +14,10 @@ name: crawl-and-detect
 
 on:
   schedule:
-    - cron: "0,30 * * * *"    # every 30 minutes (UTC, best-effort)
+    - cron: "0 * * * *"    # hourly (UTC, best-effort). Was every 30 min -
+                            # halved 2026-07-12 as part of staying inside
+                            # Supabase's free-tier egress quota; deal
+                            # detection latency is now <= ~1h, still fine.
   workflow_dispatch: {}         # manual "Run workflow" button
 
 jobs:

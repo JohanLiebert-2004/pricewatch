@@ -253,6 +253,8 @@ def bulk_upsert(conn, recs: list) -> list:
 
 def _upsert_chunk(conn, chunk, now) -> list:
     """One transaction: upsert products, snapshot only real price changes."""
+    if DATABASE_URL:
+        return _upsert_chunk_pg(conn, chunk, now)
     bool_cast = "::boolean" if DATABASE_URL else ""
     # what do we currently know about these products?
     old = {}
@@ -313,6 +315,81 @@ def _upsert_chunk(conn, chunk, now) -> list:
             [(pid, r.price, r.rrp, r.in_stock, now) for pid, r in changed])
     conn.commit()
     return [r for pid, r in changed]
+
+
+def _upsert_chunk_pg(conn, chunk, now) -> list:
+    """Postgres path: one statement, change detection server-side.
+
+    The SQLite-style path above reads every chunk row back to compare old
+    prices client-side - over Supabase that shipped megabytes out of the DB
+    on every sweep (48x/day across the retailer matrix) and blew the free
+    tier's egress quota. Here the VALUES payload goes IN (ingress is free),
+    the old-price comparison and snapshot writes happen inside the database,
+    and only the keys of rows whose price actually changed come back.
+    """
+    by_key = {(r.retailer, r.sku, r.region or ""): r for r in chunk}
+    row_sql = "(" + ",".join(["%s"] * 14) + ")"
+    values_sql = ",".join([row_sql] * len(chunk))
+    params = []
+    for r in chunk:
+        params += [r.retailer, r.sku, r.gtin, r.title, r.brand, r.category,
+                   r.subcategory, r.url, r.image_url, r.is_marketplace,
+                   r.region or "", r.price, r.rrp, r.in_stock]
+    sql = f"""
+    WITH v (retailer, sku, gtin, title, brand, category, subcategory, url,
+            image_url, is_marketplace, region, price, rrp, in_stock) AS (
+      VALUES {values_sql}
+    ),
+    old AS (
+      -- pre-statement prices: every CTE sees the same snapshot, so this
+      -- reads the state from before `up` writes
+      SELECT p.id, p.current_price
+      FROM products p
+      JOIN v ON v.retailer = p.retailer AND v.sku = p.sku
+            AND v.region = p.region
+    ),
+    up AS (
+      INSERT INTO products (retailer, sku, gtin, title, brand, category,
+          subcategory, url, image_url, is_marketplace, region, first_seen,
+          last_seen, current_price, current_rrp, price_updated_at)
+      SELECT retailer, sku, gtin, title, brand, category, subcategory, url,
+             image_url, is_marketplace::boolean, region, %s, %s,
+             price::numeric(10,2), rrp::numeric(10,2), %s
+      FROM v
+      ON CONFLICT (retailer, sku, region) DO UPDATE SET
+        gtin=COALESCE(excluded.gtin, products.gtin), title=excluded.title,
+        brand=COALESCE(excluded.brand, products.brand), url=excluded.url,
+        subcategory=COALESCE(excluded.subcategory, products.subcategory),
+        image_url=COALESCE(excluded.image_url, products.image_url),
+        is_marketplace=excluded.is_marketplace,
+        last_seen=excluded.last_seen,
+        current_price=excluded.current_price,
+        current_rrp=excluded.current_rrp,
+        price_updated_at=excluded.price_updated_at
+      RETURNING id, retailer, sku, region
+    ),
+    snap AS (
+      INSERT INTO price_snapshots (product_id, price, rrp, in_stock, scraped_at)
+      SELECT up.id, v.price::numeric(10,2), v.rrp::numeric(10,2),
+             v.in_stock::boolean, %s
+      FROM up
+      JOIN v ON v.retailer = up.retailer AND v.sku = up.sku
+            AND v.region = up.region
+      LEFT JOIN old ON old.id = up.id
+      -- current_price is REAL (float); cast BOTH sides to numeric(10,2) or
+      -- float representation error (35.8 -> 35.7999...) marks every row
+      -- changed and re-bloats the snapshots this design exists to avoid
+      WHERE old.id IS NULL
+         OR old.current_price::numeric(10,2) IS DISTINCT FROM v.price::numeric(10,2)
+      RETURNING product_id
+    )
+    SELECT up.retailer, up.sku, up.region
+    FROM up JOIN snap ON snap.product_id = up.id
+    """
+    rows = conn.execute(sql, (*params, now, now, now, now)).fetchall()
+    conn.commit()
+    return [by_key[(r["retailer"], r["sku"], r["region"])] for r in rows
+            if (r["retailer"], r["sku"], r["region"]) in by_key]
 
 
 class _PgShim:

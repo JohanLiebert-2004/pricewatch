@@ -25,8 +25,21 @@ MIN_HISTORY = 3             # snapshots needed before history_drop can fire
 def run(conn) -> list[dict]:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     found = []
-    cross_peers = _cross_peers(conn)
-    products = conn.execute("SELECT * FROM products").fetchall()
+    # Cross-retailer matching needs gtin/brand/title for every live product
+    # (~9MB out of Supabase per call) - the heaviest read left after the
+    # SELECT * fix. The signal compares slow-moving catalogue overlap, so
+    # computing it a few times a day loses nothing; rrp_gap/history_drop
+    # still run on every detect.
+    if datetime.now(timezone.utc).hour % 6 == 0:
+        cross_peers = _cross_peers(conn)
+    else:
+        cross_peers = {}
+    # explicit columns: SELECT * shipped ~62MB out of Supabase per run (the
+    # single biggest egress line in the whole system - blew the free-tier
+    # quota); these seven cost ~1.6MB
+    products = conn.execute(
+        "SELECT id, retailer, title, url, is_marketplace, "
+        "current_price, current_rrp FROM products").fetchall()
     # one bulk pass instead of a per-product query: with change-only
     # snapshots the whole table stays small enough to group in memory
     history_by_pid = {}
@@ -97,10 +110,10 @@ def _cross_peers(conn) -> dict:
     latest = {}
     retailer_of = {}
     for p in conn.execute(
-            "SELECT id, retailer, current_price FROM products"):
+            "SELECT id, retailer, current_price FROM products "
+            "WHERE current_price IS NOT NULL"):
         retailer_of[p["id"]] = p["retailer"]
-        if p["current_price"] is not None:
-            latest[p["id"]] = float(p["current_price"])
+        latest[p["id"]] = float(p["current_price"])
     if not latest:  # legacy rows from before current_price existed
         for r in conn.execute(
             """SELECT product_id, price FROM price_snapshots ps WHERE id = (
