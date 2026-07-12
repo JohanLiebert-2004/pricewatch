@@ -7,10 +7,17 @@ feed and the catalogue agree.
 import re
 
 RULES = [
+    ("clothing", re.compile(
+        r"\b(t-?shirt|shirt|tee|top|trunks|shorts|jeans|pants?|trouser|"
+        r"leggings?|dress|skirt|jacket|hoodie|jumper|sweater|coat|vest|"
+        r"cardigan|blouse|polo|chino|sock|underwear|bra|briefs|pyjama|pajama|"
+        r"sneaker|shoe|boot|sandal|thong|slipper|cap|beanie|hat|scarf|glove|"
+        r"swimwear|bikini|rashie|wig|costume|racing suit)\b", re.I)),
     ("tech", re.compile(
         r"\b(laptop|notebook pc|monitor|headphone|earbud|ear ?pod|speaker|"
         r"soundbar|tablet|ipad|iphone|galaxy|pixel|phone|charger|power ?bank|"
-        r"usb|hdmi|ssd|hard ?drive|mouse|keyboard|printer|ink|toner|camera|"
+        r"usb|hdmi|ssd|hard ?drive|mouse|keyboard|printer|ink cartridge|"
+        r"ink refill|toner|camera|"
         r"webcam|smart ?watch|fitbit|garmin|television|tv|console|playstation|"
         r"xbox|nintendo|router|modem|drone|projector|chromebook|macbook|"
         r"airpod|kindle|e-?reader|gpu|cpu|ram)\b", re.I)),
@@ -25,12 +32,6 @@ RULES = [
         r"play set|action figure|hot wheels|paw patrol|bluey|pokemon|disney|"
         r"marvel|scooter|trampoline|baby|infant|nappy|nappies|pram|stroller|"
         r"cot|bassinet|nanobebe|teether|kids?|children)\b", re.I)),
-    ("clothing", re.compile(
-        r"\b(t-?shirt|shirt|tee|trunks|shorts|jeans|pants|leggings|dress|"
-        r"skirt|jacket|hoodie|jumper|sweater|coat|sock|underwear|bra|briefs|"
-        r"pyjama|pajama|sneaker|shoe|boot|sandal|thong|slipper|cap|beanie|"
-        r"hat|scarf|glove|swimwear|bikini|rashie|wig|costume|racing suit)\b",
-        re.I)),
     ("beauty", re.compile(
         r"\b(skincare|skin care|serum|toner|moisturis\w*|cleanser|sunscreen|"
         r"spf|makeup|make-up|mascara|lipstick|foundation|concealer|eyeshadow|"
