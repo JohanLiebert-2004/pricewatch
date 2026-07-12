@@ -62,6 +62,24 @@ drift plans a full VM replacement.
   domain support — no need to migrate off Vercel for this, it's free either
   way. Nothing to do until the user picks a name.
 
+### Backups and data-quality safeguards (2026-07-12)
+
+- **Database backups:** OCI runs a daily PostgreSQL 17 `pg_dump` at 03:17 UTC.
+  It uploads a custom-format dump and SHA-256 checksum to a private OCI Object
+  Storage bucket. The VM uses an instance principal with upload access limited
+  to that bucket; the lifecycle policy deletes backups after 30 days. The first
+  backup was verified at 23 MB. A restore drill is still recommended before
+  relying on the backup for incident recovery.
+- **JB Hi-Fi RAM alerts:** the Shopify feed can retain delisted products. The
+  special RAM watcher now live-checks the retailer page and price before sending;
+  dead, unreadable, or mismatched listings are skipped. Alert links open the
+  durable Underpriced history page rather than a retailer page that may expire.
+- **Myer category correction:** bare `Ink` was incorrectly treated as a tech
+  signal. Apparel matching now runs first and includes terms such as `chino`,
+  `vest`, and `blouse`; printer ink requires a specific `ink cartridge` or
+  `ink refill` phrase. Corrected 4,022 existing Myer clothing rows and
+  refreshed the public feeds.
+
 ## Retailers covered (10)
 
 | Retailer     | Method                                              | Notes |
