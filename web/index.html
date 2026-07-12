@@ -99,6 +99,7 @@
       <button class="chip" data-r="sephora" aria-pressed="false">Sephora</button>
       <button class="chip" data-r="chemistwarehouse" aria-pressed="false">Chemist Warehouse</button>
     </div>
+    <div class="store-status" id="storeStatus" hidden></div>
     <div class="barlabel">Category</div>
     <div class="bar" id="cats"></div>
     <div class="barlabel">Sort &amp; Price Range</div>
@@ -121,6 +122,13 @@
       <input type="range" id="minoff" min="0" max="99" step="1" value="0"
              aria-label="Minimum discount percentage">
       <output id="minoffval" for="minoff">any</output>
+    </div>
+    <div class="barlabel">Quick finds</div>
+    <div class="bar quickbar" id="quickFilters">
+      <button class="chip" type="button" data-quick="half" aria-pressed="false">50%+ off</button>
+      <button class="chip" type="button" data-quick="under50" aria-pressed="false">Under $50</button>
+      <button class="chip" type="button" data-quick="fresh" aria-pressed="false">New drops</button>
+      <button class="chip" type="button" data-quick="low30" aria-pressed="false">30-day lows</button>
     </div>
   </div>
   <div class="total" id="total"></div>
@@ -182,11 +190,17 @@ const SORTS = {
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let selRetailers = new Set(), selCats = new Set(), selSubcats = new Set(),
-    minOff = 0, q = "", sort = "deep", pmin = null, pmax = null, fetchSeq = 0;
+    minOff = 0, q = "", sort = "deep", pmin = null, pmax = null,
+    only30DayLow = false, quick = "", fetchSeq = 0;
 const SHARED_CATS = [["tech","Tech"],["home","Home"],["kitchen","Kitchen"],
   ["toys","Toys & Baby"],["clothing","Clothing"],["beauty","Beauty"],
   ["books","Books & Stationery"],["other","Other"]];
 let SUBSTATS = {};   // retailer -> [subcategory labels] desc by item count
+let FRESHNESS = {};
+fetch(`${SUPABASE_URL}/rest/v1/retailer_freshness?select=*`, {headers:HDRS})
+  .then(r=>r.ok ? r.json() : [])
+  .then(rows=>{ for(const row of rows) FRESHNESS[row.retailer] = row;
+    renderStoreStatus(); }).catch(()=>{});
 fetch(`${SUPABASE_URL}/rest/v1/subcategory_stats?select=*&order=items.desc`,
       {headers:HDRS})
   .then(r=>r.json())
@@ -215,6 +229,30 @@ function renderCats(){
 }
 renderCats();
 
+function since(iso){
+  const seconds = Math.max(0, Math.round((Date.now()-new Date(iso))/1000));
+  if(seconds < 90) return "just now";
+  if(seconds < 3600) return `${Math.round(seconds/60)} min ago`;
+  if(seconds < 86400) return `${Math.round(seconds/3600)} hr ago`;
+  return `${Math.round(seconds/86400)} days ago`;
+}
+function renderStoreStatus(){
+  const el = document.getElementById("storeStatus");
+  const retailer = selRetailers.size === 1 ? [...selRetailers][0] : null;
+  const row = retailer && FRESHNESS[retailer];
+  if(!row || !row.last_seen){ el.hidden = true; return; }
+  const fresh = Number(row.fresh_products), total = Number(row.products);
+  el.textContent = `${RETAILER_LABEL[retailer]||retailer}: ${fresh.toLocaleString("en-AU")} current listings · checked ${since(row.last_seen)}` +
+    (fresh < total ? ` (${(total-fresh).toLocaleString("en-AU")} older listings hidden)` : "");
+  el.hidden = false;
+}
+
+function renderQuickFilters(){
+  document.querySelectorAll("#quickFilters .chip").forEach(b=>
+    b.setAttribute("aria-pressed", b.dataset.quick === quick));
+}
+function clearQuick(){ if(quick === "low30") only30DayLow = false; quick = ""; renderQuickFilters(); }
+
 function feedUrl(){
   let u = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
           `&order=${SORTS[sort]}&limit=${LIMIT}`;
@@ -225,6 +263,7 @@ function feedUrl(){
     .map(s=>encodeURIComponent(`"${s}"`)).join(",")})`;   // quoted: labels contain & and spaces
   if(pmin !== null) u += `&price=gte.${pmin}`;
   if(pmax !== null) u += `&price=lte.${pmax}`;
+  if(only30DayLow) u += `&is_30d_low=is.true`;
   if(q){
     // PostgREST or= syntax breaks on , ( ) — strip them; * are wildcards
     const pat = `*${q.replace(/[,()*]/g," ").trim().split(/\s+/).join("*")}*`;
@@ -245,9 +284,9 @@ function thumbSrc(u){
 function cardHtml(d, i){
   const mono = (RETAILER_LABEL[d.retailer]||"?")[0];
   const save = d.reference_price - d.price;
-  const histUrl = `product.html?retailer=${d.retailer}&sku=${encodeURIComponent(d.sku)}`;
+  const histUrl = `product.html?retailer=${encodeURIComponent(d.retailer)}&sku=${encodeURIComponent(d.sku)}`;
   return `<div class="card" style="animation-delay:${Math.min(i*25,350)}ms">
-    <a class="card-link" href="${esc(d.url)}" target="_blank" rel="noopener" aria-label="${esc(d.title)}"></a>
+    <a class="card-link" href="${histUrl}" aria-label="View price history for ${esc(d.title)}"></a>
     <div class="ph">
       <span class="badge ${d.pct_off>=50?"":"mild"}">-${d.pct_off}%</span>
       ${d.image_url
@@ -259,11 +298,13 @@ function cardHtml(d, i){
       <div class="cname">${esc(d.title)}</div>
       <div class="ctags">
         <span class="pill">${esc(d.subcategory || d.category)}</span>
+        ${d.is_30d_low ? `<span class="pill trust">30-day low</span>` : ""}
       </div>
       <div class="cprices"><span class="cnow">${money(d.price)}</span>
         <span class="cwas">${money(d.reference_price)}</span></div>
       <div class="cfoot"><span>${RETAILER_LABEL[d.retailer]||esc(d.retailer)}</span>
         <span class="save">save ${money(save)}</span></div>
+      <div class="trustline">Compared with ${esc(d.reference_source || "recorded price")}</div>
       <a class="track-btn" href="${histUrl}">🔔 Track price &amp; get alerts</a>
     </div>
   </div>`;
@@ -314,6 +355,7 @@ function render(rows, total){
     (selSubcats.size ? ` · ${[...selSubcats].map(esc).join(", ")}` : "") +
     (minOff>0 ? ` · ${minOff}%+ off` : "") +
     (pmin!==null||pmax!==null ? ` · $${pmin??0}–${pmax!==null?"$"+pmax:"any"}` : "") +
+    (only30DayLow ? " · at a 30-day low" : "") +
     ` · ${SORT_LABEL[sort]}` +
     (q ? ` · “${esc(q)}”` : "");
   document.getElementById("total").innerHTML =
@@ -356,6 +398,8 @@ document.getElementById("retailers").addEventListener("click", e=>{
   // would silently keep filtering
   selCats.clear(); selSubcats.clear();
   renderCats();
+  renderStoreStatus();
+  clearQuick();
   refresh();
 });
 document.getElementById("cats").addEventListener("click", e=>{
@@ -366,22 +410,26 @@ document.getElementById("cats").addEventListener("click", e=>{
   else if(sel.has(val)){ sel.delete(val); }
   else{ sel.add(val); }
   renderCats();
+  clearQuick();
   refresh();
 });
 
 document.getElementById("qbar").addEventListener("submit", e=>{
   e.preventDefault();
   q = document.getElementById("q").value.trim();
+  clearQuick();
   refresh();
 });
 document.getElementById("qclear").addEventListener("click", ()=>{
   q = "";
   document.getElementById("q").value = "";
+  clearQuick();
   refresh();
 });
 
 document.getElementById("sort").addEventListener("change", e=>{
   sort = e.target.value;
+  clearQuick();
   refresh();
 });
 const num = v => { const n = Number(v); return v !== "" && isFinite(n) && n >= 0 ? n : null; };
@@ -389,12 +437,32 @@ document.getElementById("pbar").addEventListener("submit", e=>{
   e.preventDefault();
   pmin = num(document.getElementById("pmin").value);
   pmax = num(document.getElementById("pmax").value);
+  clearQuick();
   refresh();
 });
 document.getElementById("pclear").addEventListener("click", ()=>{
   pmin = pmax = null;
   document.getElementById("pmin").value = "";
   document.getElementById("pmax").value = "";
+  clearQuick();
+  refresh();
+});
+
+document.getElementById("quickFilters").addEventListener("click", e=>{
+  const b = e.target.closest(".chip"); if(!b) return;
+  quick = b.dataset.quick;
+  minOff = 0; pmin = pmax = null; only30DayLow = false; sort = "deep";
+  if(quick === "half") minOff = 50;
+  if(quick === "under50"){ pmax = 50; sort = "price_asc"; }
+  if(quick === "fresh") sort = "fresh";
+  if(quick === "low30"){ only30DayLow = true; sort = "fresh"; }
+  document.getElementById("minoff").value = minOff;
+  document.getElementById("minoff").style.setProperty("--fill", `${minOff}%`);
+  document.getElementById("minoffval").textContent = minOff ? `${minOff}%+` : "any";
+  document.getElementById("pmin").value = "";
+  document.getElementById("pmax").value = pmax === null ? "" : pmax;
+  document.getElementById("sort").value = sort;
+  renderQuickFilters();
   refresh();
 });
 
@@ -406,7 +474,7 @@ slider.addEventListener("input", ()=>{
   slider.style.setProperty("--fill", `${v}%`);
   sliderVal.textContent = v === 0 ? "any" : `${v}%+`;
   clearTimeout(sliderTimer);
-  sliderTimer = setTimeout(()=>{ minOff = v; refresh(); }, 250);
+  sliderTimer = setTimeout(()=>{ minOff = v; clearQuick(); refresh(); }, 250);
 });
 
 refresh();

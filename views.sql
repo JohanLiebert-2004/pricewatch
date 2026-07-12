@@ -34,7 +34,9 @@ grant select on deal_feed to anon;
 drop materialized view if exists discount_feed;
 create materialized view discount_feed as
 with hist as (
-  select product_id, max(price) as hi
+  select product_id,
+         max(price) as hi,
+         min(price) filter (where scraped_at > now() - interval '30 days') as low_30
   from price_snapshots
   where scraped_at > now() - interval '90 days'
   group by product_id
@@ -49,6 +51,9 @@ select p.retailer, p.sku, p.title, p.brand,
        ((1 - p.current_price/greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0))) >= 0.8) as error_tier,
        case when coalesce(p.current_rrp,0) >= coalesce(h.hi,0)
             then 'rrp_gap' else 'history_drop' end as signal,
+       case when coalesce(p.current_rrp,0) >= coalesce(h.hi,0)
+            then 'Retailer RRP' else '90-day price high' end as reference_source,
+       (h.low_30 is not null and p.current_price <= h.low_30) as is_30d_low,
        coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at,
        p.first_seen
 from products p
@@ -100,6 +105,32 @@ group by 1, 2;
 create unique index catalogue_stats_pk on catalogue_stats (retailer, category);
 revoke all on catalogue_stats from anon, authenticated;
 grant select on catalogue_stats to anon;
+
+-- Retailer status shown on the homepage after a shopper selects a store.
+-- Keeping it materialized makes the freshness check cheap for every visit.
+do $$
+declare kind "char";
+begin
+  select c.relkind into kind
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relname = 'retailer_freshness';
+  if kind = 'v' then
+    execute 'drop view retailer_freshness';
+  elsif kind = 'm' then
+    execute 'drop materialized view retailer_freshness';
+  end if;
+end $$;
+create materialized view retailer_freshness as
+select retailer,
+       count(*) filter (where current_price is not null) as products,
+       count(*) filter (where current_price is not null
+                          and last_seen > now() - interval '36 hours') as fresh_products,
+       max(last_seen) filter (where current_price is not null) as last_seen
+from products
+group by retailer;
+create unique index retailer_freshness_pk on retailer_freshness (retailer);
+revoke all on retailer_freshness from anon, authenticated;
+grant select on retailer_freshness to anon;
 
 -- Per-store category chips: each retailer's own (native or title-derived)
 -- subcategory labels with item counts, so the site can render a store's chip

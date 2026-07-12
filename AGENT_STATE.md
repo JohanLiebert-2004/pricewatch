@@ -44,6 +44,7 @@ Before changing anything:
 | 12 July Myer category fix | Removed bare `ink` as a tech signal and prioritised expanded apparel terms. Corrected 4,022 existing Myer clothing records and refreshed public feeds; reported Chino now returns `clothing`. |
 | 12 July freshness fix | Public deal feed now excludes products not seen for 36 hours; direct verification found zero stale cards after rebuild. Big W changed from an hourly to a three-hour proxy cadence after 403 blocks; monitor its next scheduled run. |
 
+| 12 July deal trust and discovery | Homepage cards now show whether the current price equals the 30-day low and whether the comparison is retailer RRP or a 90-day observed high. Selecting one retailer shows its last checked time and current listing count; quick filters cover 50%+, under-$50, new drops, and 30-day lows. Card clicks now open the internal history page first. |
 ### Production data correction
 
 Big W SKU `41041` (Harry Potter Hufflepuff skirt) was corrected directly in
@@ -98,6 +99,7 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
 | P5 | Custom domain and Resend sender setup | User | Waiting | Needs a domain choice/purchase and external verification. |
 
 | P6 | Daily Supabase backup to OCI Object Storage | Codex | **Done 12 July** | Private bucket, instance-principal upload, 30-day lifecycle, daily timer, and first dump verified. |
+| P8 | CartSavvy-inspired trust and discovery improvements | Codex | **Done 12 July** | Production views verified through anon API: 14,844 deal cards and 10 retailer freshness rows. |
 ## Handoff notes
 
 - `PROJECT_NOTES.md` contains the long technical history. Treat this document
