@@ -153,6 +153,19 @@ EOF
   - cd /opt/pricewatch && python3 -m venv .venv
   - cd /opt/pricewatch && .venv/bin/pip install --upgrade pip
   - cd /opt/pricewatch && .venv/bin/pip install -r requirements.txt
+  - install -d /usr/share/postgresql-common/pgdg
+  - curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+  - |
+    . /etc/os-release
+    cat > /etc/apt/sources.list.d/pgdg.sources <<EOF
+    Types: deb
+    URIs: https://apt.postgresql.org/pub/repos/apt
+    Suites: $VERSION_CODENAME-pgdg
+    Components: main
+    Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+    EOF
+  - apt-get update
+  - apt-get install -y postgresql-client-17
   - pipx install oci-cli
   - ln -sf /root/.local/bin/oci /usr/local/bin/oci
   - systemctl daemon-reload

@@ -16,7 +16,13 @@ dump_file="${workdir}/pricewatch.dump"
 checksum_file="${workdir}/pricewatch.dump.sha256"
 trap 'rm -rf "${workdir}"' EXIT
 
-pg_dump --dbname="${DATABASE_URL}" --format=custom --no-owner --no-privileges \
+pg_dump_bin="${PG_DUMP:-/usr/lib/postgresql/17/bin/pg_dump}"
+if [ ! -x "${pg_dump_bin}" ]; then
+  pg_dump_bin="$(command -v pg_dump)"
+fi
+
+"${pg_dump_bin}" --version
+"${pg_dump_bin}" --dbname="${DATABASE_URL}" --format=custom --no-owner --no-privileges \
   --file="${dump_file}"
 sha256sum "${dump_file}" > "${checksum_file}"
 
