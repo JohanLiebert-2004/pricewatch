@@ -168,6 +168,7 @@ EOF
   - apt-get install -y postgresql-client-17
   - pipx install oci-cli
   - ln -sf /root/.local/bin/oci /usr/local/bin/oci
+  - chmod 0755 /opt/pricewatch/scripts/backup_postgres_to_oci.sh
   - systemctl daemon-reload
   - systemctl enable --now pricewatch-cycle.timer
   - systemctl enable --now pricewatch-backup.timer

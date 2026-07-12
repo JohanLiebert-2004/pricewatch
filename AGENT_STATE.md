@@ -1,6 +1,6 @@
 # Pricewatch — shared agent state
 
-*Updated: 11 July 2026 AWST. This is the durable summary for Codex and Claude;
+*Updated: 12 July 2026 AWST. This is the durable summary for Codex and Claude;
 it deliberately records decisions and outcomes, not chat transcripts or secrets.*
 
 ## Start here
@@ -17,16 +17,17 @@ Before changing anything:
 ## Current production state
 
 - **Live site:** https://web-pi-blush-48.vercel.app
-- **Production branch/commit:** `master` at `3406c45` — pushed on 11 July
-  2026. The Vercel static frontend remains deployed from `daf6dd7`; newer
-  commits only change the scheduled backend and Supabase views, which were
-  applied directly to production.
+- **Production branch:** `master` is current. The Vercel static frontend
+  remains deployed from `daf6dd7`; later commits change backend, OCI, and
+  Supabase infrastructure and have been applied directly to production.
 - **Hosting:** static `web/` on Vercel. Web Analytics is enabled; its
   cookie-free tracking script is installed on every public page. Dashboard
   reports will only contain visits from after enablement.
 - **Data:** Supabase Postgres; GitHub Actions is the only active crawler.
   OCI hosts the Telegram subscription bot, SSR previews, and image proxy, but
   its old crawler timer remains disabled.
+- **Backups:** a daily Supabase `pg_dump` runs on OCI at 03:17 UTC and uploads
+  to a private Object Storage bucket; the lifecycle rule keeps 30 days.
 - **Retailers:** 10. Telegram item/store subscriptions are live.
 
 ## Latest completed work
@@ -38,6 +39,7 @@ Before changing anything:
 | 11 July homepage stats fix | `catalogue_stats` is now a materialized view, refreshed by each detect run. The public product-total request fell from about 1.75 seconds to about 0.1 seconds after warm-up. |
 | `ef6df9e` | Removed the obsolete local Big W scheduled task and script; made price tracking visible and moved the tracking panel above the chart. |
 | 12 July RAM alert validation | The JB Hi-Fi RAM watcher now re-checks the live retailer product page and price before sending. Dead, unparseable, or price-mismatched listings are skipped; the verified dead `10009166` alert is rejected. |
+| 12 July OCI backups | First verified PostgreSQL 17 dump (23 MB) and SHA-256 checksum uploaded to OCI Object Storage. Daily timer enabled; private bucket lifecycle deletes backups after 30 days. |
 | `40302cb` / `5d5aeb6` | Retailer-native category chips and correct item counts. |
 
 ### Production data correction
@@ -74,7 +76,7 @@ not "fix" its absence.
 | P4 | Consider browser push alerts | Unassigned | Proposed | Build only if user asks; no cookies or third-party tracker. |
 | P5 | Custom domain and Resend sender setup | User | Waiting | Needs a domain choice/purchase and external verification. |
 
-| P6 | Daily Supabase backup to OCI Object Storage | Codex | **In progress** | `infra/oci/`, `scripts/`; create private bucket, 30-day retention, and VM timer. |
+| P6 | Daily Supabase backup to OCI Object Storage | Codex | **Done 12 July** | Private bucket, instance-principal upload, 30-day lifecycle, daily timer, and first dump verified. |
 ## Handoff notes
 
 - `PROJECT_NOTES.md` contains the long technical history. Treat this document
