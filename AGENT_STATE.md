@@ -67,6 +67,24 @@ not "fix" its absence.
   price alerts are paid template messages. Do not start setup without an
   explicit user decision to accept Meta onboarding and message costs.
 
+### Supabase egress quota (12 July)
+
+Supabase emailed: the org blew the free tier's egress quota (grace until
+Aug 11; keep egress under 5.5GB/month). Root cause measured with
+pg_column_size: anomaly.py's `SELECT * FROM products` (62MB x 48 runs/day
+~= 3GB/day) plus per-sweep full-row readbacks in bulk_upsert and
+sku+url fetches in cmd_refresh. Fixed in `2b792e3`: explicit columns
+(62MB -> 1.6MB), cross-retailer matching only when UTC hour %% 6 == 0,
+server-side change detection in a new `_upsert_chunk_pg` (single CTE
+statement, returns changed keys only; both price sides cast to
+numeric(10,2) or float error marks everything changed), sku-only refresh
+bookkeeping, and the cron halved to hourly. Estimated ~0.13GB/day
+(~3.7GB/month) after, vs ~4.5GB/day before. All verified against
+production (synthetic-retailer upsert tests + a real jbhifi refresh).
+**Do not reintroduce `SELECT *` against products, or client-side price
+diffing, without re-checking the egress budget.** If usage still trends
+over, next levers: Pro plan ($25/mo) or further cadence cuts.
+
 ## Task queue
 
 | ID | Task | Owner | Status | Allowed files / notes |
