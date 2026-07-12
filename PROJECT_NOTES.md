@@ -1,6 +1,6 @@
 # Underpriced (Pricewatch) — project notes
 
-*Last updated: 11 July 2026*
+*Last updated: 12 July 2026*
 
 An AU retail price-anomaly tracker. Crawlers watch retailer catalogues,
 an anomaly engine flags big price drops, and a public website shows the
@@ -12,7 +12,7 @@ deals. Everything runs on free tiers.
 ## Architecture
 
 ```
-GitHub Actions (half-hourly crawl matrix + detect job)
+GitHub Actions (hourly crawl matrix + detect job)
         │  scrape / refresh / crawl / detect
         ▼
 Supabase Postgres (Sydney, ap-southeast-2)
@@ -224,8 +224,9 @@ one retailer is selected:
 - Matrix: one refresh + crawl job pair per retailer, batch size for the
   crawl lane is per-retailer (`matrix.crawl_batch || 40`; raised for the
   four retailers with no bulk listing API and no bot protection — Good
-  Guys 500, Chemist Warehouse 500, Supercheap 1000, Myer 1000). Runs every
-  30 min. Detect job follows with Telegram secrets. First-run catalogue
+  Guys 500, Chemist Warehouse 500, Supercheap 1000, Myer 1000). Runs
+  hourly (was 30 min; halved 2026-07-12 for the Supabase egress budget —
+  see the Egress section below). Detect job follows with Telegram secrets. First-run catalogue
   index line stays commented out (`index` was run once per retailer
   manually against Supabase instead — Good Guys 8,629 URLs, Chemist
   Warehouse ~26k, Supercheap ~518k, Myer ~154k).
@@ -241,6 +242,32 @@ one retailer is selected:
   (a JB Hi-Fi RAM listing showing as a "76% off" deal after JB delisted
   it). Fixed with one retry-after-backoff before falling back to
   fail-open in `run.py`'s missing-SKU loop.
+
+## Supabase egress budget (2026-07-12) — DO NOT regress this
+
+Supabase emailed that the org blew the free tier's ~5GB/month egress
+(grace until 11 Aug). Egress = bytes read OUT of Postgres; writes are
+free. The stack was reading ~4.5GB/DAY, almost all of it the pipeline
+re-downloading its own data. Measured with
+`sum(pg_column_size(...))` and fixed in commit `2b792e3`:
+
+| Offender | Was | Now |
+|---|---|---|
+| `anomaly.py` `SELECT * FROM products` per detect | 62MB/run | 1.6MB (seven explicit columns) |
+| Cross-retailer matching (gtin/brand/title for every live product) | ~9MB every run | only in runs where UTC hour % 6 == 0; delisted rows excluded |
+| `bulk_upsert` reading every swept row back to diff prices client-side | ~7MB per Kmart sweep | `_upsert_chunk_pg`: one CTE statement does upsert + old-price diff + snapshot insert server-side, returns changed keys only |
+| `cmd_refresh` fetching sku+url for every tracked product | ~10MB/cycle | sku-only; URLs fetched just for the <= 15 delisting checks |
+| Cron cadence | every 30 min | hourly |
+
+Estimated ~0.13GB/day (~3.7GB/month) after. Rules of thumb this
+encodes: never `SELECT *` from products/price_snapshots in anything that
+runs on a schedule; push row-diffing into the database and return only
+what changed (VALUES payloads in are free); prefer explicit column lists
+sized with `pg_column_size` before adding a new scheduled read. In
+`_upsert_chunk_pg`, both sides of the price comparison are cast to
+`numeric(10,2)` — comparing REAL to numeric raw marks every row changed
+and re-bloats snapshots. If usage still trends over: Pro plan ($25/mo)
+or further cadence cuts.
 
 ## Key decisions
 
