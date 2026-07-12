@@ -42,6 +42,7 @@ Before changing anything:
 | 12 July OCI backups | First verified PostgreSQL 17 dump (23 MB) and SHA-256 checksum uploaded to OCI Object Storage. Daily timer enabled; private bucket lifecycle deletes backups after 30 days. |
 | `40302cb` / `5d5aeb6` | Retailer-native category chips and correct item counts. |
 | 12 July Myer category fix | Removed bare `ink` as a tech signal and prioritised expanded apparel terms. Corrected 4,022 existing Myer clothing records and refreshed public feeds; reported Chino now returns `clothing`. |
+| 12 July freshness fix | Public deal feed now excludes products not seen for 36 hours; direct verification found zero stale cards after rebuild. Big W changed from an hourly to a three-hour proxy cadence after 403 blocks; monitor its next scheduled run. |
 
 ### Production data correction
 
@@ -76,6 +77,7 @@ pg_column_size: anomaly.py's `SELECT * FROM products` (62MB x 48 runs/day
 sku+url fetches in cmd_refresh. Fixed in `2b792e3`: explicit columns
 (62MB -> 1.6MB), cross-retailer matching only when UTC hour %% 6 == 0,
 server-side change detection in a new `_upsert_chunk_pg` (single CTE
+| P7 | Verify Big W three-hour proxy refresh | Codex | Waiting for scheduled run | Next scheduled Big W attempt after the 12 July cadence fix; inspect its Actions log before changing proxy or scraper settings. |
 statement, returns changed keys only; both price sides cast to
 numeric(10,2) or float error marks everything changed), sku-only refresh
 bookkeeping, and the cron halved to hourly. Estimated ~0.13GB/day

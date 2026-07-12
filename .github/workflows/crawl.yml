@@ -88,11 +88,24 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
+      - name: Big W cadence gate
+        id: bigw_cadence
+        run: |
+          if [[ "${{ matrix.retailer }}" != "bigw" || "${{ github.event_name }}" != "schedule" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif (( 10#$(date -u +%H) % 3 == 0 )); then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping Big W this hour; its residential-proxy refresh runs every three hours."
+          fi
       # First run only: uncomment to load full catalogues into the queue.
       # - run: python run.py index all
       - name: Bulk price refresh (${{ matrix.retailer }})
+        if: matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true'
         run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }} || true
       - name: Product-page enrichment (${{ matrix.retailer }})
+        if: matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true'
         run: python run.py crawl ${{ matrix.retailer }} --batch ${{ matrix.crawl_batch || 40 }} || true
 
   detect:

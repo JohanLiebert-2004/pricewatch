@@ -57,7 +57,9 @@ where p.current_price is not null
   and p.current_price > 0     -- $0 = sold-out placeholder, not a 100% discount
   and greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)) >= 40
   and greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)) > p.current_price
-  and p.last_seen > now() - interval '10 days'
+  -- A retailer's old catalogue record is not a live deal. Each fast feed
+  -- runs at least daily; keep only items confirmed in the last 36 hours.
+  and p.last_seen > now() - interval '36 hours'
   and round((1 - p.current_price/greatest(coalesce(p.current_rrp,0), coalesce(h.hi,0)))*100) >= 1;
 create unique index discount_feed_pk on discount_feed (retailer, sku);
 revoke all on discount_feed from anon, authenticated;
