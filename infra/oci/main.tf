@@ -29,10 +29,11 @@ locals {
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[var.availability_domain_index].name
   image_id            = var.image_ocid != "" ? var.image_ocid : data.oci_core_images.ubuntu.images[0].id
   cloud_init = templatefile("${path.module}/cloud-init.yaml.tftpl", {
-    repo_url       = var.repo_url
-    repo_branch    = var.repo_branch
-    site_url       = var.site_url
-    crawl_schedule = var.crawl_schedule
+    repo_url           = var.repo_url
+    repo_branch        = var.repo_branch
+    site_url           = var.site_url
+    crawl_schedule     = var.crawl_schedule
+    backup_bucket_name = var.backup_bucket_name
   })
 }
 
@@ -153,4 +154,48 @@ resource "oci_core_instance" "pricewatch" {
     # full instance replacement - destroying the provisioned VM and its IP.
     ignore_changes = [metadata]
   }
+}
+data "oci_objectstorage_namespace" "pricewatch" {
+  compartment_id = var.compartment_ocid
+}
+
+resource "oci_objectstorage_bucket" "pricewatch_backups" {
+  compartment_id = var.compartment_ocid
+  namespace      = data.oci_objectstorage_namespace.pricewatch.namespace
+  name           = var.backup_bucket_name
+  access_type    = "NoPublicAccess"
+  storage_tier   = "Standard"
+  versioning     = "Enabled"
+}
+
+resource "oci_objectstorage_object_lifecycle_policy" "pricewatch_backups" {
+  namespace = data.oci_objectstorage_namespace.pricewatch.namespace
+  bucket    = oci_objectstorage_bucket.pricewatch_backups.name
+
+  rules {
+    name        = "delete-daily-backups-after-30-days"
+    action      = "DELETE"
+    target      = "objects"
+    time_amount = 30
+    time_unit   = "DAYS"
+    is_enabled  = true
+  }
+}
+
+resource "oci_identity_dynamic_group" "pricewatch_backup_writer" {
+  compartment_id = var.tenancy_ocid
+  name           = "pricewatch-backup-writer"
+  description    = "Lets the Pricewatch VM upload database backups only."
+  matching_rule  = "All {instance.id = '${oci_core_instance.pricewatch.id}'}"
+}
+
+resource "oci_identity_policy" "pricewatch_backup_writer" {
+  compartment_id = var.tenancy_ocid
+  name           = "pricewatch-backup-writer"
+  description    = "Least-privilege Object Storage access for Pricewatch backups."
+  statements = [
+    "Allow dynamic-group ${oci_identity_dynamic_group.pricewatch_backup_writer.name} to read buckets in compartment id ${var.compartment_ocid}",
+    "Allow dynamic-group ${oci_identity_dynamic_group.pricewatch_backup_writer.name} to manage objects in compartment id ${var.compartment_ocid} where target.bucket.name = '${oci_objectstorage_bucket.pricewatch_backups.name}'",
+    "Allow service objectstorage-ap-sydney-1 to manage object-family in compartment id ${var.compartment_ocid} where any {request.permission='BUCKET_INSPECT', request.permission='BUCKET_READ', request.permission='OBJECT_INSPECT', request.permission='OBJECT_DELETE', request.permission='OBJECT_VERSION_DELETE'}"
+  ]
 }

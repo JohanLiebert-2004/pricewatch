@@ -74,6 +74,7 @@ not "fix" its absence.
 | P4 | Consider browser push alerts | Unassigned | Proposed | Build only if user asks; no cookies or third-party tracker. |
 | P5 | Custom domain and Resend sender setup | User | Waiting | Needs a domain choice/purchase and external verification. |
 
+| P6 | Daily Supabase backup to OCI Object Storage | Codex | **In progress** | `infra/oci/`, `scripts/`; create private bucket, 30-day retention, and VM timer. |
 ## Handoff notes
 
 - `PROJECT_NOTES.md` contains the long technical history. Treat this document

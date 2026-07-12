@@ -89,3 +89,8 @@ variable "crawl_schedule" {
   type        = string
   default     = "*:0/30"
 }
+variable "backup_bucket_name" {
+  description = "Private OCI Object Storage bucket for daily database backups."
+  type        = string
+  default     = "pricewatch-database-backups"
+}

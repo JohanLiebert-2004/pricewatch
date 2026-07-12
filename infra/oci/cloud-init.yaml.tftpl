@@ -10,6 +10,8 @@ packages:
   - curl
   - jq
   - util-linux
+  - postgresql-client
+  - pipx
 
 write_files:
 
@@ -87,6 +89,44 @@ write_files:
       [Install]
       WantedBy=timers.target
 
+  - path: /etc/pricewatch-backup.env
+    owner: root:root
+    permissions: '0600'
+    content: |
+      OCI_BACKUP_BUCKET=${backup_bucket_name}
+
+  - path: /etc/systemd/system/pricewatch-backup.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Back up Pricewatch Supabase database to OCI Object Storage
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      User=root
+      EnvironmentFile=/etc/pricewatch-backup.env
+      ExecStart=/opt/pricewatch/scripts/backup_postgres_to_oci.sh
+      TimeoutStartSec=1800
+      Nice=10
+
+  - path: /etc/systemd/system/pricewatch-backup.timer
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Run the Pricewatch database backup daily
+
+      [Timer]
+      OnCalendar=*-*-* 03:17:00 UTC
+      Persistent=true
+      RandomizedDelaySec=300
+
+      [Install]
+      WantedBy=timers.target
+
 runcmd:
   - fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
   - chmod 600 /swapfile
@@ -113,6 +153,9 @@ EOF
   - cd /opt/pricewatch && python3 -m venv .venv
   - cd /opt/pricewatch && .venv/bin/pip install --upgrade pip
   - cd /opt/pricewatch && .venv/bin/pip install -r requirements.txt
+  - pipx install oci-cli
+  - ln -sf /root/.local/bin/oci /usr/local/bin/oci
   - systemctl daemon-reload
   - systemctl enable --now pricewatch-cycle.timer
+  - systemctl enable --now pricewatch-backup.timer
   - systemctl start --no-block pricewatch-cycle.service

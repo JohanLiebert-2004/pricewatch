@@ -1,0 +1,12 @@
+[Unit]
+Description=Back up Pricewatch Supabase database to OCI Object Storage
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/pricewatch-backup.env
+ExecStart=/opt/pricewatch/scripts/backup_postgres_to_oci.sh
+TimeoutStartSec=1800
+Nice=10
