@@ -1,12 +1,4 @@
 {
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "has": [{"type": "host", "value": "www.dealwatch.com.au"}],
-      "destination": "https://dealwatch.com.au/$1",
-      "permanent": true
-    }
-  ],
   "rewrites": [
     {
       "source": "/p/:retailer/:sku",
