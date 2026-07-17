@@ -277,7 +277,7 @@ SITEMAP_PAGE_SIZE = 1_000  # Supabase/PostgREST enforces a hard 1000-row
                             # leave gaps between pages instead of increasing
                             # rows returned. Confirmed live 17 July: a
                             # limit=5000 request still came back as 1000 rows.
-SITEMAP_PAGE_COUNT = 5
+SITEMAP_PAGE_COUNT = 25
 SITEMAP_TTL = 24 * 3600  # cache once daily: enough freshness without egress churn
 
 
