@@ -1,10 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-AU">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dealwatch — Australian Price Drop Tracker</title>
 <meta name="description" content="A fast-moving view of notable price drops across major Australian retailers, with current prices, discount history and watch alerts.">
+<link rel="canonical" href="https://dealwatch.com.au/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Dealwatch">
+<meta property="og:title" content="Dealwatch — Australian Price Drop Tracker">
+<meta property="og:description" content="A fast-moving view of notable price drops across major Australian retailers, with current prices, discount history and watch alerts.">
+<meta property="og:url" content="https://dealwatch.com.au/">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebSite","name":"Dealwatch","url":"https://dealwatch.com.au/","description":"A fast-moving view of notable price drops across major Australian retailers.","potentialAction":{"@type":"SearchAction","target":"https://dealwatch.com.au/search.html?q={search_term_string}","query-input":"required name=search_term_string"}}
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -284,7 +294,7 @@ function thumbSrc(u){
 function cardHtml(d, i){
   const mono = (RETAILER_LABEL[d.retailer]||"?")[0];
   const save = d.reference_price - d.price;
-  const histUrl = `product.html?retailer=${encodeURIComponent(d.retailer)}&sku=${encodeURIComponent(d.sku)}`;
+  const histUrl = `/p/${encodeURIComponent(d.retailer)}/${encodeURIComponent(d.sku)}`;
   return `<div class="card" style="animation-delay:${Math.min(i*25,350)}ms">
     <a class="card-link" href="${histUrl}" aria-label="View price history for ${esc(d.title)}"></a>
     <div class="ph">
@@ -319,7 +329,7 @@ function recentItems(){
 }
 function recentHtml(p){
   const store = RETAILER_LABEL[p.retailer] || p.retailer;
-  const href = `product.html?retailer=${encodeURIComponent(p.retailer)}&sku=${encodeURIComponent(p.sku)}`;
+  const href = `/p/${encodeURIComponent(p.retailer)}/${encodeURIComponent(p.sku)}`;
   const image = p.image_url ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt="">`
     : `<div class="recentthumb">${esc(store[0] || "?")}</div>`;
   return `<a class="recentcard" href="${href}">${image}<div><div class="recentname">${esc(p.title)}</div>

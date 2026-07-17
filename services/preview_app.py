@@ -22,8 +22,10 @@ website (read-only by RLS) - no DB credentials needed in this process.
 """
 import hashlib
 import html
+import json
 import os
 import re
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -104,6 +106,29 @@ async def preview(retailer: str, sku: str):
         if p.get("current_price") else "",
         '<meta property="product:price:currency" content="AUD">',
     ]))
+
+    if p.get("current_price"):
+        jsonld = {
+            "@context": "https://schema.org",
+            "@type": "Product",
+            "name": p["title"],
+            "url": canonical,
+            "offers": {
+                "@type": "Offer",
+                "price": f"{float(p['current_price']):.2f}",
+                "priceCurrency": "AUD",
+                "availability": "https://schema.org/InStock",
+                "url": p.get("url") or canonical,
+                "seller": {"@type": "Organization", "name": RETAILER_LABEL[retailer]},
+            },
+        }
+        if image:
+            jsonld["image"] = image
+        if p.get("brand"):
+            jsonld["brand"] = {"@type": "Brand", "name": p["brand"]}
+        meta += (f'\n<script type="application/ld+json">'
+                 f'{json.dumps(jsonld).replace("</", "<\\/")}</script>')
+
     out = template.replace("<title>", f"{meta}\n<title>", 1)
     out = re.sub(r"<title>.*?</title>", f"<title>{e(title)}</title>", out,
                  count=1, flags=re.S)
@@ -137,6 +162,37 @@ async def img(u: str = Query(..., max_length=1000)):
     type_f.write_text(ctype)
     return Response(r.content, media_type=ctype,
                     headers={"Cache-Control": "public, max-age=2592000, immutable"})
+
+
+SITEMAP_CACHE = CACHE_DIR / "sitemap-products.xml"
+SITEMAP_TTL = 6 * 3600  # matches the hourly crawl cadence with headroom; keeps
+                         # this off the Supabase egress budget on repeat hits
+
+
+@app.get("/sitemap-products.xml")
+async def sitemap_products():
+    if SITEMAP_CACHE.exists() and time.time() - SITEMAP_CACHE.stat().st_mtime < SITEMAP_TTL:
+        return Response(SITEMAP_CACHE.read_bytes(), media_type="application/xml")
+    r = await client.get(
+        f"{SUPABASE_URL}/rest/v1/product_search",
+        params={"select": "retailer,sku,price_updated_at",
+                "order": "price_updated_at.desc", "limit": 5000},
+        headers={"apikey": SUPABASE_ANON_KEY,
+                 "Authorization": f"Bearer {SUPABASE_ANON_KEY}"})
+    rows = r.json() if r.status_code == 200 else []
+    e = html.escape
+    urls = "\n".join(
+        f"  <url><loc>{e(SITE_URL)}/p/{e(row['retailer'])}/{e(row['sku'])}</loc>"
+        f"<lastmod>{e(row['price_updated_at'][:10])}</lastmod></url>"
+        for row in rows if row.get("retailer") and row.get("sku"))
+    body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            f"{urls}\n</urlset>\n").encode()
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = SITEMAP_CACHE.with_suffix(".tmp")
+    tmp.write_bytes(body)
+    tmp.replace(SITEMAP_CACHE)
+    return Response(body, media_type="application/xml")
 
 
 @app.get("/healthz")
