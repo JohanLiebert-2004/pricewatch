@@ -30,7 +30,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 
 SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co"
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
@@ -84,6 +84,24 @@ def _product_path(retailer: str, sku: str) -> str:
     return f"/p/{quote(retailer, safe='')}/{quote(str(sku), safe='')}"
 
 
+def _base_origin(request: Request) -> str:
+    """The origin that actually served this request, for the <base> tag.
+
+    Must NOT be hardcoded to SITE_URL: the page's CSP sends
+    `base-uri 'self'`, so a <base href> pointing at a different origin
+    than the one the browser thinks it's on gets silently blocked,
+    breaking every relative resource (style.css, etc.) on the page. This
+    bit a real user 17 July when a www->apex redirect briefly lapsed and
+    www-served pages got a base tag pointing at the bare apex - a
+    different origin under CSP. Deriving it from the actual request
+    means it's correct regardless of which host (apex, www, or a future
+    alias) the request came in on.
+    """
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    return f"{proto}://{host}" if host else SITE_URL
+
+
 def _landing_card(row: dict) -> str:
     retailer = str(row.get("retailer") or "")
     sku = str(row.get("sku") or "")
@@ -128,7 +146,7 @@ async def _fetch_landing_deals(field: str, value: str) -> list[dict]:
     return r.json()
 
 
-async def _landing_page(kind: str, value: str):
+async def _landing_page(request: Request, kind: str, value: str):
     if kind == "category":
         label = CATEGORY_LABEL.get(value)
         field = "category"
@@ -156,7 +174,7 @@ async def _landing_page(kind: str, value: str):
               "name": title, "url": canonical, "description": description,
               "mainEntity": {"@type": "ItemList", "itemListElement": items}}
     template = LANDING_TEMPLATE_PATH.read_text(encoding="utf-8")
-    rendered = (template.replace("{{base_url}}", html.escape(SITE_URL, quote=True))
+    rendered = (template.replace("{{base_url}}", html.escape(_base_origin(request), quote=True))
                 .replace("{{title}}", html.escape(title, quote=True))
                 .replace("{{description}}", html.escape(description, quote=True))
                 .replace("{{canonical}}", html.escape(canonical, quote=True))
@@ -169,16 +187,16 @@ async def _landing_page(kind: str, value: str):
 
 
 @app.get("/deals/{category}")
-async def deals_landing(category: str):
-    return await _landing_page("category", category)
+async def deals_landing(request: Request, category: str):
+    return await _landing_page(request, "category", category)
 
 
 @app.get("/retailers/{retailer}")
-async def retailer_landing(retailer: str):
-    return await _landing_page("retailer", retailer)
+async def retailer_landing(request: Request, retailer: str):
+    return await _landing_page(request, "retailer", retailer)
 
 @app.get("/p/{retailer}/{sku}")
-async def preview(retailer: str, sku: str):
+async def preview(request: Request, retailer: str, sku: str):
     if retailer not in RETAILER_LABEL or not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", sku):
         raise HTTPException(404)
     p = await fetch_product(retailer, sku)
@@ -198,7 +216,7 @@ async def preview(retailer: str, sku: str):
 
     e = html.escape
     meta = "\n".join(filter(None, [
-        f'<base href="{SITE_URL}/">',
+        f'<base href="{_base_origin(request)}/">',
         f'<link rel="canonical" href="{e(canonical)}">',
         f'<meta name="description" content="{e(desc)}">',
         f'<meta property="og:type" content="product">',
