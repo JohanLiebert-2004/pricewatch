@@ -1,13 +1,20 @@
-# Underpriced (Pricewatch) — project notes
+# Dealwatch (Pricewatch) — project notes
 
-*Last updated: 12 July 2026*
+*Last updated: 17 July 2026*
 
 An AU retail price-anomaly tracker. Crawlers watch retailer catalogues,
 an anomaly engine flags big price drops, and a public website shows the
 deals. Everything runs on free tiers.
 
-**Live site:** https://web-pi-blush-48.vercel.app
+**Live site:** https://dealwatch.com.au (custom domain, live 17 July;
+https://web-pi-blush-48.vercel.app still resolves to the same deployment)
 **Repo:** https://github.com/JohanLiebert-2004/pricewatch (public)
+
+The product was called "Underpriced" until 17 July 2026, when it was
+rebranded to **Dealwatch** to match the purchased domain (commit `7245560`).
+If "Underpriced" turns up anywhere in code, copy, or a commit message after
+that point, it's a regression — grep the repo for it before trusting old
+docs or memory.
 
 ## Architecture
 
@@ -286,6 +293,56 @@ sized with `pg_column_size` before adding a new scheduled read. In
 `numeric(10,2)` — comparing REAL to numeric raw marks every row changed
 and re-bloats snapshots. If usage still trends over: Pro plan ($25/mo)
 or further cadence cuts.
+
+## Custom domain, rebrand, and SEO (2026-07-17)
+
+The user bought `dealwatch.com.au`. Wired up end to end:
+
+- Added apex + `www` to the Vercel `web` project; DNS A records point at
+  `76.76.21.21`. SSL issued and verified. `SITE_URL` updated in **two**
+  separate places that don't share state — the GitHub Actions secret and
+  `/opt/pricewatch.env` on the OCI VM — both had to be changed by hand.
+- Renamed the product Underpriced → Dealwatch everywhere (see the note at
+  the top of this file), including the `underpriced_recent` →
+  `dealwatch_recent` localStorage key shared between `index.html` (reads)
+  and `product.html` (writes) — these two must stay in sync if either
+  changes again.
+- Added `robots.txt`, a sitemap index (`web/sitemap.xml`) referencing a
+  static `web/sitemap-pages.xml` and a **dynamic**
+  `sitemap-products.xml` served from OCI's `preview_app.py` — deliberately
+  capped at 5,000 URLs and disk-cached 6h so it doesn't reopen the egress
+  problem above.
+- Added canonical/Open Graph/Twitter/JSON-LD tags site-wide (`WebSite` +
+  `SearchAction` on the homepage; `Product` + `Offer` on SSR product
+  pages). `search.html` now actually handles `?q=` so the SearchAction
+  isn't decorative.
+- Fixed a real bug found while doing this: internal links from the
+  homepage/catalogue/search cards pointed at
+  `product.html?retailer=&sku=` — a client-rendered URL with **no**
+  server-side meta tags — instead of the SSR'd `/p/:retailer/:sku` route.
+  Google crawls what's actually linked on the page, so this meant every
+  discovered product URL had an empty JS-shell title/description. All
+  internal links now point at `/p/:retailer/:sku`.
+- Google Search Console submission is still unstarted — needs the user's
+  own Google account. Ranking for competitive terms takes months of
+  authority-building beyond what's fixed here; that's a separate,
+  longer-running effort.
+
+**Also found and fixed the same day:** the OCI VM was several commits
+behind (`git pull` had not been run there since an earlier session), so it
+was silently serving the old brand and the old `SITE_URL` even after the
+repo and Vercel deploy looked current. The VM does not auto-deploy — see
+`AGENT_STATE.md`'s handoff notes for the check-before-you-trust-it rule.
+
+**Also fixed:** `scrapers/base.py`'s default JSON-LD parser never read a
+product's `image` field, so Myer (which has no bulk-listing lane — its
+`refresh` step is a no-op) had zero product images, ever. Added a small
+`_image()` helper and wired it in; existing rows self-heal via the
+`COALESCE(excluded.image_url, products.image_url)` already in both upsert
+paths, verified live against a real crawl batch. Big W's bulk
+`refresh_listings` lane builds records from listing JSON directly and
+still bypasses this fix — flagged as task P9 in `AGENT_STATE.md`, not
+patched blind.
 
 ## Key decisions
 

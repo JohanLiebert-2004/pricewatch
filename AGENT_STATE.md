@@ -1,6 +1,6 @@
 # Pricewatch — shared agent state
 
-*Updated: 12 July 2026 AWST. This is the durable summary for Codex and Claude;
+*Updated: 17 July 2026 AWST. This is the durable summary for Codex and Claude;
 it deliberately records decisions and outcomes, not chat transcripts or secrets.*
 
 ## Start here
@@ -16,10 +16,17 @@ Before changing anything:
 
 ## Current production state
 
-- **Live site:** https://web-pi-blush-48.vercel.app
+- **Live site:** https://dealwatch.com.au (custom domain, live 17 July - see
+  the "Custom domain + rebrand" entry below). The old
+  https://web-pi-blush-48.vercel.app alias still resolves to the same
+  deployment and is not being removed.
+- **Brand:** the site is called **Dealwatch**, not Underpriced - it was
+  renamed 17 July to match the purchased domain. If you see "Underpriced" in
+  any file, that's stale; it should not exist anywhere after commit `7245560`.
 - **Production branch:** `master` is current. The Vercel static frontend
-  remains deployed from `daf6dd7`; later commits change backend, OCI, and
-  Supabase infrastructure and have been applied directly to production.
+  is deployed from `3892a26` (17 July SEO work); later commits change
+  backend, OCI, and Supabase infrastructure and have been applied directly to
+  production.
 - **Hosting:** static `web/` on Vercel. Web Analytics is enabled; its
   cookie-free tracking script is installed on every public page. Dashboard
   reports will only contain visits from after enablement.
@@ -45,6 +52,9 @@ Before changing anything:
 | 12 July freshness fix | Public deal feed now excludes products not seen for 36 hours; direct verification found zero stale cards after rebuild. Big W changed from an hourly to a three-hour proxy cadence after 403 blocks; monitor its next scheduled run. |
 
 | 12 July deal trust and discovery | Homepage cards now show whether the current price equals the 30-day low and whether the comparison is retailer RRP or a 90-day observed high. Selecting one retailer shows its last checked time and current listing count; quick filters cover 50%+, under-$50, new drops, and 30-day lows. Card clicks now open the internal history page first. |
+| 17 July custom domain + rebrand (`7245560`) | User bought `dealwatch.com.au`. Added to the Vercel `web` project (apex + www), DNS A records pointed at `76.76.21.21`, SSL issued and verified live. Site renamed Underpriced -> Dealwatch everywhere: HTML titles/meta/logo/footer, the `underpriced_recent` -> `dealwatch_recent` localStorage key (index.html and product.html both changed together - **do not let these drift apart**, product.html writes it and index.html reads it), and user-facing strings in `services/preview_app.py`, `services/telegram_bot.py`, `watch_alerts.py`. `SITE_URL` updated in the GitHub secret **and** separately in `/opt/pricewatch.env` on the OCI VM (these are two different places that both need updating - the VM does not read the GitHub secret). Verified live: canonical/og:url on a real `/p/bigw/...` preview page now show `dealwatch.com.au`. |
+| 17 July SEO pass (`3892a26`) | Added `robots.txt`, a sitemap index (`sitemap.xml`) referencing a static `sitemap-pages.xml` plus a **dynamic** `sitemap-products.xml` served from the OCI `preview_app.py` (queries `product_search` for `retailer,sku,price_updated_at` only, capped at 5000 rows, disk-cached 6h - deliberately cheap against the Supabase egress budget, see the egress section below). Added canonical/OG/Twitter/JSON-LD (`WebSite`+`SearchAction` on the homepage, `Product`+`Offer` on preview pages) to every page. **Important fix:** internal product links across `index.html`/`catalogue.html`/`search.html` were pointing at `product.html?retailer=&sku=` (a client-rendered URL with zero server-side meta) instead of the SSR'd `/p/:retailer/:sku` route - switched all of them, since this is what Google actually crawls from on-page links. `search.html` now reads `?q=` on load so the SearchAction schema is functional, not decorative. `growth.html` marked `noindex` (internal stats page, low search value, deliberately excluded from indexing budget). |
+| 17 July Myer image fix (`30ee38d`) | Root cause of "Myer photos not showing": `scrapers/base.py`'s default JSON-LD parser read price/rrp/brand/gtin from a product's schema.org block but never its `image` field, so `image_url` stayed `NULL` forever for any retailer with no scraper-level override. Myer has zero bulk-listing lane (its `refresh` step is a documented no-op), so this was its *only* ingestion path - 100% of Myer images were missing. Added a generic `_image()` helper (handles string / list / ImageObject) and wired it into the shared `parse_product`. Existing rows self-heal: both `db.upsert` and `_upsert_chunk_pg` already do `image_url=COALESCE(excluded.image_url, products.image_url)`, so no backfill migration was needed - the next Myer crawl pass (full sweep ~3 days) fills them in. Verified live: a 5-URL test crawl (`python run.py crawl myer --batch 5`) produced a row with a real `myer-media.com.au` image_url immediately after the fix. **Known follow-up, not fixed:** Big W's bulk `refresh_listings` lane builds `ProductRecord`s directly from its Next.js listing JSON (`_record_from_listing` in `scrapers/bigw.py`) and never calls the shared `parse_product` at all, so it's unaffected by this fix and still has no image field wired up. I did not blind-patch it - didn't have a confirmed field name from a live listing payload (direct requests to bigw.com.au are blocked per the proxy policy, and I wasn't going to burn Webshare proxy budget just to inspect a field name). Whoever picks this up next should fetch one listing page through the approved proxy path and check for an image/media key on `item`, then mirror the `_image()` pattern above into `_record_from_listing`. |
 ### Production data correction
 
 Big W SKU `41041` (Harry Potter Hufflepuff skirt) was corrected directly in
@@ -96,10 +106,12 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
 | P2 | Test Telegram subscription end-to-end from a real user account | User | Waiting for user action | User must press Start in Telegram. |
 | P3 | Big W proxy 402 | Claude | **Resolved 11 July** | Root cause: stale proxy *username* (password was current) - Webshare rotated it; every CONNECT got 402 from both CI and local, so Big W silently stopped crawling right after setup (dashboard's 0.02GB usage corroborates). Fixed via the Webshare API (key in local .env as WEBSHARE_API_KEY; user should rotate it - it was pasted in chat): PROXY_URL now `<user>-AU-rotate@p.webshare.io:80`, updated in local .env + GitHub secret + VM env. Also fixed daf6dd7's cents regression (JSON-LD price is DOLLARS; only page-state wasPrice is cents - commit 96a5175); no bad rows were written because the proxy was down the whole time. Verified live: SKU 41041 parses $11.00 / rrp $35.80 through the proxy. Workflow run 29147446498 kicked to confirm in CI. |
 | P4 | Consider browser push alerts | Unassigned | Proposed | Build only if user asks; no cookies or third-party tracker. |
-| P5 | Custom domain and Resend sender setup | User | Waiting | Needs a domain choice/purchase and external verification. |
+| P5 | Custom domain setup | Claude | **Domain done 17 July; Resend sender still open** | dealwatch.com.au live on Vercel with SSL, `SITE_URL` updated in both the GitHub secret and the OCI env file. Resend sender-domain verification is still unstarted and needs the user to sign up/verify at resend.com themselves - watch alert emails remain a no-op until that's done (see CLAUDE.md's "what the human must do" section). |
 
 | P6 | Daily Supabase backup to OCI Object Storage | Codex | **Done 12 July** | Private bucket, instance-principal upload, 30-day lifecycle, daily timer, and first dump verified. |
 | P8 | CartSavvy-inspired trust and discovery improvements | Codex | **Done 12 July** | Production views verified through anon API: 14,844 deal cards and 10 retailer freshness rows. |
+| P9 | Big W bulk-listing lane has no product images | Unassigned | Open | `scrapers/bigw.py`'s `_record_from_listing` builds `ProductRecord`s from Next.js listing JSON directly, bypassing the JSON-LD image fix in commit `30ee38d`. Needs a confirmed image/media field name from a real listing payload (fetch via the approved Webshare proxy, not a bare request - direct hits get 403'd) before patching. |
+| P10 | SEO follow-through: Google Search Console | User | Waiting | Site now has robots.txt/sitemap/canonical/OG/JSON-LD (commit `3892a26`), but nobody has submitted the sitemap to Search Console or verified domain ownership there - that needs the user's own Google account login. Ranking for competitive terms also takes months of authority-building beyond on-page technical SEO; set that expectation if asked about timeline. |
 ## Handoff notes
 
 - `PROJECT_NOTES.md` contains the long technical history. Treat this document
@@ -109,6 +121,20 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
 - The user permits normal repo, GitHub, Vercel, and production changes needed
   for requested work; still do not make irreversible billing, domain purchase,
   account, or legal/communications-policy decisions without a direct request.
+- **The OCI VM does not auto-deploy.** `git push` to `master` changes nothing
+  there until someone SSHes in, runs `git pull`, and restarts
+  `pricewatch-web`/`pricewatch-bot`. On 17 July it was found several commits
+  behind (`c2b4119`, from an earlier session) - serving stale HTML/branding
+  and a stale `SITE_URL` the whole time despite the repo looking current.
+  **Check `ssh ubuntu@159.13.59.184 "cd /opt/pricewatch && git log -1"`
+  against `origin/master` at the start of any session that touches
+  `services/preview_app.py`, `services/telegram_bot.py`, or anything the OCI
+  services serve/read (including `web/product.html`, which `preview_app.py`
+  reads directly off disk).** SSH access is IP-allowlisted in the OCI
+  security list (`infra/oci/terraform.tfvars`, gitignored) - if it times out,
+  the deployer's public IP has probably changed since the list was last
+  applied; `terraform plan`/`apply` after updating `ssh_allowed_cidr` fixes it
+  with a clean single-rule diff, no instance recreate.
 
 ## End-of-session checklist
 
