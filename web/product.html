@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-AU">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -293,7 +293,7 @@ async function load(){
   main.innerHTML = `
     <div class="pblock">
       <div class="pthumb">${p.image_url
-        ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt=""
+        ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt="${esc(p.title)}"
              onerror="this.outerHTML='<span class=mono>${store[0]}</span>'">`
         : `<span class="mono">${store[0]}</span>`}</div>
       <div class="pinfo">

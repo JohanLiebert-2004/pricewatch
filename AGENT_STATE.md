@@ -111,7 +111,7 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
 | P6 | Daily Supabase backup to OCI Object Storage | Codex | **Done 12 July** | Private bucket, instance-principal upload, 30-day lifecycle, daily timer, and first dump verified. |
 | P8 | CartSavvy-inspired trust and discovery improvements | Codex | **Done 12 July** | Production views verified through anon API: 14,844 deal cards and 10 retailer freshness rows. |
 | P9 | Big W bulk-listing lane has no product images | Unassigned | Open | `scrapers/bigw.py`'s `_record_from_listing` builds `ProductRecord`s from Next.js listing JSON directly, bypassing the JSON-LD image fix in commit `30ee38d`. Needs a confirmed image/media field name from a real listing payload (fetch via the approved Webshare proxy, not a bare request - direct hits get 403'd) before patching. |
-| P10 | SEO follow-through: Google Search Console | User | Waiting | Site now has robots.txt/sitemap/canonical/OG/JSON-LD (commit `3892a26`), but nobody has submitted the sitemap to Search Console or verified domain ownership there - that needs the user's own Google account login. Ranking for competitive terms also takes months of authority-building beyond on-page technical SEO; set that expectation if asked about timeline. |
+| P10 | SEO follow-through: domain, crawlability, and Search Console readiness | Codex | In progress | Fixing `web/` and `services/preview_app.py`: canonical-host redirect, sitemap coverage, noindex conflict, SSR retailer/category landing pages, and metadata. Search Console ownership still requires the user's Google account. |
 ## Handoff notes
 
 - `PROJECT_NOTES.md` contains the long technical history. Treat this document

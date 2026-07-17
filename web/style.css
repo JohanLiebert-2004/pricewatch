@@ -320,3 +320,12 @@ footer{
   .row.media > div:not(.thumb), .row.media .price{grid-column:2}
   .row.plain.media .price{grid-column:2}
 }
+
+/* ---------- crawlable discovery pages ---------- */
+.discovery,.method{margin:34px 0;padding:22px;background:var(--card);border:1px solid var(--hair);border-radius:16px;box-shadow:var(--shadow)}
+.discovery h2,.method h2,.section-title{margin:0;font-size:20px;letter-spacing:-.02em}
+.discovery p,.method p,.landing-note{color:var(--muted);margin:8px 0 0;line-height:1.7}
+.landing-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.landing-links a{border:1px solid var(--hair);border-radius:999px;padding:8px 13px;background:var(--paper);font-size:13px;font-weight:700;text-decoration:none;color:var(--ink)}
+.landing-links a:hover{border-color:var(--flag);color:var(--flag)}
+.section-title{margin-top:30px}

@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dealwatch — Australian Price Drop Tracker</title>
-<meta name="description" content="A fast-moving view of notable price drops across major Australian retailers, with current prices, discount history and watch alerts.">
+<title>Compare Australian Prices &amp; Track Price Drops | Dealwatch</title>
+<meta name="description" content="Compare Australian retail prices, track price history, and find notable price drops across major stores with Dealwatch.">
 <link rel="canonical" href="https://dealwatch.com.au/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Dealwatch">
-<meta property="og:title" content="Dealwatch — Australian Price Drop Tracker">
-<meta property="og:description" content="A fast-moving view of notable price drops across major Australian retailers, with current prices, discount history and watch alerts.">
+<meta property="og:title" content="Compare Australian Prices &amp; Track Price Drops | Dealwatch">
+<meta property="og:description" content="Compare Australian retail prices, track price history, and find notable price drops across major stores with Dealwatch.">
 <meta property="og:url" content="https://dealwatch.com.au/">
 <meta name="twitter:card" content="summary">
 <script type="application/ld+json">
@@ -74,7 +74,7 @@
 
 <header class="hero"><div class="wrap">
   <div class="eyebrow"><span class="live"></span> price drops · australia</div>
-  <h1 class="display">Good prices, <em>found</em> fast.</h1>
+  <h1 class="display">Australian price <em>tracking</em>, made simple.</h1>
   <p class="sub">Dealwatch highlights notable discounts across major Australian
     retailers so you can compare current prices, recent history and potential
     savings in one place.</p>
@@ -144,6 +144,15 @@
   <div class="total" id="total"></div>
   <div class="grid" id="list"><div class="empty">Curating the latest finds…</div></div>
 </main>
+    <section class="discovery" aria-labelledby="browse-title">
+    <h2 id="browse-title">Browse Australian deals by category or retailer</h2>
+    <p>Explore currently tracked price drops with crawlable deal pages and full price-history links.</p>
+    <nav class="landing-links" aria-label="Browse deals">
+      <a href="/deals/tech">Tech deals</a><a href="/deals/home">Home deals</a><a href="/deals/kitchen">Kitchen deals</a><a href="/deals/beauty">Beauty deals</a>
+      <a href="/retailers/kmart">Kmart deals</a><a href="/retailers/bigw">Big W deals</a><a href="/retailers/officeworks">Officeworks deals</a><a href="/retailers/jbhifi">JB Hi-Fi deals</a>
+    </nav>
+  </section>
+
   <section class="personal" id="personal" hidden>
     <div id="recentWrap" hidden>
       <div class="sectionhead"><div><h2>Recently viewed</h2><div class="hint">Saved only on this device.</div></div></div>
@@ -300,7 +309,7 @@ function cardHtml(d, i){
     <div class="ph">
       <span class="badge ${d.pct_off>=50?"":"mild"}">-${d.pct_off}%</span>
       ${d.image_url
-        ? `<img src="${esc(thumbSrc(d.image_url))}" loading="lazy" alt=""
+        ? `<img src="${esc(thumbSrc(d.image_url))}" loading="lazy" alt="${esc(d.title)}"
              onerror="this.outerHTML='<span class=mono>${mono}</span>'">`
         : `<span class="mono">${mono}</span>`}
     </div>
@@ -330,7 +339,7 @@ function recentItems(){
 function recentHtml(p){
   const store = RETAILER_LABEL[p.retailer] || p.retailer;
   const href = `/p/${encodeURIComponent(p.retailer)}/${encodeURIComponent(p.sku)}`;
-  const image = p.image_url ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt="">`
+  const image = p.image_url ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt="${esc(p.title)}">`
     : `<div class="recentthumb">${esc(store[0] || "?")}</div>`;
   return `<a class="recentcard" href="${href}">${image}<div><div class="recentname">${esc(p.title)}</div>
     <div class="recentmeta">${esc(store)}${p.current_price != null ? ` · ${money(p.current_price)}` : ""}</div></div></a>`;

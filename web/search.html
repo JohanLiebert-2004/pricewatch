@@ -117,7 +117,7 @@ async function search(q){
   }
   list.innerHTML = rows.map((p,i)=>`<div class="row plain media" style="animation-delay:${Math.min(i*30,300)}ms">
     <div class="thumb">${p.image_url
-      ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt=""
+      ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt="${esc(p.title)}"
            onerror="this.outerHTML='<span class=mono>${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>'">`
       : `<span class="mono">${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>`}</div>
     <div>

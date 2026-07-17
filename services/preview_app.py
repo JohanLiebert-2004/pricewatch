@@ -38,6 +38,8 @@ SITE_URL = os.environ.get("SITE_URL", "https://web-pi-blush-48.vercel.app").rstr
 SELF_URL = os.environ.get("SELF_URL", "https://159-13-59-184.sslip.io").rstrip("/")
 TEMPLATE_PATH = Path(os.environ.get(
     "PRODUCT_TEMPLATE", "/opt/pricewatch/web/product.html"))
+LANDING_TEMPLATE_PATH = Path(os.environ.get(
+    "LANDING_TEMPLATE", "/opt/pricewatch/web/landing.html"))
 CACHE_DIR = Path(os.environ.get("IMG_CACHE_DIR", "/var/cache/pricewatch-img"))
 MAX_IMG_BYTES = 8 * 1024 * 1024
 
@@ -70,6 +72,110 @@ async def fetch_product(retailer: str, sku: str) -> dict | None:
     rows = r.json() if r.status_code == 200 else []
     return rows[0] if rows else None
 
+
+CATEGORY_LABEL = {
+    "tech": "Tech", "home": "Home", "kitchen": "Kitchen",
+    "toys": "Toys & Baby", "clothing": "Clothing", "beauty": "Beauty",
+    "books": "Books & Stationery", "other": "Other",
+}
+
+
+def _product_path(retailer: str, sku: str) -> str:
+    return f"/p/{quote(retailer, safe='')}/{quote(str(sku), safe='')}"
+
+
+def _landing_card(row: dict) -> str:
+    retailer = str(row.get("retailer") or "")
+    sku = str(row.get("sku") or "")
+    label = RETAILER_LABEL.get(retailer, retailer.title())
+    title = str(row.get("title") or "Price history")
+    price = float(row.get("price") or 0)
+    reference = float(row.get("reference_price") or 0)
+    pct_off = int(round(float(row.get("pct_off") or 0)))
+    image = row.get("image_url") or ""
+    if image:
+        image = f"{SELF_URL}/img?u={quote(str(image), safe='')}"
+        media = (f'<img src="{html.escape(image, quote=True)}" loading="lazy" '
+                 f'alt="{html.escape(title, quote=True)}">')
+    else:
+        media = f'<span class="mono">{html.escape((label or "?")[0])}</span>'
+    was = (f'<span class="cwas">${reference:.2f}</span>' if reference > price
+           else "")
+    save = (f'<span class="save">Save ${reference - price:.2f}</span>'
+            if reference > price else "")
+    href = _product_path(retailer, sku)
+    return f'''<article class="card">
+  <a class="card-link" href="{html.escape(href, quote=True)}" aria-label="View price history for {html.escape(title, quote=True)}"></a>
+  <div class="ph"><span class="badge">-{pct_off}%</span>{media}</div>
+  <div class="cbody"><div class="cname">{html.escape(title)}</div>
+    <div class="cprices"><span class="cnow">${price:.2f}</span>{was}</div>
+    <div class="cfoot"><span>{html.escape(label)}</span>{save}</div>
+    <a class="track-btn" href="{html.escape(href, quote=True)}">View price history</a>
+  </div>
+</article>'''
+
+
+async def _fetch_landing_deals(field: str, value: str) -> list[dict]:
+    r = await client.get(
+        f"{SUPABASE_URL}/rest/v1/discount_feed",
+        params={"select": "retailer,sku,title,category,image_url,price,reference_price,pct_off,price_updated_at",
+                field: f"eq.{value}", "order": "pct_off.desc,reference_price.desc",
+                "limit": 36},
+        headers={"apikey": SUPABASE_ANON_KEY,
+                 "Authorization": f"Bearer {SUPABASE_ANON_KEY}"})
+    if r.status_code != 200:
+        raise HTTPException(503, "deal feed unavailable")
+    return r.json()
+
+
+async def _landing_page(kind: str, value: str):
+    if kind == "category":
+        label = CATEGORY_LABEL.get(value)
+        field = "category"
+        if not label:
+            raise HTTPException(404)
+        heading = f"{label} deals in Australia"
+        description = (f"Compare current {label.lower()} deals from major Australian retailers. "
+                       "See tracked price history before you buy.")
+        canonical = f"{SITE_URL}/deals/{quote(value, safe='')}"
+    else:
+        label = RETAILER_LABEL.get(value)
+        field = "retailer"
+        if not label:
+            raise HTTPException(404)
+        heading = f"{label} deals and price history"
+        description = (f"See current {label} price drops, compare discounts, and review "
+                       "tracked price history on Dealwatch.")
+        canonical = f"{SITE_URL}/retailers/{quote(value, safe='')}"
+
+    rows = await _fetch_landing_deals(field, value)
+    title = f"{heading} | Dealwatch"
+    items = [{"@type": "ListItem", "position": i, "url": f"{SITE_URL}{_product_path(row['retailer'], row['sku'])}"}
+             for i, row in enumerate(rows, 1) if row.get("retailer") and row.get("sku")]
+    jsonld = {"@context": "https://schema.org", "@type": "CollectionPage",
+              "name": title, "url": canonical, "description": description,
+              "mainEntity": {"@type": "ItemList", "itemListElement": items}}
+    template = LANDING_TEMPLATE_PATH.read_text(encoding="utf-8")
+    rendered = (template.replace("{{base_url}}", html.escape(SITE_URL, quote=True))
+                .replace("{{title}}", html.escape(title, quote=True))
+                .replace("{{description}}", html.escape(description, quote=True))
+                .replace("{{canonical}}", html.escape(canonical, quote=True))
+                .replace("{{heading}}", html.escape(heading))
+                .replace("{{jsonld}}", json.dumps(jsonld).replace("</", "<\\/"))
+                .replace("{{cards}}", "\n".join(_landing_card(row) for row in rows)
+                 or '<p class="empty">No current deals are available for this page yet.</p>'))
+    return Response(rendered, media_type="text/html",
+                    headers={"Cache-Control": "public, max-age=600"})
+
+
+@app.get("/deals/{category}")
+async def deals_landing(category: str):
+    return await _landing_page("category", category)
+
+
+@app.get("/retailers/{retailer}")
+async def retailer_landing(retailer: str):
+    return await _landing_page("retailer", retailer)
 
 @app.get("/p/{retailer}/{sku}")
 async def preview(retailer: str, sku: str):
@@ -112,12 +218,13 @@ async def preview(retailer: str, sku: str):
             "@context": "https://schema.org",
             "@type": "Product",
             "name": p["title"],
+            "description": desc,
+            "sku": str(sku),
             "url": canonical,
             "offers": {
                 "@type": "Offer",
                 "price": f"{float(p['current_price']):.2f}",
                 "priceCurrency": "AUD",
-                "availability": "https://schema.org/InStock",
                 "url": p.get("url") or canonical,
                 "seller": {"@type": "Organization", "name": RETAILER_LABEL[retailer]},
             },
@@ -164,43 +271,52 @@ async def img(u: str = Query(..., max_length=1000)):
                     headers={"Cache-Control": "public, max-age=2592000, immutable"})
 
 
-SITEMAP_CACHE = CACHE_DIR / "sitemap-products.xml"
-SITEMAP_TTL = 6 * 3600  # matches the hourly crawl cadence with headroom; keeps
-                         # this off the Supabase egress budget on repeat hits
+SITEMAP_PAGE_SIZE = 25_000
+SITEMAP_PAGE_COUNT = 5
+SITEMAP_TTL = 24 * 3600  # cache once daily: enough freshness without egress churn
 
 
-@app.get("/sitemap-products.xml")
-async def sitemap_products():
-    if SITEMAP_CACHE.exists() and time.time() - SITEMAP_CACHE.stat().st_mtime < SITEMAP_TTL:
-        return Response(SITEMAP_CACHE.read_bytes(), media_type="application/xml")
+async def _sitemap_products(page: int):
+    if page < 1 or page > SITEMAP_PAGE_COUNT:
+        raise HTTPException(404)
+    cache_file = CACHE_DIR / f"sitemap-products-{page}.xml"
+    if cache_file.exists() and time.time() - cache_file.stat().st_mtime < SITEMAP_TTL:
+        return Response(cache_file.read_bytes(), media_type="application/xml")
+
     r = await client.get(
         f"{SUPABASE_URL}/rest/v1/product_search",
         params={"select": "retailer,sku,price_updated_at",
-                "order": "price_updated_at.desc", "limit": 5000},
+                "order": "price_updated_at.desc",
+                "limit": SITEMAP_PAGE_SIZE,
+                "offset": (page - 1) * SITEMAP_PAGE_SIZE},
         headers={"apikey": SUPABASE_ANON_KEY,
                  "Authorization": f"Bearer {SUPABASE_ANON_KEY}"})
     if r.status_code != 200:
-        # Don't cache a transient upstream failure - serve the last good
-        # sitemap if we have one rather than baking in an empty file for
-        # SITEMAP_TTL, which would silently de-index the whole catalogue.
-        if SITEMAP_CACHE.exists():
-            return Response(SITEMAP_CACHE.read_bytes(), media_type="application/xml")
-        raise HTTPException(502, "sitemap source unavailable")
+        raise HTTPException(503, "product sitemap unavailable")
     rows = r.json()
-    e = html.escape
     urls = "\n".join(
-        f"  <url><loc>{e(SITE_URL)}/p/{e(row['retailer'])}/{e(row['sku'])}</loc>"
-        f"<lastmod>{e(row['price_updated_at'][:10])}</lastmod></url>"
-        for row in rows if row.get("retailer") and row.get("sku"))
+        f"  <url><loc>{html.escape(SITE_URL)}/p/{html.escape(quote(str(row['retailer']), safe=''))}/{html.escape(quote(str(row['sku']), safe=''))}</loc>"
+        f"<lastmod>{html.escape(str(row['price_updated_at'])[:10])}</lastmod></url>"
+        for row in rows if row.get("retailer") and row.get("sku") and row.get("price_updated_at"))
     body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             f"{urls}\n</urlset>\n").encode()
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = SITEMAP_CACHE.with_suffix(".tmp")
+    tmp = cache_file.with_suffix(".tmp")
     tmp.write_bytes(body)
-    tmp.replace(SITEMAP_CACHE)
+    tmp.replace(cache_file)
     return Response(body, media_type="application/xml")
 
+
+@app.get("/sitemap-products.xml")
+async def sitemap_products():
+    """Legacy first-page endpoint retained for previously discovered URLs."""
+    return await _sitemap_products(1)
+
+
+@app.get("/sitemap-products-{page}.xml")
+async def sitemap_products_page(page: int):
+    return await _sitemap_products(page)
 
 @app.get("/healthz")
 async def healthz():

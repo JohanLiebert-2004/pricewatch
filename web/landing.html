@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="{{base_url}}/">
+<title>{{title}}</title>
+<meta name="description" content="{{description}}">
+<link rel="canonical" href="{{canonical}}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Dealwatch">
+<meta property="og:title" content="{{title}}">
+<meta property="og:description" content="{{description}}">
+<meta property="og:url" content="{{canonical}}">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">{{jsonld}}</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav"><div class="wrap navrow">
+  <a class="logo" href="/">Deal<em>watch</em></a>
+  <div class="navlinks"><a href="/">Deals</a><a href="catalogue.html">Catalogue</a><a href="search.html">Search</a></div>
+</div></nav>
+<header class="hero compact"><div class="wrap">
+  <div class="eyebrow">Australian price tracker · updated daily</div>
+  <h1 class="display">{{heading}}</h1>
+  <p class="sub">{{description}}</p>
+</div></header>
+<main class="wrap">
+  <section aria-labelledby="latest-deals"><h2 id="latest-deals" class="section-title">Latest tracked deals</h2>
+    <p class="landing-note">These are current discounts with a known price and a recent retailer check. Open any product for its price history and alert options.</p>
+    <div class="grid">{{cards}}</div>
+  </section>
+  <section class="method" aria-labelledby="method-title"><h2 id="method-title">How Dealwatch checks prices</h2>
+    <p>Dealwatch compares the current retailer price with its listed RRP or recorded price history. Prices can change or sell out quickly, so confirm the retailer listing before you buy.</p>
+  </section>
+</main>
+<footer><div class="wrap footgrid"><div class="fbrand">Deal<em>watch</em></div><div class="note">Dealwatch is an independent Australian price tracker. We do not sell products; purchases happen on the retailer's website.</div></div></footer>
+</body>
+</html>
