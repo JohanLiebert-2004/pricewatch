@@ -48,9 +48,21 @@ jobs:
                                # Salesforce Commerce Cloud storefront, JSON-LD
                                # product pages only); all coverage via the
                                # crawl (queue) lane
-            crawl_batch: 1000 # 141.7k-URL queue seeded from sitemap_20251*.xml.gz;
+            crawl_batch: 2400 # 154k-URL queue seeded from sitemap_20251*.xml.gz;
                                # no bot protection seen on plain requests (same
-                               # profile as supercheap) - full sweep in ~3 days
+                               # profile as supercheap). Raised from 1000 on
+                               # 17 July to speed up the image_url backfill
+                               # (commit 30ee38d fixed the parser but ~79k
+                               # already-tracked products still need a
+                               # re-crawl to pick up the new field, and the
+                               # queue processes never-seen URLs first) - at
+                               # the 1.5s delay floor, 2400*1.5s=60min, still
+                               # well under the 110min job timeout. Clears the
+                               # ~72k never-scraped backlog in ~1.5 days
+                               # (queue prioritises those first), then starts
+                               # revisiting - and image-backfilling - already-
+                               # tracked products; a full queue cycle is
+                               # ~2.7 days, down from ~6.5.
           - retailer: supercheap
             budget: 50        # refresh lane is a no-op (no compliant bulk
                                # listing; robots.txt disallows pagination params)
