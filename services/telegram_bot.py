@@ -42,7 +42,7 @@ RETAILER_LABEL = {"kmart": "Kmart", "bigw": "Big W", "target": "Target",
 PAYLOAD_RX = re.compile(r"^(i_([a-z]+)_([A-Za-z0-9_-]{1,48})|s_([a-z]+))$")
 
 HELP = (
-    "👋 <b>Underpriced alerts</b>\n\n"
+    "👋 <b>Dealwatch alerts</b>\n\n"
     "Subscribe from the website: open any product's price-history page and "
     "tap <i>Telegram alerts</i> — you'll land back here with the watch "
     "pre-filled.\n\n"

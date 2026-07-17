@@ -90,7 +90,7 @@ def test_message(to_addr: str):
         RESEND_ENDPOINT,
         headers={"Authorization": f"Bearer {api_key}"},
         json={"from": from_addr, "to": [to_addr],
-              "subject": "Underpriced watch alerts are live",
+              "subject": "Dealwatch watch alerts are live",
               "html": "<p>Price-watch emails are wired up correctly.</p>"},
         timeout=15)
     print(r.status_code, r.text[:200])

@@ -78,10 +78,10 @@ async def preview(retailer: str, sku: str):
         raise HTTPException(404)
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
 
-    title = f"{p['title']} — {RETAILER_LABEL[retailer]} price | Underpriced"
+    title = f"{p['title']} — {RETAILER_LABEL[retailer]} price | Dealwatch"
     price = f"${float(p['current_price']):.2f}" if p.get("current_price") else ""
     desc = (f"{price} at {RETAILER_LABEL[retailer]}. Price history and "
-            f"drop alerts for {p['title']} on Underpriced, the Australian "
+            f"drop alerts for {p['title']} on Dealwatch, the Australian "
             f"price tracker.")
     canonical = f"{SITE_URL}/p/{retailer}/{sku}"
     image = p.get("image_url") or ""
