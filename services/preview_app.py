@@ -179,7 +179,14 @@ async def sitemap_products():
                 "order": "price_updated_at.desc", "limit": 5000},
         headers={"apikey": SUPABASE_ANON_KEY,
                  "Authorization": f"Bearer {SUPABASE_ANON_KEY}"})
-    rows = r.json() if r.status_code == 200 else []
+    if r.status_code != 200:
+        # Don't cache a transient upstream failure - serve the last good
+        # sitemap if we have one rather than baking in an empty file for
+        # SITEMAP_TTL, which would silently de-index the whole catalogue.
+        if SITEMAP_CACHE.exists():
+            return Response(SITEMAP_CACHE.read_bytes(), media_type="application/xml")
+        raise HTTPException(502, "sitemap source unavailable")
+    rows = r.json()
     e = html.escape
     urls = "\n".join(
         f"  <url><loc>{e(SITE_URL)}/p/{e(row['retailer'])}/{e(row['sku'])}</loc>"
