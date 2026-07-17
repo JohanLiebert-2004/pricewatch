@@ -239,6 +239,7 @@ class BaseScraper:
                 url=url,
                 price=price,
                 rrp=_num(offer.get("highPrice")) or _find_rrp(html, price),
+                image_url=_image(block.get("image")),
                 in_stock="InStock" in str(offer.get("availability", "")),
                 is_marketplace=bool(seller_name) and self.name.lower() not in seller_name.lower(),
             )
@@ -328,6 +329,16 @@ def _brand(b):
     if isinstance(b, dict):
         return b.get("name")
     return b if isinstance(b, str) else None
+
+
+def _image(img):
+    """Schema.org Product.image: a URL string, a list of either, or an
+    ImageObject ({"url": ...}). Take the first usable URL."""
+    if isinstance(img, list):
+        img = img[0] if img else None
+    if isinstance(img, dict):
+        img = img.get("url")
+    return img if isinstance(img, str) and img.startswith("http") else None
 
 
 def _find_rrp(html: str, price: float):
