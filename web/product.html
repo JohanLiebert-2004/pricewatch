@@ -297,7 +297,19 @@ async function load(){
   const recent = rows.filter(r=>new Date(r.scraped_at).getTime() >= cutoff).map(r=>r.price);
   const ninetyLow = recent.length ? Math.min(...recent) : allLow;
   const store = RETAILER_LABEL[p.retailer] || p.retailer;
-  const points = rows.map(r=>({x: new Date(r.scraped_at), y: Number(r.price)}));
+  let points = rows.map(r=>({x: new Date(r.scraped_at), y: Number(r.price)}));
+  // Dense histories (many intraday flips) render as unreadable stripes -
+  // collapse to one point per day at that day's LOWEST price, the number a
+  // shopper could actually have paid.
+  if(points.length > 60){
+    const byDay = new Map();
+    for(const p of points){
+      const day = p.x.toISOString().slice(0,10);
+      const cur = byDay.get(day);
+      if(!cur || p.y < cur.y) byDay.set(day, p);
+    }
+    points = [...byDay.values()].sort((a,b)=>a.x-b.x);
+  }
   rememberViewed(p);
 
   main.innerHTML = `
@@ -338,6 +350,5 @@ async function load(){
 
 load();
 </script>
-<script src="/watch-confirm.js"></script>
 </body>
 </html>

@@ -92,37 +92,64 @@ class KmartScraper(BaseScraper):
         """Yield ProductRecords for the whole catalogue via the browse API.
 
         budget = max API requests this run.
+
+        The same product appears in MULTIPLE merchandising groups (Clearance,
+        Winter, brand groups, ...), and Constructor returns a different
+        data.price per group for variant-priced products (e.g. apparel where
+        sizes sell at $9/$10/$15). Yielding every occurrence made
+        current_price flip several times within one sweep, each flip writing
+        a bogus change-snapshot - one shirt collected 462 in nine days and
+        its price-history chart rendered as solid stripes. So: collect the
+        whole sweep first, then yield ONE record per SKU at its minimum
+        price (the "from $X" a shopper can actually pay).
         """
         used = 0
+        sweep = {}   # sku -> ProductRecord, minimum price wins
+        done = False
         with self._api() as client:
             try:
                 groups = list(self._leaf_groups(client))
             except Exception as e:
                 raise Blocked(f"kmart: constructor groups fetch failed: {e}")
             used += 1
-            for gid, gname, count, section in groups:
-                subcat = self.SECTION_LABEL.get(section)
-                max_window = 9800 // self.per_page
-                pages = (min((count + self.per_page - 1) // self.per_page,
-                             max_window) if count else max_window)
-                for page in range(1, pages + 1):
-                    if used >= budget:
-                        return
-                    time.sleep(self.api_delay)
-                    r = client.get(
-                        f"https://ac.cnstrc.com/browse/group_id/{gid}",
-                        params={"num_results_per_page": self.per_page,
-                                "page": page})
-                    used += 1
-                    if r.status_code != 200:
+            try:
+                for gid, gname, count, section in groups:
+                    if done:
                         break
-                    results = (r.json().get("response") or {}).get("results") or []
-                    for item in results:
-                        rec = self._record_from_api(item, subcat)
-                        if rec:
-                            yield rec
-                    if len(results) < self.per_page:
-                        break
+                    subcat = self.SECTION_LABEL.get(section)
+                    max_window = 9800 // self.per_page
+                    pages = (min((count + self.per_page - 1) // self.per_page,
+                                 max_window) if count else max_window)
+                    for page in range(1, pages + 1):
+                        if used >= budget:
+                            done = True
+                            break
+                        time.sleep(self.api_delay)
+                        r = client.get(
+                            f"https://ac.cnstrc.com/browse/group_id/{gid}",
+                            params={"num_results_per_page": self.per_page,
+                                    "page": page})
+                        used += 1
+                        if r.status_code != 200:
+                            break
+                        results = (r.json().get("response") or {}).get("results") or []
+                        for item in results:
+                            rec = self._record_from_api(item, subcat)
+                            if not rec:
+                                continue
+                            cur = sweep.get(rec.sku)
+                            if cur is None or (rec.price is not None
+                                               and (cur.price is None
+                                                    or rec.price < cur.price)):
+                                sweep[rec.sku] = rec
+                        if len(results) < self.per_page:
+                            break
+            except Exception as e:
+                # keep the partial sweep rather than losing it - the caller
+                # treats what we yield as "seen this sweep"
+                print(f"  kmart sweep interrupted ({type(e).__name__}: {e}), "
+                      f"keeping {len(sweep)} collected products")
+        yield from sweep.values()
 
     def _record_from_api(self, item, subcat=None) -> ProductRecord | None:
         d = item.get("data") or {}
