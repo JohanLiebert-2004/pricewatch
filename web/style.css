@@ -311,6 +311,9 @@ footer{
 .footlinks{display:flex;flex-wrap:wrap;gap:14px;max-width:1120px;margin:14px auto 0;padding:0 22px;font-size:12px;font-weight:700;color:var(--muted)}
 .footlinks a{text-decoration:none}
 .footlinks a:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.footdiscovery{max-width:1120px;margin:16px auto 0;padding:0 22px;font-size:11px;line-height:2;color:var(--faint)}
+.footdiscovery a{color:var(--faint);text-decoration:none}
+.footdiscovery a:hover{color:var(--flag);text-decoration:underline;text-underline-offset:2px}
 .legal{max-width:780px;background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:24px;box-shadow:var(--shadow);margin:8px 0 34px}
 .legal h2{font-size:18px;letter-spacing:-.02em;margin:28px 0 8px}
 .legal h2:first-child{margin-top:0}
