@@ -80,6 +80,13 @@
   <p class="sub">Dealwatch highlights notable discounts across major Australian
     retailers so you can compare current prices, recent history and potential
     savings in one place.</p>
+  <form class="herosearch" id="qbar" role="search">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input type="search" id="q" placeholder="Search &#39;Anko Air Fryer&#39;…"
+           autocomplete="off">
+    <button type="submit">Search</button>
+  </form>
+  <button type="button" class="clear herosearch-clear" id="qclear">Clear search &amp; filters</button>
   <div class="stats">
     <div class="stat"><b id="s-deals">–</b><span>live deals, 50%+ off</span></div>
     <div class="stat"><b id="s-items">–</b><span>products under watch</span></div>
@@ -90,13 +97,6 @@
 
 <main class="wrap">
   <div class="panel">
-    <div class="barlabel">Search the Collection</div>
-    <form class="pricebar" id="qbar">
-      <input type="search" id="q" placeholder="Search &#39;Anko Air Fryer&#39;…"
-             autocomplete="off" style="width:min(640px,100%)">
-      <button type="submit">Search</button>
-      <button type="button" class="clear" id="qclear">Clear</button>
-    </form>
     <div class="barlabel">Retailer</div>
     <div class="bar" id="retailers">
       <button class="chip" data-r="all" aria-pressed="true">All Retailers</button>
@@ -151,7 +151,7 @@
     <div class="hot-grid" id="hotList"></div>
   </section>
   <div class="total" id="total"></div>
-  <div class="grid" id="list"><div class="empty">Curating the latest finds…</div></div>
+  <div class="grid" id="list"></div>
 </main>
   <section class="personal" id="personal" hidden>
     <div id="recentWrap" hidden>
@@ -201,6 +201,8 @@ fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=sku&pct_off=gte.50&limit=1`,
   .catch(()=>{});
 
 // ---- render ------------------------------------------------------------
+function skeletonCards(n){return Array.from({length:n||12},()=>`<div class="skeleton-card"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>`).join("");}
+document.getElementById("list").innerHTML = skeletonCards();
 const money = n => "$"+Number(n).toFixed(2).replace(/\.00$/,"");
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse", booktopia:"Booktopia", qbd:"QBD Books", ikea:"IKEA"};
 const RETAILER_GROUPS = {
@@ -563,6 +565,6 @@ let promptIndex=0;
 setInterval(()=>{const input=document.getElementById("q");if(input&&document.activeElement!==input){promptIndex=(promptIndex+1)%SEARCH_PROMPTS.length;input.placeholder=SEARCH_PROMPTS[promptIndex];}},3600);
 refresh();
 </script>
-<nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><span aria-hidden="true">⌂</span>Home</a><a href="/search.html"><span aria-hidden="true">⌕</span>Search</a><a href="/search.html#scan"><span aria-hidden="true">▣</span>Scan</a><a href="/index.html#hotNow"><span aria-hidden="true">♢</span>Hot</a></nav></body>
+<nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><span aria-hidden="true">⌂</span>Home</a><a href="/search.html"><span aria-hidden="true">⌕</span>Search</a><a href="/alerts.html"><span aria-hidden="true">🔔</span>Alerts</a><a href="/search.html#scan"><span aria-hidden="true">▣</span>Scan</a></nav></body>
 </html>
 renderPersonal();

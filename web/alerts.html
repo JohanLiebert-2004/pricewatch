@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Alerts — Dealwatch</title>
+<meta name="description" content="Price watches you've set on this device.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .alertrow{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+    background:var(--card);border:1px solid var(--hair);border-radius:14px;
+    padding:14px 16px;margin:10px 0;box-shadow:var(--shadow)}
+  .alertrow .thumb{width:56px;height:56px;border-radius:10px;flex:none;background:#fff;
+    border:1px solid var(--hair2);overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .alertrow .thumb img{width:100%;height:100%;object-fit:contain;padding:4px}
+  .alertrow .thumb .mono{font-weight:800;font-size:18px;color:var(--faint)}
+  .alertrow .title{font-weight:600;font-size:14px;text-decoration:none;color:var(--ink)}
+  .alertrow .title:hover{text-decoration:underline}
+  .alertrow .meta{font-size:12px;color:var(--muted);margin-top:5px}
+  .alertrow .target{font-weight:800;font-size:15px;color:var(--deal);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .alertrow .cancel{display:block;margin-top:6px;font-size:11px;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+  .alertrow .cancel:hover{color:var(--bad)}
+</style>
+  <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
+  <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
+  <script defer src="/_vercel/insights/script.js"></script>
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#ffffff"><script defer src="/pwa.js"></script>
+</head>
+<body>
+
+<nav class="topnav"><div class="wrap navrow">
+  <a class="logo" href="index.html">Deal<em>watch</em></a>
+  <div class="navlinks">
+    <a href="index.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.58a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.82Z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/></svg>Deals</a>
+    <a href="catalogue.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Catalogue</a>
+    <a href="search.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>Search</a>
+  </div>
+</div></nav>
+
+<header class="hero compact"><div class="wrap">
+  <div class="eyebrow">🔔 price watches · this device only</div>
+  <h1 class="display">My <em>alerts</em></h1>
+  <p class="sub">Every price watch you've set from this browser. We only ever
+    email you once, the first time a price drops to your target — cancel any
+    time from here or from the email itself.</p>
+</div></header>
+
+<main class="wrap">
+  <div id="list"><div class="empty">Loading…</div></div>
+</main>
+
+<footer><div class="wrap footgrid">
+  <div class="fbrand">Deal<em>watch</em></div>
+  <div class="note">
+    Alerts are stored only in this browser's local storage — Dealwatch has no
+    accounts or logins. Clearing your browser data clears this list, but any
+    watch already confirmed by email keeps working until it fires or you
+    cancel it from the email link.
+  </div>
+</div><nav class="footlinks" aria-label="Site information"><a href="/how-it-works.html">How it works</a><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></footer>
+
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const money = n => "$"+Number(n).toFixed(2);
+const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse", booktopia:"Booktopia", qbd:"QBD Books", ikea:"IKEA"};
+const IMG_PROXY = "https://159-13-59-184.sslip.io/img";
+function thumbSrc(u){
+  if(u.includes("cdn.shopify.com")) u = u + (u.includes("?")?"&":"?") + "width=200";
+  else if(u.includes("JPEG_1000x1000")) u = u.replace("JPEG_1000x1000","JPEG_300x300");
+  else if(u.includes("assets.kmart.com.au")) u = u.replace(/width:\d+,height:\d+/,"width:200,height:250");
+  return `${IMG_PROXY}?u=${encodeURIComponent(u)}`;
+}
+function since(ts){
+  const days = Math.floor((Date.now()-Number(ts))/86400000);
+  if(days <= 0) return "set today";
+  if(days === 1) return "set yesterday";
+  return `set ${days} days ago`;
+}
+function alertRow(a){
+  const store = RETAILER_LABEL[a.retailer] || a.retailer;
+  const href = `/p/${encodeURIComponent(a.retailer)}/${encodeURIComponent(a.sku)}`;
+  const mono = (store || "?")[0];
+  const thumb = a.image_url
+    ? `<img src="${esc(thumbSrc(a.image_url))}" loading="lazy" alt="${esc(a.title||"")}"
+         onerror="this.outerHTML='<span class=mono>${mono}</span>'">`
+    : `<span class="mono">${mono}</span>`;
+  return `<div class="alertrow">
+    <a class="thumb" href="${href}">${thumb}</a>
+    <div>
+      <a class="title" href="${href}">${esc(a.title || "View this product")}</a>
+      <div class="meta">${esc(store)} · ${since(a.created_at)}</div>
+    </div>
+    <div style="text-align:right">
+      <div class="target">alert at ${money(a.target_price)}</div>
+      ${a.cancel_url ? `<a class="cancel" href="${esc(a.cancel_url)}">Cancel this alert</a>` : ""}
+    </div>
+  </div>`;
+}
+function render(){
+  const list = document.getElementById("list");
+  let alerts = [];
+  try{ alerts = JSON.parse(localStorage.getItem("dealwatch_alerts") || "[]"); }catch(e){}
+  if(!Array.isArray(alerts) || !alerts.length){
+    list.innerHTML = `<div class="empty">No alerts set on this device yet.<br>
+      Open any product's price history page and set a target price to get started.<br>
+      <a href="/index.html" style="font-weight:700">Browse today's deals →</a></div>`;
+    return;
+  }
+  list.innerHTML = alerts.map(alertRow).join("");
+}
+render();
+</script>
+<nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><span aria-hidden="true">⌂</span>Home</a><a href="/search.html"><span aria-hidden="true">⌕</span>Search</a><a href="/alerts.html"><span aria-hidden="true">🔔</span>Alerts</a><a href="/search.html#scan"><span aria-hidden="true">▣</span>Scan</a></nav></body>
+</html>

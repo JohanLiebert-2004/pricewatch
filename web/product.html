@@ -28,7 +28,7 @@
   .pmeta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .pprice{text-align:right;font-variant-numeric:tabular-nums}
   .pprice .now{font-weight:800;font-size:26px;letter-spacing:-.02em}
-  .pprice .was{color:var(--faint);text-decoration:line-through;font-size:13px}
+  .pprice .was{color:var(--bad);text-decoration:line-through;font-size:13px}
   .pprice a{
     display:inline-block;margin-top:8px;font-size:12.5px;font-weight:700;
     color:var(--paper);background:var(--ink);padding:7px 14px;border-radius:99px;
@@ -92,9 +92,14 @@
   .watchbar button{
     font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;
     background:var(--ink);color:var(--paper);border:1px solid var(--ink);
-    border-radius:10px;padding:10px 20px;transition:opacity .15s;
+    border-radius:10px;padding:10px 20px;transition:opacity .15s,background .2s,border-color .2s;
   }
   .watchbar button:hover{opacity:.85}
+  .watchbar button.tracked{
+    background:var(--deal);border-color:var(--deal);opacity:1;cursor:default;
+    animation:trackBounce .4s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes trackBounce{0%{transform:scale(1)}40%{transform:scale(1.12)}70%{transform:scale(.96)}100%{transform:scale(1)}}
   .watchnote{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.7}
   .watchok{font-size:13px;color:var(--deal);font-weight:600;margin-top:12px;line-height:1.7}
   .watcherr{font-size:13px;color:var(--flag);font-weight:600;margin-top:12px}
@@ -282,11 +287,22 @@ function historyTable(rows){
 }
 
 function showToast(message){const el=document.getElementById("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>el.classList.remove("show"),4200);}
+function rememberWatch(item){
+  try{
+    const key = "dealwatch_alerts";
+    const old = JSON.parse(localStorage.getItem(key) || "[]");
+    const items = Array.isArray(old) ? old : [];
+    const next = [item, ...items.filter(x=>!(x && x.retailer===item.retailer && x.sku===item.sku))].slice(0,30);
+    localStorage.setItem(key, JSON.stringify(next));
+  }catch(e){}
+}
 async function submitWatch(productId, e){
   e.preventDefault();
+  const form = e.target;
   const email = document.getElementById("wemail").value.trim();
   const target = Number(document.getElementById("wtarget").value);
   const out = document.getElementById("wresult");
+  const btn = document.getElementById("wbtn");
   if(!email || !target || target <= 0){
     out.innerHTML = `<div class="watcherr">Enter a valid email and target price.</div>`;
     return;
@@ -300,11 +316,19 @@ async function submitWatch(productId, e){
     if(!r.ok) throw new Error(r.status);
     const token = await r.json();
     const cancelUrl = `${location.origin}${location.pathname}?retailer=${retailer}&sku=${encodeURIComponent(sku)}&cancel=${token}`;
-    showToast("Check your email to confirm your price watch.");
+    showToast(`Alert set! We'll email you when it drops to ${money(target)} or below.`);
     out.innerHTML = `<div class="watchok">You're watching this at ${money(target)} or below —
       we'll email ${esc(email)} once, the first time it drops there.<br>
       Save this link to cancel any time: <a href="${cancelUrl}">${cancelUrl}</a></div>`;
-    document.getElementById("wform").reset();
+    rememberWatch({retailer:form.dataset.retailer, sku:form.dataset.sku,
+      title:form.dataset.title, image_url:form.dataset.image,
+      target_price:target, cancel_url:cancelUrl, created_at:Date.now()});
+    // watch-confirm.js relabels this button "Send confirmation email" for the
+    // double opt-in flow - the watch isn't active until that email is
+    // confirmed, so morph to "Check your email" rather than falsely claiming
+    // "Tracking" immediately.
+    if(btn){btn.textContent="Check your email ✓";btn.classList.add("tracked");btn.disabled=true;}
+    form.reset();
   }catch(e){
     out.innerHTML = `<div class="watcherr">Couldn't set up the watch — please try again in a moment.</div>`;
   }
@@ -327,7 +351,8 @@ async function cancelWatch(){
   }
 }
 
-function watchPanelHtml(productId){
+function watchPanelHtml(p){
+  const productId = p.product_id;
   if(cancelToken){
     return `<div class="watchpanel">
       <div class="barlabel" style="margin-top:0">Cancel watch</div>
@@ -355,12 +380,14 @@ function watchPanelHtml(productId){
         border:1px solid var(--hair);border-radius:10px;
         padding:10px 20px">All ${esc(store)} deals</a>
     </div>`;
-  return `<div class="watchpanel">
+  return `<div class="watchpanel" id="watchpanel">
     <div class="barlabel" style="margin-top:0">🔔 Track this product — email me when it drops</div>
-    <form class="watchbar" id="wform" onsubmit="submitWatch(${productId}, event)">
+    <form class="watchbar" id="wform" onsubmit="submitWatch(${productId}, event)"
+          data-retailer="${esc(retailer)}" data-sku="${esc(String(sku))}"
+          data-title="${esc(p.title || "")}" data-image="${esc(p.image_url || "")}">
       <input type="email" id="wemail" placeholder="you@example.com" required>
       <input type="number" id="wtarget" placeholder="target $" min="0" step="0.01" required>
-      <button type="submit">Watch</button>
+      <button type="submit" id="wbtn">Watch</button>
     </form>
     <div class="watchnote">One email, the first time the price drops to your target
       or below. No account needed — unsubscribe from the link in that email.</div>
@@ -463,7 +490,7 @@ async function load(){
 
     ${buyAdvice(points)}
     ${storeReportPanelHtml(p.product_id, store)}
-    ${watchPanelHtml(p.product_id)}
+    ${watchPanelHtml(p)}
     <section class="related" id="related"><div class="empty" style="padding:12px 0">Finding comparable listings…</div></section>
     <section class="hot-section" id="aiSimilar" aria-labelledby="ai-similar-title">
       <div class="hot-head"><div><h2 id="ai-similar-title">You might also like</h2><p>AI-suggested similar products.</p></div></div>
@@ -473,7 +500,14 @@ async function load(){
     <div class="chartwrap">${priceChart(points)}<div class="historynote">Tracking since ${trackingSince} · ${rows.length} recorded ${rows.length === 1 ? "observation" : "observations"} · last checked ${lastChecked}</div></div>
     ${historyTable(rows)}
   `;
-  document.getElementById("stickyWatch")?.addEventListener("click",()=>document.getElementById("watchpanel")?.scrollIntoView({behavior:"smooth",block:"center"}));
+  const stickyBtn = document.getElementById("stickyWatch");
+  if(stickyBtn && document.getElementById("watchpanel")){
+    stickyBtn.hidden = false;
+    stickyBtn.addEventListener("click",()=>{
+      document.getElementById("watchpanel").scrollIntoView({behavior:"smooth",block:"center"});
+      document.getElementById("wemail")?.focus();
+    });
+  }
   document.getElementById("storeReport")?.addEventListener("submit",e=>submitStoreReport(p.product_id,e));
   logInterest(p);
   relatedItems(p).then(rows=>renderRelated(p,rows)).catch(()=>{const box=document.getElementById("related");if(box)box.remove();});
@@ -483,5 +517,6 @@ async function load(){
 load();
 </script>
 <script src="/watch-confirm.js"></script>
-<nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><span aria-hidden="true">⌂</span>Home</a><a href="/search.html"><span aria-hidden="true">⌕</span>Search</a><a href="/search.html#scan"><span aria-hidden="true">▣</span>Scan</a><a href="/index.html#hotNow"><span aria-hidden="true">♢</span>Hot</a></nav></body>
+<button type="button" class="sticky-watch" id="stickyWatch" hidden>🔔 Track this price</button>
+<nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><span aria-hidden="true">⌂</span>Home</a><a href="/search.html"><span aria-hidden="true">⌕</span>Search</a><a href="/alerts.html"><span aria-hidden="true">🔔</span>Alerts</a><a href="/search.html#scan"><span aria-hidden="true">▣</span>Scan</a></nav></body>
 </html>
