@@ -291,6 +291,17 @@ footer{
 .fbrand{font-weight:800;font-size:16px;white-space:nowrap;letter-spacing:-.02em}
 .fbrand em{font-style:normal;color:var(--flag)}
 .note{font-size:12px;color:var(--muted);line-height:1.9;max-width:640px;font-weight:500}
+.footlinks{display:flex;flex-wrap:wrap;gap:14px;max-width:1120px;margin:14px auto 0;padding:0 22px;font-size:12px;font-weight:700;color:var(--muted)}
+.footlinks a{text-decoration:none}
+.footlinks a:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.legal{max-width:780px;background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:24px;box-shadow:var(--shadow);margin:8px 0 34px}
+.legal h2{font-size:18px;letter-spacing:-.02em;margin:28px 0 8px}
+.legal h2:first-child{margin-top:0}
+.legal p,.legal li{color:var(--muted);line-height:1.75}
+.legal ul{padding-left:22px}
+.contact-card{max-width:620px;background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:24px;box-shadow:var(--shadow);margin:8px 0 34px}
+.contact-email{display:inline-block;margin-top:10px;padding:10px 14px;border-radius:10px;background:var(--ink);color:var(--paper);font-weight:800;text-decoration:none}
+.contact-email:hover{opacity:.88}
 
 /* scrollbar */
 ::-webkit-scrollbar{width:10px}

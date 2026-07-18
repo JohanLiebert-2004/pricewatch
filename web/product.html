@@ -38,11 +38,15 @@
     background:var(--card);border:1px solid var(--hair);border-radius:16px;
     padding:20px;margin-top:16px;box-shadow:var(--shadow);
   }
-  .chartwrap svg{width:100%;height:170px;display:block}
-  .chartwrap .cline{fill:none;stroke:var(--flag);stroke-width:2}
+  .charthead{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:14px}
+  .charttitle{font-size:14px;font-weight:800;letter-spacing:-.01em}
+  .chartmeta{font-size:12px;color:var(--muted);text-align:right}
+  .chartwrap svg{width:100%;height:auto;min-height:220px;display:block;overflow:visible}
+  .chartwrap .cgrid{stroke:var(--hair);stroke-width:1;vector-effect:non-scaling-stroke}
+  .chartwrap .cline{fill:none;stroke:var(--flag);stroke-width:2.5;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
   .chartwrap .carea{fill:var(--flag-soft)}
   .chartwrap .caxis{font-size:10px;fill:var(--faint);font-family:inherit}
-  .chartwrap .cpt{fill:var(--flag)}
+  .chartwrap .cpt{fill:var(--card);stroke:var(--flag);stroke-width:2;vector-effect:non-scaling-stroke}
   .watchpanel{
     background:var(--card);border:1px solid var(--hair);border-radius:16px;
     padding:18px 20px 20px;margin-top:16px;box-shadow:var(--shadow);
@@ -100,7 +104,7 @@
     Watch alerts fire once, by email, the first time the price reaches your
     target; unsubscribe any time from the link in that email.
   </div>
-</div></footer>
+</div><nav class="footlinks" aria-label="Site information"><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></footer>
 
 <script>
 const SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co";
@@ -146,40 +150,47 @@ const sku = params.get("sku") || (pathMatch && decodeURIComponent(pathMatch[2]))
 const cancelToken = params.get("cancel");
 const TG_BOT = "underp22bot";
 
-function sparkline(points){
-  // points: [{x: Date, y: price}], oldest first. Returns an SVG string.
-  // AXIS is a band below the plot for the date labels: they must live
-  // INSIDE the viewBox - a label drawn past its height is silently
-  // clipped (the old start-date label sat at H+16 and never rendered).
-  const W = 600, H = 150, PAD = 8, AXIS = 24;
-  const prices = points.map(p=>p.y);
+function priceChart(points){
+  // A time-scaled step chart: a retailer price remains true until the next
+  // recorded change, so joining points diagonally was visually misleading.
+  const W = 680, H = 260, L = 62, R = 18, T = 20, B = 46;
+  const plotW = W - L - R, plotH = H - T - B, bottom = H - B;
+  const prices = points.map(p => p.y);
   const lo = Math.min(...prices), hi = Math.max(...prices);
-  const span = (hi - lo) || 1;
-  const xAt = i => PAD + (i/(points.length-1 || 1)) * (W - PAD*2);
-  const yAt = v => H - PAD - ((v - lo)/span) * (H - PAD*2);
-  const line = points.map((p,i)=>`${xAt(i).toFixed(1)},${yAt(p.y).toFixed(1)}`).join(" ");
-  const area = `${PAD},${H-PAD} ${line} ${W-PAD},${H-PAD}`;
-  const dots = points.length <= 150
-    ? points.map((p,i)=>`<circle class="cpt" cx="${xAt(i).toFixed(1)}" cy="${yAt(p.y).toFixed(1)}" r="2.5">` +
-        `<title>${money(p.y)} — ${asOf(p.x.toISOString())}</title></circle>`).join("")
-    : "";
-  const first = points[0].x, last = points[points.length-1].x;
-  const mid = points[Math.floor((points.length-1)/2)].x;
-  const dateY = H + AXIS - 9;
-  // middle tick only when the range is wide enough that it adds information
-  const midTick = points.length > 2 && (last - first) > 3*86400e3
-    ? `<text class="caxis" x="${W/2}" y="${dateY}" text-anchor="middle">${asOf(mid.toISOString())}</text>`
-    : "";
-  return `<svg viewBox="0 0 ${W} ${H+AXIS}" preserveAspectRatio="none">
-    <polygon class="carea" points="${area}"></polygon>
-    <polyline class="cline" points="${line}"></polyline>
-    ${dots}
-    <text class="caxis" x="${PAD}" y="14">${money(hi)}</text>
-    <text class="caxis" x="${PAD}" y="${H-PAD-4}">${money(lo)}</text>
-    <text class="caxis" x="${PAD}" y="${dateY}">${asOf(first.toISOString())}</text>
-    ${midTick}
-    <text class="caxis" x="${W-PAD}" y="${dateY}" text-anchor="end">${asOf(last.toISOString())}</text>
-  </svg>`;
+  const pad = Math.max((hi - lo) * .08, Math.max(hi, 1) * .025);
+  const yMin = Math.max(0, lo - pad), yMax = hi + pad, ySpan = (yMax - yMin) || 1;
+  const firstTime = +points[0].x, lastTime = +points[points.length - 1].x;
+  const timeSpan = (lastTime - firstTime) || 1;
+  const xAt = p => L + ((+p.x - firstTime) / timeSpan) * plotW;
+  const yAt = value => T + ((yMax - value) / ySpan) * plotH;
+  const line = points.map((p, i) => {
+    const x = xAt(p).toFixed(1), y = yAt(p.y).toFixed(1);
+    return i ? `H ${x} V ${y}` : `M ${x} ${y}`;
+  }).join(" ");
+  const firstX = xAt(points[0]).toFixed(1), lastX = xAt(points[points.length - 1]).toFixed(1);
+  const area = `${line} L ${lastX} ${bottom} L ${firstX} ${bottom} Z`;
+  const gridValues = [hi, (hi + lo) / 2, lo];
+  const grid = gridValues.map(value => {
+    const y = yAt(value).toFixed(1);
+    return `<line class="cgrid" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"></line>` +
+      `<text class="caxis" x="${L - 8}" y="${(+y + 3.5).toFixed(1)}" text-anchor="end">${money(value)}</text>`;
+  }).join("");
+  const tickCount = timeSpan < 12 * 60 * 60 * 1000 ? 1 : (innerWidth < 520 ? 2 : 4);
+  const ticks = Array.from({length:tickCount}, (_, i) => {
+    const t = firstTime + (timeSpan * i / (tickCount - 1 || 1));
+    const x = L + ((t - firstTime) / timeSpan) * plotW;
+    const d = new Date(t);
+    return `<text class="caxis" x="${x.toFixed(1)}" y="${H - 16}" text-anchor="${i === 0 ? "start" : i === tickCount - 1 ? "end" : "middle"}">${d.toLocaleDateString("en-AU", {day:"numeric", month:"short", year:i === 0 || i === tickCount - 1 ? "2-digit" : undefined})}</text>`;
+  }).join("");
+  const dots = points.length <= 70 ? points.map(p => {
+    const x = xAt(p).toFixed(1), y = yAt(p.y).toFixed(1);
+    return `<circle class="cpt" cx="${x}" cy="${y}" r="3"><title>${money(p.y)} — ${asOf(p.x.toISOString())}</title></circle>`;
+  }).join("") : "";
+  const noun = points.length === 1 ? "recorded point" : "recorded changes";
+  return `<div class="charthead"><div class="charttitle">Tracked price timeline</div><div class="chartmeta">${points.length} ${noun} · ${asOf(points[0].x.toISOString())}–${asOf(points[points.length - 1].x.toISOString())}</div></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price history from ${money(lo)} to ${money(hi)}">
+      ${grid}<path class="carea" d="${area}"></path><path class="cline" d="${line}"></path>${dots}${ticks}
+    </svg>`;
 }
 
 async function submitWatch(productId, e){
@@ -344,11 +355,12 @@ async function load(){
 
     ${watchPanelHtml(p.product_id)}
 
-    <div class="chartwrap">${sparkline(points)}</div>
+    <div class="chartwrap">${priceChart(points)}</div>
   `;
 }
 
 load();
 </script>
+<script src="/watch-confirm.js"></script>
 </body>
 </html>
