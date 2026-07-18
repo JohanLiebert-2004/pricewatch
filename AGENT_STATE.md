@@ -239,31 +239,64 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
   background, blue accents, Codex's Books/Auto/Cosmetics retailer groupings
   all rendering correctly together with the new theme.
 
-## v2 UI redesign (owner-requested, in progress, separate worktree)
+## v2 UI redesign (owner-requested, all 7 spec items done, separate worktree)
 
 - Branch `v2`, checked out in its own worktree at
   `C:\Users\tarun\Downloads\pricewatch_4\pricewatch-v2` (NOT this directory -
   see the worktree note in "Start here" above). `master`/production is
-  untouched by this work; nothing here is live until explicitly merged.
-- Scope (owner-provided spec, 7 sections): chart gradient/tooltip/
+  untouched by this work; nothing here is live until explicitly merged and
+  deployed.
+- Scope was an owner-provided 7-section spec: chart gradient/tooltip/
   annotations, image-forward product cards, tabular-nums typography, a
   bigger homepage search bar, mobile bottom nav + sticky track button, and
-  various micro-interactions (button morph, skeleton loaders, toast). Being
-  worked through incrementally, chart first since the owner called it the
-  "hero element".
-- Done so far (commit `53d0cb7` on `v2`): `web/product.html`'s price chart -
-  gradient area fill (SVG `linearGradient`, replaces the old flat-colour
-  fill), a custom floating dark tooltip on hover/tap (date + price +
-  "(Lowest!)" when applicable, replacing the old native-browser `<title>`
-  tooltip), and the "lowest recorded" value promoted from a plain axis
-  gridline to its own dashed/coloured/labelled annotation (matching the
-  existing average-price guide's treatment) with a collision guard so it
-  never overlaps a plain gridline label on a tight-range product. The
-  step-line shape (not a smoothed curve) was deliberately kept - it
-  represents a recorded price holding constant between observations, a real
-  accuracy property worth keeping over generic chart "smoothness".
-- Not started yet: cards, typography, search bar, mobile nav, micro-
-  interactions (spec items 3-7).
+  various micro-interactions. All 7 are done as of `52252a9`:
+  1. Colour work - excluded per owner request (see the blue/white theme
+     entry above; unrelated to this spec).
+  2. Chart (`53d0cb7`): SVG gradient area fill, a custom floating tooltip
+     on hover/tap (date + price + "(Lowest!)"), and the lowest-recorded
+     value promoted to its own dashed/coloured annotation with a collision
+     guard against the plain axis gridlines. Kept the step-line shape (not
+     smoothed) - it represents a price holding constant between real
+     observations, worth keeping over generic "smoothness".
+  3. Cards (`90e4275`): red "was" price, a pulsing-glow "Lowest Price!"
+     badge (top-right corner, driven by the existing `is_30d_low` signal -
+     no new query) on both the homepage grid and the SSR landing pages.
+     Background removal ("crop out messy retailer photos") explicitly
+     skipped - that needs a real image-processing model, out of scope for
+     a CSS pass; flagged to the owner as a separate future feature if wanted.
+  4. Typography (`52252a9`): tabular-nums audit across every price-
+     displaying class site-wide (several were missing it).
+  5. Search bar (`52252a9`): moved out of the buried filter panel into a
+     large centered pill in the hero, glows on `:focus-within`. Rotating
+     placeholder was already built (untouched).
+  6. Mobile nav + alerts + sticky track button (`52252a9`): bottom nav's
+     4th icon changed Hot->My Alerts (Home/Search/Alerts/Scan) across all
+     10 pages carrying it. New `web/alerts.html` reads a
+     `dealwatch_alerts` localStorage list (same pattern as "recently
+     viewed"); `submitWatch()` now writes to it on success. The sticky
+     mobile track button's CSS already existed but had no HTML element and
+     a dangling click handler (`#stickyWatch`/`#watchpanel` didn't exist) -
+     wired both up.
+  7. Micro-interactions (`52252a9`): watch button morphs to a green,
+     bounce-animated "Check your email ✓" on success (not "Tracking ✓" -
+     watch-confirm.js's double opt-in means the watch isn't active until
+     the email is confirmed, so that text would have been false). Homepage
+     grid gets a skeleton-card loading state on first paint. Toast
+     notifications and the product-page skeleton loader already existed.
+- **A real, severe, unrelated production bug was found and fixed while
+  testing item 7 on `master` directly** (commit `354ae62`, already
+  deployed - see the "Current production state" entry above):
+  `watch-confirm.js` had a live infinite loop that froze the tab on every
+  successful watch submission. This was merged into `v2` too so testing
+  here doesn't hit it.
+- Verified in a real browser throughout (search focus glow, card badges,
+  chart tooltip/gradient, alerts page empty + populated states, the
+  button-morph/localStorage flow via a fetch-intercepted test submission -
+  not a real write to production - and the watch-confirm.js fix on actual
+  production). Not verified: true narrow-viewport rendering of the mobile
+  bottom nav/sticky button (a browser-automation tooling limitation this
+  session, not a code issue - the underlying `@media(max-width:640px)`
+  rule is pre-existing, unmodified, and already relied on elsewhere).
 - Before this is deployed anywhere, it needs a Vercel *preview* deploy
   (never straight to production) for the owner to review, run from the
   `pricewatch-v2` worktree on the OCI VM (the owner does not want deploys
