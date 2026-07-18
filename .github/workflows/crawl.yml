@@ -48,21 +48,25 @@ jobs:
                                # Salesforce Commerce Cloud storefront, JSON-LD
                                # product pages only); all coverage via the
                                # crawl (queue) lane
-            crawl_batch: 2400 # 154k-URL queue seeded from sitemap_20251*.xml.gz;
+            crawl_batch: 1000 # 154k-URL queue seeded from sitemap_20251*.xml.gz;
                                # no bot protection seen on plain requests (same
-                               # profile as supercheap). Raised from 1000 on
-                               # 17 July to speed up the image_url backfill
-                               # (commit 30ee38d fixed the parser but ~79k
-                               # already-tracked products still need a
-                               # re-crawl to pick up the new field, and the
-                               # queue processes never-seen URLs first) - at
-                               # the 1.5s delay floor, 2400*1.5s=60min, still
-                               # well under the 110min job timeout. Clears the
-                               # ~72k never-scraped backlog in ~1.5 days
-                               # (queue prioritises those first), then starts
-                               # revisiting - and image-backfilling - already-
-                               # tracked products; a full queue cycle is
-                               # ~2.7 days, down from ~6.5.
+                               # profile as supercheap). Was raised 1000->2400
+                               # on 17 July to speed up the image_url backfill,
+                               # but reverted same day (18 July ~00:00 UTC):
+                               # actual per-item time ran ~2-3x the assumed
+                               # 1.5s delay floor, so 2400 took 1.5-2h instead
+                               # of the estimated 60min - every hourly cron
+                               # tick then queued a new run that cancelled the
+                               # still-running previous one (concurrency group
+                               # crawl-myer, cancel-in-progress: false only
+                               # protects against 1 overlap, not a job that
+                               # consistently overruns the schedule interval).
+                               # Net effect was *zero* completed myer crawls
+                               # for 4+ consecutive hourly runs and knock-on
+                               # `detect` step failures (statement_timeout on
+                               # the deals insert, likely contention from the
+                               # pile-up). 1000 is the last value confirmed to
+                               # reliably complete inside an hour.
           - retailer: supercheap
             budget: 50        # refresh lane is a no-op (no compliant bulk
                                # listing; robots.txt disallows pagination params)
