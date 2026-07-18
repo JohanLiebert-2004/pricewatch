@@ -47,6 +47,13 @@
   .chartwrap .carea{fill:var(--flag-soft)}
   .chartwrap .caxis{font-size:10px;fill:var(--faint);font-family:inherit}
   .chartwrap .cpt{fill:var(--card);stroke:var(--flag);stroke-width:2;vector-effect:non-scaling-stroke}
+  .historynote{font-size:12px;color:var(--muted);margin:10px 0 0;line-height:1.7}
+  .pprice .reportlink{display:block;margin-top:9px;padding:0;background:transparent;color:var(--muted);font-size:12px;font-weight:700}
+  .historytable{background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:16px 20px;margin-top:16px;box-shadow:var(--shadow)}
+  .historytable summary{cursor:pointer;font-size:14px;font-weight:800}
+  .historytable table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px;text-align:left}
+  .historytable th,.historytable td{padding:9px 6px;border-top:1px solid var(--hair)}
+  .historytable th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
   .watchpanel{
     background:var(--card);border:1px solid var(--hair);border-radius:16px;
     padding:18px 20px 20px;margin-top:16px;box-shadow:var(--shadow);
@@ -104,7 +111,7 @@
     Watch alerts fire once, by email, the first time the price reaches your
     target; unsubscribe any time from the link in that email.
   </div>
-</div><nav class="footlinks" aria-label="Site information"><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></footer>
+</div><nav class="footlinks" aria-label="Site information"><a href="/how-it-works.html">How it works</a><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></footer>
 
 <script>
 const SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co";
@@ -191,6 +198,22 @@ function priceChart(points){
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price history from ${money(lo)} to ${money(hi)}">
       ${grid}<path class="carea" d="${area}"></path><path class="cline" d="${line}"></path>${dots}${ticks}
     </svg>`;
+}
+
+function historyTable(rows){
+  // Keep the table readable without hiding the fact that we may have sampled
+  // more than once a day. The most recent observation for each day wins.
+  const days = new Map();
+  for(const row of rows){
+    const day = new Date(row.scraped_at).toISOString().slice(0,10);
+    days.set(day, row);
+  }
+  const entries = [...days.values()].reverse().slice(0, 60);
+  const body = entries.map(row => `<tr><td>${asOf(row.scraped_at)}</td><td>${money(row.price)}</td><td>${row.snapshot_rrp && Number(row.snapshot_rrp) > Number(row.price) ? money(row.snapshot_rrp) : "—"}</td><td>${row.in_stock === true ? "Available" : row.in_stock === false ? "Unavailable" : "Not recorded"}</td></tr>`).join("");
+  return `<details class="historytable"><summary>Price history table (${days.size} recorded ${days.size === 1 ? "day" : "days"})</summary>
+    <table><thead><tr><th scope="col">Date checked</th><th scope="col">Price</th><th scope="col">Retailer RRP</th><th scope="col">Availability</th></tr></thead><tbody>${body}</tbody></table>
+    ${days.size > entries.length ? `<p class="historynote">Showing the latest ${entries.length} recorded days.</p>` : ""}
+  </details>`;
 }
 
 async function submitWatch(productId, e){
@@ -308,6 +331,9 @@ async function load(){
   const recent = rows.filter(r=>new Date(r.scraped_at).getTime() >= cutoff).map(r=>r.price);
   const ninetyLow = recent.length ? Math.min(...recent) : allLow;
   const store = RETAILER_LABEL[p.retailer] || p.retailer;
+  const trackingSince = asOf(rows[0].scraped_at);
+  const lastChecked = asOf(p.price_updated_at || rows[rows.length - 1].scraped_at);
+  const reportHref = `mailto:alerts@dealwatch.com.au?subject=${encodeURIComponent("Dealwatch price correction: " + p.title)}&body=${encodeURIComponent("Product: " + location.href + "\nRetailer: " + store + "\nWhat looks incorrect: ")}`;
   let points = rows.map(r=>({x: new Date(r.scraped_at), y: Number(r.price)}));
   // Dense histories (many intraday flips) render as unreadable stripes -
   // collapse to one point per day at that day's LOWEST price, the number a
@@ -343,19 +369,21 @@ async function load(){
         ${p.current_rrp && Number(p.current_rrp) > Number(p.current_price)
           ? `<div class="was">${money(p.current_rrp)}</div>` : ""}
         <a href="${esc(p.url)}" target="_blank" rel="noopener">View at ${esc(store)}</a>
+        <a class="reportlink" href="${reportHref}">Report an incorrect price</a>
       </div>
     </div>
 
     <div class="stats" style="margin-top:16px">
       <div class="stat"><b>${money(p.current_price)}</b><span>current price</span></div>
-      <div class="stat"><b>${money(allLow)}</b><span>all-time low</span></div>
-      <div class="stat"><b>${money(allHigh)}</b><span>all-time high</span></div>
+      <div class="stat"><b>${money(allLow)}</b><span>lowest recorded price</span></div>
+      <div class="stat"><b>${money(allHigh)}</b><span>highest recorded price</span></div>
       <div class="stat"><b>${money(ninetyLow)}</b><span>90-day low</span></div>
     </div>
 
     ${watchPanelHtml(p.product_id)}
 
-    <div class="chartwrap">${priceChart(points)}</div>
+    <div class="chartwrap">${priceChart(points)}<div class="historynote">Tracking since ${trackingSince} · ${rows.length} recorded ${rows.length === 1 ? "observation" : "observations"} · last checked ${lastChecked}</div></div>
+    ${historyTable(rows)}
   `;
 }
 

@@ -173,7 +173,7 @@
     recorded in the last 90 days where no RRP is published.
     Categories are inferred from product names and may occasionally be misclassified.
   </div>
-</div><nav class="footlinks" aria-label="Site information"><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></footer>
+</div><nav class="footlinks" aria-label="Site information"><a href="/how-it-works.html">How it works</a><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></footer>
 
 <script>
 // ---- data source -------------------------------------------------------
@@ -333,7 +333,7 @@ function cardHtml(d, i){
         <span class="cwas">${money(d.reference_price)}</span></div>
       <div class="cfoot"><span>${RETAILER_LABEL[d.retailer]||esc(d.retailer)}</span>
         <span class="save">save ${money(save)}</span></div>
-      <div class="trustline">Compared with ${esc(d.reference_source || "recorded price")}</div>
+      <div class="trustline">${d.is_marketplace ? "Marketplace seller · " : ""}Compared with ${esc(d.reference_source || "recorded price")} · checked ${ago(d.price_updated_at)}</div>
       <a class="track-btn" href="${histUrl}">🔔 Track price &amp; get alerts</a>
     </div>
   </div>`;
