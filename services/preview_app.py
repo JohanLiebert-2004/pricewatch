@@ -123,10 +123,11 @@ def _landing_card(row: dict) -> str:
            else "")
     save = (f'<span class="save">Save ${reference - price:.2f}</span>'
             if reference > price else "")
+    lowest = '<span class="badge lowest">Lowest Price!</span>' if row.get("is_30d_low") else ""
     href = _product_path(retailer, sku)
     return f'''<article class="card">
   <a class="card-link" href="{html.escape(href, quote=True)}" aria-label="View price history for {html.escape(title, quote=True)}"></a>
-  <div class="ph"><span class="badge">-{pct_off}%</span>{media}</div>
+  <div class="ph"><span class="badge">-{pct_off}%</span>{lowest}{media}</div>
   <div class="cbody"><div class="cname">{html.escape(title)}</div>
     <div class="cprices"><span class="cnow">${price:.2f}</span>{was}</div>
     <div class="cfoot"><span>{html.escape(label)}</span>{save}</div>
@@ -138,7 +139,7 @@ def _landing_card(row: dict) -> str:
 async def _fetch_landing_deals(field: str, value: str) -> list[dict]:
     r = await client.get(
         f"{SUPABASE_URL}/rest/v1/discount_feed",
-        params={"select": "retailer,sku,title,category,image_url,price,reference_price,pct_off,price_updated_at",
+        params={"select": "retailer,sku,title,category,image_url,price,reference_price,pct_off,price_updated_at,is_30d_low",
                 field: f"eq.{value}", "order": "pct_off.desc,reference_price.desc",
                 "limit": 36},
         headers={"apikey": SUPABASE_ANON_KEY,

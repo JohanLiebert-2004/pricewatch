@@ -338,6 +338,7 @@ function cardHtml(d, i){
     <a class="card-link" href="${histUrl}" aria-label="View price history for ${esc(d.title)}"></a>
     <div class="ph">
       <span class="badge ${d.pct_off>=50?"":"mild"}">-${d.pct_off}%</span>
+      ${d.is_30d_low ? `<span class="badge lowest">Lowest Price!</span>` : ""}
       ${d.image_url
         ? `<img src="${esc(thumbSrc(d.image_url))}" loading="lazy" alt="${esc(d.title)}"
              onerror="this.outerHTML='<span class=mono>${mono}</span>'">`
@@ -347,7 +348,6 @@ function cardHtml(d, i){
       <div class="cname">${esc(d.title)}</div>
       <div class="ctags">
         <span class="pill">${esc(d.subcategory || d.category)}</span>
-        ${d.is_30d_low ? `<span class="pill trust">30-day low</span>` : ""}
       </div>
       <div class="cprices"><span class="cnow">${money(d.price)}</span>
         <span class="cwas">${money(d.reference_price)}</span></div>

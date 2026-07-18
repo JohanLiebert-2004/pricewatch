@@ -204,6 +204,15 @@ a{color:inherit}
   font-weight:800;font-size:14px;padding:5px 10px;border-radius:9px;letter-spacing:-.02em;
 }
 .badge.mild{background:var(--ink)}
+.badge.lowest{
+  position:absolute;top:10px;right:10px;left:auto;background:var(--deal);color:#fff;
+  font-weight:800;font-size:11px;padding:5px 9px;border-radius:9px;letter-spacing:-.01em;
+  animation:badgeGlow 2.2s ease-in-out infinite;
+}
+@keyframes badgeGlow{
+  0%,100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--deal) 55%, transparent)}
+  50%{box-shadow:0 0 10px 3px color-mix(in srgb, var(--deal) 55%, transparent)}
+}
 .cbody{padding:13px 14px 15px;display:flex;flex-direction:column;gap:8px;flex:1}
 .cname{
   font-weight:600;font-size:13.5px;line-height:1.35;color:var(--ink);
@@ -212,7 +221,7 @@ a{color:inherit}
 }
 .cprices{display:flex;align-items:baseline;gap:8px;margin-top:auto}
 .cnow{font-weight:800;font-size:20px;letter-spacing:-.03em;color:var(--ink)}
-.cwas{color:var(--faint);text-decoration:line-through;font-size:13px;font-weight:500}
+.cwas{color:var(--bad);text-decoration:line-through;font-size:13px;font-weight:500}
 .cfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;
   font-size:12px;color:var(--muted);font-weight:600}
 .cfoot .save{color:var(--deal);font-weight:700;white-space:nowrap}
