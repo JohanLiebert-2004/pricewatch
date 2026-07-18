@@ -77,8 +77,17 @@ CREATE TABLE IF NOT EXISTS watches (
     fired_at TEXT,
     cancelled_at TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_watches_confirmed_unfired ON watches(product_id)
-    WHERE confirmed_at IS NOT NULL AND fired_at IS NULL AND cancelled_at IS NULL;
+CREATE TABLE IF NOT EXISTS store_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    suburb TEXT NOT NULL,
+    price REAL NOT NULL,
+    reported_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    reviewed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_store_reports_review
+    ON store_reports(product_id, status, reported_at);
 """
 
 

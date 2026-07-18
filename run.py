@@ -21,6 +21,23 @@ from scrapers import REGISTRY
 from scrapers.base import Blocked, NotFound, verify_price
 
 
+def record_scraper_health(conn, retailer: str, status: str, *, stored: int = 0,
+                          attempted: int = 0, detail: str = ""):
+    """Persist the most recent crawler outcome for the health-alert job.
+
+    A blocked request is otherwise easy to miss because a crawl batch exits
+    cleanly after recording the queue failure so the next scheduled batch can
+    continue. This marker makes that operational state observable.
+    """
+    value = json.dumps({"status": status, "stored": stored,
+                        "attempted": attempted, "detail": detail[:300],
+                        "at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+    conn.execute("INSERT OR IGNORE INTO kv (k, v) VALUES (?, ?)",
+                 (f"scraper_health:{retailer}", value))
+    conn.execute("UPDATE kv SET v=? WHERE k=?", (value, f"scraper_health:{retailer}"))
+    conn.commit()
+
+
 def cmd_scrape(args):
     conn = db.connect()
     names = list(REGISTRY) if args.retailer == "all" else [args.retailer]
@@ -102,6 +119,7 @@ def cmd_crawl(args):
         print(f"queue empty - run: python run.py index {args.retailer}")
         return
     ok = 0
+    blocked = False
     watch_hits = []   # already-tracked products whose price moved this batch
     for r in rows:
         url = r["url"]
@@ -110,6 +128,9 @@ def cmd_crawl(args):
             rec = scraper.parse_product(url, scraper.get(url))
         except Blocked as e:
             print(f"BLOCKED, stopping batch: {e}")
+            blocked = True
+            record_scraper_health(conn, args.retailer, "blocked", stored=ok,
+                                  attempted=len(rows), detail=str(e))
             # Without this, this exact URL's last_scraped stays NULL forever,
             # so the oldest-first ordering keeps re-picking it first on every
             # future cycle and the batch never advances past it.
@@ -163,6 +184,8 @@ def cmd_crawl(args):
         conn.execute("UPDATE kv SET v=? WHERE k=?",
                      (json.dumps(proxy_state), "bigw_cat_state"))
         conn.commit()
+    if not blocked:
+        record_scraper_health(conn, args.retailer, "ok", stored=ok, attempted=len(rows))
     print(f"batch done: {ok}/{len(rows)} products stored "
           f"(rerun to continue through the queue)")
 

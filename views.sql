@@ -411,3 +411,47 @@ order by h.interest_events desc, h.last_interest desc
 limit 12;
 revoke all on trending_products from anon, authenticated;
 grant select on trending_products to anon;
+
+-- Community in-store reports are never writable through the public table.
+-- The narrow RPC validates the product and report shape, then saves it as
+-- pending. Pending reports are deliberately not shown as retailer prices.
+alter table store_reports enable row level security;
+revoke all on store_reports from anon, authenticated;
+
+create or replace function submit_store_report(
+  p_product_id bigint, p_suburb text, p_price numeric
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_suburb text := regexp_replace(trim(coalesce(p_suburb, '')), '\s+', ' ', 'g');
+begin
+  if p_product_id is null or not exists (
+    select 1 from products where id = p_product_id and current_price is not null
+  ) then
+    raise exception 'unknown product';
+  end if;
+  if length(v_suburb) < 2 or length(v_suburb) > 80
+     or v_suburb !~ '^[A-Za-z0-9 .''-]+$' then
+    raise exception 'enter a valid suburb or store location';
+  end if;
+  if p_price is null or p_price <= 0 or p_price > 20000 then
+    raise exception 'enter a valid price';
+  end if;
+  -- Stops accidental double taps without claiming to be an identity system.
+  if exists (
+    select 1 from store_reports
+    where product_id = p_product_id and suburb = v_suburb and price = p_price
+      and reported_at > now() - interval '15 minutes'
+  ) then
+    return;
+  end if;
+  insert into store_reports(product_id, suburb, price)
+  values (p_product_id, v_suburb, round(p_price, 2));
+end;
+$$;
+revoke all on function submit_store_report(bigint, text, numeric) from public;
+grant execute on function submit_store_report(bigint, text, numeric) to anon;

@@ -82,8 +82,8 @@
   <div class="stats">
     <div class="stat"><b id="s-deals">–</b><span>live deals, 50%+ off</span></div>
     <div class="stat"><b id="s-items">–</b><span>products under watch</span></div>
-    <div class="stat"><b>10</b><span>retailers covered</span></div>
-    <div class="stat"><b>Daily</b><span>frequent updates</span></div>
+    <div class="stat"><b>13</b><span>retailers covered</span></div>
+    <div class="stat"><b>Hourly</b><span>frequent updates</span></div>
   </div>
 </div></header>
 
@@ -108,7 +108,7 @@
       <button class="chip" data-r="myer" aria-pressed="false">Myer</button>
       <button class="chip" data-r="supercheap" aria-pressed="false">Supercheap Auto</button>
       <button class="chip" data-r="sephora" aria-pressed="false">Sephora</button>
-      <button class="chip" data-r="chemistwarehouse" aria-pressed="false">Chemist Warehouse</button>
+      <button class="chip" data-r="chemistwarehouse" aria-pressed="false">Chemist Warehouse</button><button class="chip" data-r="booktopia" aria-pressed="false">Booktopia</button><button class="chip" data-r="qbd" aria-pressed="false">QBD Books</button><button class="chip" data-r="ikea" aria-pressed="false">IKEA</button>
     </div>
     <div class="store-status network-status" id="networkStatus" hidden></div>
     <div class="store-status" id="storeStatus" hidden></div>
@@ -155,7 +155,7 @@
     <p>Explore currently tracked price drops with crawlable deal pages and full price-history links.</p>
     <nav class="landing-links" aria-label="Browse deals">
       <a href="/deals/tech">Tech deals</a><a href="/deals/home">Home deals</a><a href="/deals/kitchen">Kitchen deals</a><a href="/deals/toys">Toys &amp; baby deals</a><a href="/deals/clothing">Clothing deals</a><a href="/deals/beauty">Beauty deals</a><a href="/deals/books">Books deals</a>
-      <a href="/retailers/kmart">Kmart deals</a><a href="/retailers/bigw">Big W deals</a><a href="/retailers/officeworks">Officeworks deals</a><a href="/retailers/target">Target deals</a><a href="/retailers/jbhifi">JB Hi-Fi deals</a><a href="/retailers/goodguys">The Good Guys deals</a><a href="/retailers/myer">Myer deals</a><a href="/retailers/supercheap">Supercheap Auto deals</a><a href="/retailers/sephora">Sephora deals</a><a href="/retailers/chemistwarehouse">Chemist Warehouse deals</a>
+      <a href="/retailers/kmart">Kmart deals</a><a href="/retailers/bigw">Big W deals</a><a href="/retailers/officeworks">Officeworks deals</a><a href="/retailers/target">Target deals</a><a href="/retailers/jbhifi">JB Hi-Fi deals</a><a href="/retailers/goodguys">The Good Guys deals</a><a href="/retailers/myer">Myer deals</a><a href="/retailers/supercheap">Supercheap Auto deals</a><a href="/retailers/sephora">Sephora deals</a><a href="/retailers/chemistwarehouse">Chemist Warehouse deals</a><a href="/retailers/booktopia">Booktopia deals</a><a href="/retailers/qbd">QBD Books deals</a><a href="/retailers/ikea">IKEA deals</a>
     </nav>
   </section>
 
@@ -204,7 +204,7 @@ fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=sku&pct_off=gte.50&limit=1`,
 
 // ---- render ------------------------------------------------------------
 const money = n => "$"+Number(n).toFixed(2).replace(/\.00$/,"");
-const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse"};
+const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse", booktopia:"Booktopia", qbd:"QBD Books", ikea:"IKEA"};
 const SORTS = {
   deep:  "pct_off.desc,reference_price.desc",
   price_asc:  "price.asc,pct_off.desc",
@@ -349,7 +349,9 @@ function cardHtml(d, i){
 function hotCard(p){
   const store = RETAILER_LABEL[p.retailer] || p.retailer;
   const href = `/p/${encodeURIComponent(p.retailer)}/${encodeURIComponent(p.sku)}`;
-  return `<a class="hot-card" href="${href}"><strong>${esc(p.title)}</strong><div class="meta"><span class="pill">${esc(store)}</span>${p.category ? `<span class="pill">${esc(p.category)}</span>` : ""}</div><div class="hot-price">${money(p.current_price)}</div></a>`;
+  const interest = Number(p.interest_events || 0);
+  const heat = interest >= 2 ? `<span class="hot-heat">${interest} recent shoppers</span>` : "";
+  return `<a class="hot-card" href="${href}"><strong>${esc(p.title)}</strong><div class="meta"><span class="pill">${esc(store)}</span>${p.category ? `<span class="pill">${esc(p.category)}</span>` : ""}</div><div class="hot-price">${money(p.current_price)}</div>${heat}</a>`;
 }
 function loadHotNow(){
   fetch(`${SUPABASE_URL}/rest/v1/trending_products?select=*`, {headers:HDRS})

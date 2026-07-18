@@ -19,7 +19,7 @@ RETAILER_LABEL = {"kmart": "Kmart", "bigw": "Big W", "target": "Target",
                   "officeworks": "Officeworks", "jbhifi": "JB Hi-Fi",
                   "goodguys": "The Good Guys", "myer": "Myer",
                   "supercheap": "Supercheap Auto", "sephora": "Sephora",
-                  "chemistwarehouse": "Chemist Warehouse"}
+                  "chemistwarehouse": "Chemist Warehouse", "booktopia": "Booktopia", "qbd": "QBD Books", "ikea": "IKEA"}
 
 
 def _config():

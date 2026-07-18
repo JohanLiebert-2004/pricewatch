@@ -37,7 +37,7 @@ RETAILER_LABEL = {"kmart": "Kmart", "bigw": "Big W", "target": "Target",
                   "officeworks": "Officeworks", "jbhifi": "JB Hi-Fi",
                   "goodguys": "The Good Guys", "myer": "Myer",
                   "supercheap": "Supercheap Auto", "sephora": "Sephora",
-                  "chemistwarehouse": "Chemist Warehouse"}
+                  "chemistwarehouse": "Chemist Warehouse", "booktopia": "Booktopia", "qbd": "QBD Books", "ikea": "IKEA"}
 
 PAYLOAD_RX = re.compile(r"^(i_([a-z]+)_([A-Za-z0-9_-]{1,48})|s_([a-z]+))$")
 

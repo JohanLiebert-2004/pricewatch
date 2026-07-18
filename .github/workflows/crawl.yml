@@ -89,6 +89,15 @@ jobs:
                                # coverage via the crawl (queue) lane
             crawl_batch: 500  # ~26k-URL queue seeded from products.xml;
                                # full sweep in ~26h of half-hourly runs
+          - retailer: booktopia
+            budget: 25
+            crawl_batch: 180  # robots.txt requires a 10-second crawl delay
+          - retailer: qbd
+            budget: 25
+            crawl_batch: 250
+          - retailer: ikea
+            budget: 25
+            crawl_batch: 80   # product pages are approximately 1 MB each
     concurrency:
       group: crawl-${{ matrix.retailer }}
       cancel-in-progress: false
@@ -153,6 +162,15 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
+          - retailer: booktopia
+            budget: 25
+            crawl_batch: 180  # robots.txt requires a 10-second crawl delay
+          - retailer: qbd
+            budget: 25
+            crawl_batch: 250
+          - retailer: ikea
+            budget: 25
+            crawl_batch: 80   # product pages are approximately 1 MB each
     concurrency:
       group: detect            # two overlapping runs' detects insert the same
       cancel-in-progress: false # deals and deadlock/starve each other on the
@@ -173,3 +191,8 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Detect price drops
         run: python run.py detect
+      - name: Email crawler health alerts
+        if: always()
+        env:
+          ADMIN_ALERT_EMAIL: admin@dealwatch.com.au
+        run: python health_alerts.py

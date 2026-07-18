@@ -70,7 +70,7 @@ const SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrbGZnd2FseWZ1Z3BlaWVlcXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNDc1NTcsImV4cCI6MjA5ODcyMzU1N30.Y-q-s49eP67iHuQIysRb7Apl5vLA4u2C6fZYCdS7Ijg";  // public anon key (read-only via RLS)
 
 const money = n => "$"+Number(n).toFixed(2);
-const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse"};
+const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse", booktopia:"Booktopia", qbd:"QBD Books", ikea:"IKEA"};
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const IMG_PROXY = "https://159-13-59-184.sslip.io/img";  // OCI image cache

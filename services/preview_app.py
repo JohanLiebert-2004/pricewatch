@@ -51,13 +51,15 @@ ALLOWED_IMG_HOSTS = {
     "static.chemistwarehouse.com.au",                    # Chemist Warehouse
     "image-optimizer-reg.production.sephora-asia.net",   # Sephora
     "myer-media.com.au",                                 # Myer
+    "www.booktopia.com.au", "www.qbd.com.au",           # book retailers
+    "www.ikea.com",                                       # IKEA
 }
 
 RETAILER_LABEL = {"kmart": "Kmart", "bigw": "Big W", "target": "Target",
                   "officeworks": "Officeworks", "jbhifi": "JB Hi-Fi",
                   "goodguys": "The Good Guys", "myer": "Myer",
                   "supercheap": "Supercheap Auto", "sephora": "Sephora",
-                  "chemistwarehouse": "Chemist Warehouse"}
+                  "chemistwarehouse": "Chemist Warehouse", "booktopia": "Booktopia", "qbd": "QBD Books", "ikea": "IKEA"}
 
 app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
 client = httpx.AsyncClient(timeout=20, follow_redirects=True)

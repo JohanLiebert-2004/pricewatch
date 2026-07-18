@@ -59,6 +59,12 @@
     <button type="submit">Apply</button>
     <button type="button" class="clear" id="pclear">Clear</button>
   </form>
+  <div class="barlabel">Sort</div>
+  <div class="pricebar"><select id="sort" aria-label="Sort catalogue">
+    <option value="title">Name: A–Z</option>
+    <option value="price_asc">Price: low to high</option>
+    <option value="price_desc">Price: high to low</option>
+  </select></div>
   <div class="total" id="total"></div>
   <div id="list"><div class="empty">Curating the catalogue…</div></div>
   <button class="more" id="more" hidden>Show 50 more</button>
@@ -83,7 +89,7 @@ const RETAILERS = [["all","All stores"],["kmart","Kmart"],["bigw","Big W"],
                    ["officeworks","Officeworks"],["target","Target"],
                    ["jbhifi","JB Hi-Fi"],["goodguys","The Good Guys"],["myer","Myer"],
                    ["supercheap","Supercheap Auto"],
-                   ["sephora","Sephora"],["chemistwarehouse","Chemist Warehouse"]];
+                   ["sephora","Sephora"],["chemistwarehouse","Chemist Warehouse"],["booktopia","Booktopia"],["qbd","QBD Books"],["ikea","IKEA"]];
 const CATS = [["all","All"],["tech","Tech"],["home","Home"],["kitchen","Kitchen"],
               ["toys","Toys & Baby"],["clothing","Clothing"],["beauty","Beauty"],
               ["books","Books"],["other","Other"]];
@@ -104,6 +110,8 @@ let SUBSTATS = {};        // retailer -> [{subcategory, items}] desc (per-store 
 let selRetailers = new Set(), selCats = new Set(), selSubcats = new Set(), offset = 0;
 let pmin = null, pmax = null;   // price filter ($)
 let q = "";                     // text filter (name/SKU)
+let sort = "title";             // title | price_asc | price_desc
+const SORT_ORDER = {title:"title.asc", price_asc:"current_price.asc,title.asc", price_desc:"current_price.desc,title.asc"};
 const PAGE = 50;
 
 const matchRet = r => selRetailers.size===0 || selRetailers.has(r);
@@ -182,7 +190,7 @@ function filterUrl(){
 async function loadPage(reset){
   if(reset){ offset = 0; document.getElementById("list").innerHTML =
     `<div class="empty">Curating the catalogue…</div>`; }
-  const q = filterUrl() + `&order=title.asc&limit=${PAGE}&offset=${offset}`;
+  const q = filterUrl() + `&order=${SORT_ORDER[sort]}&limit=${PAGE}&offset=${offset}`;
   const r = await fetch(q, {headers:HDRS});
   const rows = r.ok ? await r.json() : [];
   const html = rows.map((p,i)=>`<div class="row plain media" style="animation-delay:${Math.min(i*30,300)}ms">
@@ -240,6 +248,10 @@ document.getElementById("cats").addEventListener("click", e=>{
   loadPage(true);
 });
 document.getElementById("more").addEventListener("click", ()=>loadPage(false));
+document.getElementById("sort").addEventListener("change", e=>{
+  sort = SORT_ORDER[e.target.value] ? e.target.value : "title";
+  loadPage(true);
+});
 
 document.getElementById("pricebar").addEventListener("submit", e=>{
   e.preventDefault();

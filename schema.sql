@@ -83,6 +83,22 @@ CREATE TABLE IF NOT EXISTS product_interest (
 CREATE INDEX IF NOT EXISTS idx_product_interest_recent
     ON product_interest (recorded_at DESC, product_id);
 
+-- Store prices are community submissions, kept pending until they can be
+-- reviewed. They are intentionally separate from scraped price history: a
+-- shelf ticket may be local, short-lived or incorrect.
+CREATE TABLE IF NOT EXISTS store_reports (
+    id BIGSERIAL PRIMARY KEY,
+    product_id BIGINT NOT NULL REFERENCES products(id),
+    suburb TEXT NOT NULL,
+    price NUMERIC(10,2) NOT NULL CHECK (price > 0),
+    reported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'verified', 'rejected')),
+    reviewed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_store_reports_review
+    ON store_reports (product_id, status, reported_at DESC);
+
 -- Telegram bot subscriptions (services/telegram_bot.py on the OCI VM writes
 -- these; alerts.py fans deal/price pings out to them from GitHub Actions).
 -- sku NULL = subscribed to every new deal for the retailer.
