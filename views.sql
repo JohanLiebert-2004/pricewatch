@@ -463,7 +463,7 @@ grant execute on function submit_store_report(bigint, text, numeric) to anon;
 -- region) - avoids fanning out if a region variant ever exists.
 create or replace function similar_products(p_retailer text, p_sku text, p_limit int default 8)
 returns table(retailer text, sku text, title text, brand text, category text,
-              image_url text, current_price numeric, current_rrp numeric)
+              image_url text, current_price real, current_rrp real)
 language plpgsql
 security definer
 set search_path = public
