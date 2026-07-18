@@ -38,11 +38,15 @@ RULES = [
         r"shampoo|conditioner|hair ?dryer|straightener|curler|perfume|"
         r"fragrance|cologne|nail polish|razor|shaver|trimmer|epilator|oxx)\b",
         re.I)),
+    # Keep this deliberately narrow. Generic stationery words (paper, journal,
+    # notebook, pen) created a misleading "Books" feed, including apparel
+    # listings with incidental words in their titles. Specialist book retailers
+    # set category="books" directly from their book-only catalogue paths.
     ("books", re.compile(
-        r"\b(book|novel|paperback|hardcover|colouring|coloring|notebook|"
-        r"journal|diary|planner|pen|pencil|marker|highlighter|stapler|tape|"
-        r"post-?it|envelope|paper|folder|binder|calculator|whiteboard|easel)\b",
-        re.I)),
+        r"\b(book|novel|paperback|hardback|hardcover|softcover|audiobook|"
+        r"e-?book|textbook|omnibus|box ?set|anthology|memoir|biography|"
+        r"dictionary|thesaurus|atlas|comic|manga|graphic novel|"
+        r"colouring book|coloring book|activity book)\b", re.I)),
     ("home", re.compile(
         r"\b(chair|desk|table|shelf|shelving|bookcase|drawer|cabinet|sofa|"
         r"couch|lounge|bed|mattress|quilt|doona|duvet|sheet set|pillow|"
@@ -145,6 +149,23 @@ def backfill(conn) -> int:
     return len(updates)
 
 
+
+def repair_misclassified_books(conn) -> int:
+    """Correct prior broad book tagging without rewriting the full catalogue.
+
+    Only records already tagged as books are reconsidered. This is safe to run
+    every detect cycle and promptly removes clothing/stationery false positives
+    created by the older broad rule.
+    """
+    rows = conn.execute(
+        "SELECT id, title FROM products WHERE category='books'").fetchall()
+    updates = [(category, row["id"]) for row in rows
+               if (category := categorize(row["title"])) != "books"]
+    for i in range(0, len(updates), 1000):
+        conn.executemany("UPDATE products SET category=? WHERE id=?",
+                         updates[i:i + 1000])
+        conn.commit()
+    return len(updates)
 def backfill_subcategories(conn) -> int:
     """Tag subcategory from titles for retailers with no native category data."""
     total = 0

@@ -20,6 +20,7 @@
 <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
 <script defer src="/_vercel/insights/script.js"></script>
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#2563eb"><script defer src="/pwa.js"></script>
 </head>
 <body>
 
@@ -45,7 +46,12 @@
            autocomplete="off" autofocus>
     <button class="go" type="submit">Search</button>
   </form>
-  <div class="hint">matches product titles and SKUs across the current catalogue</div>
+  <div class="hint">matches product titles, retailer SKUs and barcodes across the current catalogue</div>
+  <div class="scan-tools"><button class="scan-btn" id="scan" type="button">Scan barcode</button><span>Use your phone camera in-store, or enter the number below.</span></div>
+  <div class="scanner" id="scanner" hidden>
+    <video id="scanVideo" playsinline muted></video>
+    <div><strong id="scanStatus">Starting camera…</strong><p>Point the camera at a product barcode. Nothing is uploaded or recorded from the camera.</p><button class="clear" id="stopScan" type="button">Close scanner</button></div>
+  </div>
   <div class="bar" id="trending" style="margin-top:14px"></div>
   <div id="list"><div class="empty">Enter a product name or SKU above to see its latest tracked price.</div></div>
 </main>
@@ -83,9 +89,10 @@ function asOf(iso){
     {day:"numeric", month:"short", year:"numeric"});
 }
 
+function skeletonHtml(){return `<div class="skeleton-list">${Array.from({length:6},()=>`<div class="skeleton-card"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>`).join("")}</div>`;}
 async function search(q){
   const list = document.getElementById("list");
-  list.innerHTML = `<div class="empty">Searching the catalogue…</div>`;
+  list.innerHTML = skeletonHtml();
   // PostgREST or= syntax breaks on , ( ) — strip them; * are wildcards
   const safe = q.replace(/[,()*]/g, " ").trim();
   if(!safe){ list.innerHTML = `<div class="empty">Enter something to search.</div>`; return; }
@@ -94,7 +101,7 @@ async function search(q){
   // others out of a single shared result page
   const urls = Object.keys(RETAILER_LABEL).map(r =>
     `${SUPABASE_URL}/rest/v1/product_search?retailer=eq.${r}` +
-    `&or=(sku.ilike.${encodeURIComponent(pat)},title.ilike.${encodeURIComponent(pat)})` +
+    `&or=(gtin.eq.${encodeURIComponent(safe)},sku.ilike.${encodeURIComponent(pat)},title.ilike.${encodeURIComponent(pat)})` +
     `&order=title.asc&limit=20`);
   let rows = [];
   try{
@@ -154,6 +161,49 @@ document.getElementById("f").addEventListener("submit", e=>{
   }
 });
 
+let scanStream = null, scanFrame = null;
+function stopScanner(){
+  if(scanFrame) cancelAnimationFrame(scanFrame);
+  scanFrame = null;
+  if(scanStream) scanStream.getTracks().forEach(track=>track.stop());
+  scanStream = null;
+  document.getElementById("scanner").hidden = true;
+}
+async function startScanner(){
+  const box = document.getElementById("scanner"), video = document.getElementById("scanVideo"), status = document.getElementById("scanStatus");
+  box.hidden = false;
+  if(!("BarcodeDetector" in window)){
+    status.textContent = "Camera barcode scanning is not available in this browser. Enter the barcode in the search box instead.";
+    return;
+  }
+  try{
+    scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
+    video.srcObject = scanStream;
+    await video.play();
+    const detector = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39"]});
+    status.textContent = "Scanning…";
+    const tick = async ()=>{
+      if(!scanStream) return;
+      try{
+        const codes = await detector.detect(video);
+        const code = codes[0] && String(codes[0].rawValue || "").trim();
+        if(code){
+          document.getElementById("q").value = code;
+          stopScanner();
+          search(code);
+          return;
+        }
+      }catch(e){}
+      scanFrame = requestAnimationFrame(tick);
+    };
+    tick();
+  }catch(e){
+    status.textContent = "Camera access was unavailable. You can still enter the barcode in the search box.";
+  }
+}
+document.getElementById("scan").addEventListener("click", startScanner);
+document.getElementById("stopScan").addEventListener("click", stopScanner);
+window.addEventListener("pagehide", stopScanner);
 // prefill + auto-run from ?q= (Google Sitelinks Search Box / shared links)
 {
   const qp = new URLSearchParams(location.search).get("q");
@@ -180,5 +230,5 @@ fetch(`${SUPABASE_URL}/rest/v1/trending_searches?select=*`,
     });
   }).catch(()=>{});
 </script>
-</body>
+<nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><span aria-hidden="true">⌂</span>Home</a><a href="/search.html"><span aria-hidden="true">⌕</span>Search</a><a href="/search.html#scan"><span aria-hidden="true">▣</span>Scan</a><a href="/index.html#hotNow"><span aria-hidden="true">♢</span>Hot</a></nav></body>
 </html>

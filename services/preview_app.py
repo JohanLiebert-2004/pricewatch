@@ -76,7 +76,7 @@ async def fetch_product(retailer: str, sku: str) -> dict | None:
 CATEGORY_LABEL = {
     "tech": "Tech", "home": "Home", "kitchen": "Kitchen",
     "toys": "Toys & Baby", "clothing": "Clothing", "beauty": "Beauty",
-    "books": "Books & Stationery", "other": "Other",
+    "books": "Books", "other": "Other",
 }
 
 

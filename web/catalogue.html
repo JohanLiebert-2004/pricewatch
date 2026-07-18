@@ -20,6 +20,7 @@
 <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
 <script defer src="/_vercel/insights/script.js"></script>
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#2563eb"><script defer src="/pwa.js"></script>
 </head>
 <body>
 
@@ -85,7 +86,7 @@ const RETAILERS = [["all","All stores"],["kmart","Kmart"],["bigw","Big W"],
                    ["sephora","Sephora"],["chemistwarehouse","Chemist Warehouse"]];
 const CATS = [["all","All"],["tech","Tech"],["home","Home"],["kitchen","Kitchen"],
               ["toys","Toys & Baby"],["clothing","Clothing"],["beauty","Beauty"],
-              ["books","Books & Stationery"],["other","Other"]];
+              ["books","Books"],["other","Other"]];
 const RETAILER_LABEL = Object.fromEntries(RETAILERS);
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -288,5 +289,5 @@ Promise.all([
   .catch(()=>{document.getElementById("list").innerHTML =
     `<div class="empty">We couldn't load the catalogue — please try again shortly.</div>`;});
 </script>
-</body>
+<nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><span aria-hidden="true">⌂</span>Home</a><a href="/search.html"><span aria-hidden="true">⌕</span>Search</a><a href="/search.html#scan"><span aria-hidden="true">▣</span>Scan</a><a href="/index.html#hotNow"><span aria-hidden="true">♢</span>Hot</a></nav></body>
 </html>

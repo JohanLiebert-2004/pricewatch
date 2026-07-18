@@ -71,6 +71,18 @@ CREATE TABLE IF NOT EXISTS search_terms (
 );
 CREATE INDEX IF NOT EXISTS idx_search_terms_recent ON search_terms (searched_at);
 
+-- Anonymous product-interest events power the “Hot right now” list. The
+-- server-side RPC rate-limits each product, so this is an aggregate signal,
+-- not a per-person tracker; no account, IP address, cookie, or device ID is
+-- stored.
+CREATE TABLE IF NOT EXISTS product_interest (
+    id BIGSERIAL PRIMARY KEY,
+    product_id BIGINT NOT NULL REFERENCES products(id),
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_product_interest_recent
+    ON product_interest (recorded_at DESC, product_id);
+
 -- Telegram bot subscriptions (services/telegram_bot.py on the OCI VM writes
 -- these; alerts.py fans deal/price pings out to them from GitHub Actions).
 -- sku NULL = subscribed to every new deal for the retailer.
@@ -110,6 +122,7 @@ ALTER TABLE crawl_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kv ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telegram_subs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE search_terms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_interest ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON products FROM anon, authenticated;
 REVOKE ALL ON price_snapshots FROM anon, authenticated;
 REVOKE ALL ON deals FROM anon, authenticated;
@@ -119,5 +132,7 @@ REVOKE ALL ON telegram_subs FROM anon, authenticated;
 REVOKE ALL ON SEQUENCE telegram_subs_id_seq FROM anon, authenticated;
 REVOKE ALL ON search_terms FROM anon, authenticated;
 REVOKE ALL ON SEQUENCE search_terms_id_seq FROM anon, authenticated;
+REVOKE ALL ON product_interest FROM anon, authenticated;
+REVOKE ALL ON SEQUENCE product_interest_id_seq FROM anon, authenticated;
 -- watches' RLS + anon policies are set up in views.sql, next to the
 -- cancel_watch() RPC they depend on.

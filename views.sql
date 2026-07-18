@@ -73,7 +73,7 @@ grant select on discount_feed to anon;
 -- Search page: latest price + date for any tracked product.
 drop view if exists product_search;
 create view product_search as
-select p.retailer, p.sku, p.title, p.brand, p.category, p.subcategory, p.url,
+select p.retailer, p.sku, p.gtin, p.title, p.brand, p.category, p.subcategory, p.url,
        p.image_url, p.is_marketplace, p.current_price, p.current_rrp,
        coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at
 from products p
@@ -185,7 +185,7 @@ grant select on growth_daily to anon;
 -- cheap and should always be fresh, unlike discount_feed's aggregate scan.
 drop view if exists product_history;
 create view product_history as
-select p.id as product_id, p.retailer, p.sku, p.title, p.brand, p.category,
+select p.id as product_id, p.retailer, p.sku, p.gtin, p.title, p.brand, p.category,
        p.url, p.image_url, p.is_marketplace, p.current_price, p.current_rrp,
        coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at,
        ps.price, ps.rrp as snapshot_rrp, ps.in_stock, ps.scraped_at
@@ -365,3 +365,49 @@ order by searches desc
 limit 12;
 revoke all on trending_searches from anon, authenticated;
 grant select on trending_searches to anon;
+-- Product-page interest is deliberately aggregate-only. One product can add
+-- at most one event every five minutes, which keeps the public RPC from being
+-- useful as a counter-spam endpoint while still revealing sustained interest.
+create or replace function log_product_interest(p_retailer text, p_sku text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare pid bigint;
+begin
+  if p_retailer !~ '^[a-z]{2,32}$' or p_sku !~ '^[A-Za-z0-9_-]{1,48}$' then
+    return;
+  end if;
+  select id into pid from products
+  where retailer = p_retailer and sku = p_sku and current_price is not null
+  limit 1;
+  if pid is null or exists (
+      select 1 from product_interest
+      where product_id = pid and recorded_at > now() - interval '5 minutes') then
+    return;
+  end if;
+  insert into product_interest (product_id) values (pid);
+end;
+$$;
+revoke all on function log_product_interest(text, text) from public;
+grant execute on function log_product_interest(text, text) to anon;
+
+drop view if exists trending_products;
+create view trending_products as
+with heat as (
+  select product_id, count(*) as interest_events, max(recorded_at) as last_interest
+  from product_interest
+  where recorded_at > now() - interval '24 hours'
+  group by product_id
+)
+select p.retailer, p.sku, p.gtin, p.title, p.brand, p.category, p.subcategory,
+       p.url, p.image_url, p.is_marketplace, p.current_price, p.current_rrp,
+       coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at,
+       h.interest_events, h.last_interest
+from heat h join products p on p.id = h.product_id
+where p.current_price is not null and p.last_seen > now() - interval '36 hours'
+order by h.interest_events desc, h.last_interest desc
+limit 12;
+revoke all on trending_products from anon, authenticated;
+grant select on trending_products to anon;

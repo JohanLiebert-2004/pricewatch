@@ -43,6 +43,7 @@
     background:var(--card);border:1px solid var(--hair);border-radius:16px;
     padding:18px 20px 20px;margin-top:26px;box-shadow:var(--shadow)}
   .panel .barlabel:first-child{margin-top:0}
+  .search-launch{padding:22px}.search-launch #q{font-size:17px;padding:13px 16px;box-shadow:0 0 0 0 transparent;transition:border-color .2s,box-shadow .2s}.search-launch #q:focus{border-color:var(--flag);box-shadow:0 0 0 4px var(--flag-soft)}
   .personal{margin-top:34px}
   .personal[hidden]{display:none}
   .personal h2{font-size:18px;letter-spacing:-.02em;margin:0}
@@ -59,6 +60,7 @@
   <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
   <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
   <script defer src="/_vercel/insights/script.js"></script>
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#2563eb"><script defer src="/pwa.js"></script>
 </head>
 <body>
 
@@ -89,8 +91,8 @@
   <div class="panel">
     <div class="barlabel">Search the Collection</div>
     <form class="pricebar" id="qbar">
-      <input type="search" id="q" placeholder="name or SKU — e.g. air fryer"
-             autocomplete="off" style="width:min(300px,100%)">
+      <input type="search" id="q" placeholder="Search &#39;Anko Air Fryer&#39;…"
+             autocomplete="off" style="width:min(640px,100%)">
       <button type="submit">Search</button>
       <button type="button" class="clear" id="qclear">Clear</button>
     </form>
@@ -141,6 +143,10 @@
       <button class="chip" type="button" data-quick="low30" aria-pressed="false">30-day lows</button>
     </div>
   </div>
+  <section class="hot-section" id="hotNow" hidden aria-labelledby="hot-title">
+    <div class="hot-head"><div><h2 id="hot-title">Hot right now</h2><p>Products attracting the most recent Dealwatch interest.</p></div><a class="history-link" href="/search.html">Search all products</a></div>
+    <div class="hot-grid" id="hotList"></div>
+  </section>
   <div class="total" id="total"></div>
   <div class="grid" id="list"><div class="empty">Curating the latest finds…</div></div>
 </main>
@@ -148,7 +154,7 @@
     <h2 id="browse-title">Browse Australian deals by category or retailer</h2>
     <p>Explore currently tracked price drops with crawlable deal pages and full price-history links.</p>
     <nav class="landing-links" aria-label="Browse deals">
-      <a href="/deals/tech">Tech deals</a><a href="/deals/home">Home deals</a><a href="/deals/kitchen">Kitchen deals</a><a href="/deals/toys">Toys &amp; baby deals</a><a href="/deals/clothing">Clothing deals</a><a href="/deals/beauty">Beauty deals</a><a href="/deals/books">Books &amp; stationery deals</a>
+      <a href="/deals/tech">Tech deals</a><a href="/deals/home">Home deals</a><a href="/deals/kitchen">Kitchen deals</a><a href="/deals/toys">Toys &amp; baby deals</a><a href="/deals/clothing">Clothing deals</a><a href="/deals/beauty">Beauty deals</a><a href="/deals/books">Books deals</a>
       <a href="/retailers/kmart">Kmart deals</a><a href="/retailers/bigw">Big W deals</a><a href="/retailers/officeworks">Officeworks deals</a><a href="/retailers/target">Target deals</a><a href="/retailers/jbhifi">JB Hi-Fi deals</a><a href="/retailers/goodguys">The Good Guys deals</a><a href="/retailers/myer">Myer deals</a><a href="/retailers/supercheap">Supercheap Auto deals</a><a href="/retailers/sephora">Sephora deals</a><a href="/retailers/chemistwarehouse">Chemist Warehouse deals</a>
     </nav>
   </section>
@@ -213,7 +219,7 @@ let selRetailers = new Set(), selCats = new Set(), selSubcats = new Set(),
     only30DayLow = false, quick = "", fetchSeq = 0;
 const SHARED_CATS = [["tech","Tech"],["home","Home"],["kitchen","Kitchen"],
   ["toys","Toys & Baby"],["clothing","Clothing"],["beauty","Beauty"],
-  ["books","Books & Stationery"],["other","Other"]];
+  ["books","Books"],["other","Other"]];
 let SUBSTATS = {};   // retailer -> [subcategory labels] desc by item count
 let FRESHNESS = {};
 fetch(`${SUPABASE_URL}/rest/v1/retailer_freshness?select=*`, {headers:HDRS})
@@ -339,7 +345,21 @@ function cardHtml(d, i){
   </div>`;
 }
 
-const RECENT_KEY = "dealwatch_recent";
+
+function hotCard(p){
+  const store = RETAILER_LABEL[p.retailer] || p.retailer;
+  const href = `/p/${encodeURIComponent(p.retailer)}/${encodeURIComponent(p.sku)}`;
+  return `<a class="hot-card" href="${href}"><strong>${esc(p.title)}</strong><div class="meta"><span class="pill">${esc(store)}</span>${p.category ? `<span class="pill">${esc(p.category)}</span>` : ""}</div><div class="hot-price">${money(p.current_price)}</div></a>`;
+}
+function loadHotNow(){
+  fetch(`${SUPABASE_URL}/rest/v1/trending_products?select=*`, {headers:HDRS})
+    .then(r=>r.ok ? r.json() : [])
+    .then(rows=>{
+      if(!Array.isArray(rows) || !rows.length) return;
+      document.getElementById("hotList").innerHTML = rows.slice(0,8).map(hotCard).join("");
+      document.getElementById("hotNow").hidden = false;
+    }).catch(()=>{});
+}const RECENT_KEY = "dealwatch_recent";
 function recentItems(){
   try{
     const items = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
@@ -506,8 +526,12 @@ slider.addEventListener("input", ()=>{
   sliderTimer = setTimeout(()=>{ minOff = v; clearQuick(); refresh(); }, 250);
 });
 
+loadHotNow();
+const SEARCH_PROMPTS=["Search 'Anko Air Fryer'…","Paste a Kmart item number…","Try 'Artiss table'…","Scan a barcode in Search"];
+let promptIndex=0;
+setInterval(()=>{const input=document.getElementById("q");if(input&&document.activeElement!==input){promptIndex=(promptIndex+1)%SEARCH_PROMPTS.length;input.placeholder=SEARCH_PROMPTS[promptIndex];}},3600);
 refresh();
 </script>
-</body>
+<nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><span aria-hidden="true">⌂</span>Home</a><a href="/search.html"><span aria-hidden="true">⌕</span>Search</a><a href="/search.html#scan"><span aria-hidden="true">▣</span>Scan</a><a href="/index.html#hotNow"><span aria-hidden="true">♢</span>Hot</a></nav></body>
 </html>
 renderPersonal();

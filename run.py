@@ -372,6 +372,9 @@ def cmd_detect(args):
     tagged = categorize_mod.backfill(conn)
     if tagged:
         print(f"categorised {tagged} new products")
+    repaired_books = categorize_mod.repair_misclassified_books(conn)
+    if repaired_books:
+        print(f"corrected {repaired_books} misclassified book listings")
     subbed = categorize_mod.backfill_subcategories(conn)
     if subbed:
         print(f"subcategorised {subbed} products (title-rule retailers)")

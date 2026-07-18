@@ -43,10 +43,19 @@
   .chartmeta{font-size:12px;color:var(--muted);text-align:right}
   .chartwrap svg{width:100%;height:auto;min-height:220px;display:block;overflow:visible}
   .chartwrap .cgrid{stroke:var(--hair);stroke-width:1;vector-effect:non-scaling-stroke}
+  .chartwrap .cavg{stroke:var(--muted);stroke-width:1;stroke-dasharray:4 4;vector-effect:non-scaling-stroke}
   .chartwrap .cline{fill:none;stroke:var(--flag);stroke-width:2.5;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
   .chartwrap .carea{fill:var(--flag-soft)}
   .chartwrap .caxis{font-size:10px;fill:var(--faint);font-family:inherit}
   .chartwrap .cpt{fill:var(--card);stroke:var(--flag);stroke-width:2;vector-effect:non-scaling-stroke}
+  .chartsummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 16px}
+  .chartstat{border:1px solid var(--hair);border-radius:10px;padding:10px 12px;background:var(--paper)}
+  .chartstat .label{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .chartstat strong{display:block;font-size:18px;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
+  .chartstat small{display:block;font-size:11px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chartstat.current{border-color:var(--ink)} .chartstat.low strong{color:var(--deal)} .chartstat.high strong{color:var(--flag)}
+  .chart-empty{border:1px dashed var(--hair);border-radius:12px;padding:24px 16px;color:var(--muted);font-size:13px;line-height:1.6;text-align:center}
+  @media(max-width:520px){.chartsummary{grid-template-columns:1fr}.chartstat{display:grid;grid-template-columns:70px 1fr;column-gap:8px;align-items:baseline}.chartstat strong{grid-column:2;grid-row:1}.chartstat small{grid-column:2;grid-row:2}.chartstat .label{grid-row:1 / span 2}}
   .historynote{font-size:12px;color:var(--muted);margin:10px 0 0;line-height:1.7}
   .pprice .reportlink{display:block;margin-top:9px;padding:0;background:transparent;color:var(--muted);font-size:12px;font-weight:700}
   .historytable{background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:16px 20px;margin-top:16px;box-shadow:var(--shadow)}
@@ -80,6 +89,7 @@
   <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
   <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
   <script defer src="/_vercel/insights/script.js"></script>
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#2563eb"><script defer src="/pwa.js"></script>
 </head>
 <body>
 
@@ -100,7 +110,7 @@
 </div></header>
 
 <main class="wrap" id="main">
-  <div class="empty" id="loading">Loading price history…</div>
+  <div class="skeleton-list" id="loading"><div class="skeleton-card"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div><div class="skeleton-card"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div></div><div class="toast" id="toast" role="status" aria-live="polite"></div>
 </main>
 
 <footer><div class="wrap footgrid">
@@ -158,48 +168,29 @@ const cancelToken = params.get("cancel");
 const TG_BOT = "underp22bot";
 
 function priceChart(points){
-  // A time-scaled step chart: a retailer price remains true until the next
-  // recorded change, so joining points diagonally was visually misleading.
-  const W = 680, H = 260, L = 62, R = 18, T = 20, B = 46;
-  const plotW = W - L - R, plotH = H - T - B, bottom = H - B;
-  const prices = points.map(p => p.y);
-  const lo = Math.min(...prices), hi = Math.max(...prices);
-  const pad = Math.max((hi - lo) * .08, Math.max(hi, 1) * .025);
-  const yMin = Math.max(0, lo - pad), yMax = hi + pad, ySpan = (yMax - yMin) || 1;
-  const firstTime = +points[0].x, lastTime = +points[points.length - 1].x;
-  const timeSpan = (lastTime - firstTime) || 1;
-  const xAt = p => L + ((+p.x - firstTime) / timeSpan) * plotW;
-  const yAt = value => T + ((yMax - value) / ySpan) * plotH;
-  const line = points.map((p, i) => {
-    const x = xAt(p).toFixed(1), y = yAt(p.y).toFixed(1);
-    return i ? `H ${x} V ${y}` : `M ${x} ${y}`;
-  }).join(" ");
-  const firstX = xAt(points[0]).toFixed(1), lastX = xAt(points[points.length - 1]).toFixed(1);
-  const area = `${line} L ${lastX} ${bottom} L ${firstX} ${bottom} Z`;
-  const gridValues = [hi, (hi + lo) / 2, lo];
-  const grid = gridValues.map(value => {
-    const y = yAt(value).toFixed(1);
-    return `<line class="cgrid" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"></line>` +
-      `<text class="caxis" x="${L - 8}" y="${(+y + 3.5).toFixed(1)}" text-anchor="end">${money(value)}</text>`;
-  }).join("");
-  const tickCount = timeSpan < 12 * 60 * 60 * 1000 ? 1 : (innerWidth < 520 ? 2 : 4);
-  const ticks = Array.from({length:tickCount}, (_, i) => {
-    const t = firstTime + (timeSpan * i / (tickCount - 1 || 1));
-    const x = L + ((t - firstTime) / timeSpan) * plotW;
-    const d = new Date(t);
-    return `<text class="caxis" x="${x.toFixed(1)}" y="${H - 16}" text-anchor="${i === 0 ? "start" : i === tickCount - 1 ? "end" : "middle"}">${d.toLocaleDateString("en-AU", {day:"numeric", month:"short", year:i === 0 || i === tickCount - 1 ? "2-digit" : undefined})}</text>`;
-  }).join("");
-  const dots = points.length <= 70 ? points.map(p => {
-    const x = xAt(p).toFixed(1), y = yAt(p.y).toFixed(1);
-    return `<circle class="cpt" cx="${x}" cy="${y}" r="3"><title>${money(p.y)} — ${asOf(p.x.toISOString())}</title></circle>`;
-  }).join("") : "";
-  const noun = points.length === 1 ? "recorded point" : "recorded changes";
-  return `<div class="charthead"><div class="charttitle">Tracked price timeline</div><div class="chartmeta">${points.length} ${noun} · ${asOf(points[0].x.toISOString())}–${asOf(points[points.length - 1].x.toISOString())}</div></div>
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price history from ${money(lo)} to ${money(hi)}">
-      ${grid}<path class="carea" d="${area}"></path><path class="cline" d="${line}"></path>${dots}${ticks}
-    </svg>`;
+  // Snapshots are first sightings and actual price changes. A step line shows
+  // that recorded price holding until the next observation without inventing
+  // a diagonal move that was never observed.
+  const current = points.at(-1);
+  const low = points.reduce((a,p) => p.y < a.y ? p : a, points[0]);
+  const high = points.reduce((a,p) => p.y > a.y ? p : a, points[0]);
+  const stat = (kind,label,p,extra="") => `<div class="chartstat ${kind}"><span class="label">${label}</span><strong>${money(p.y)}</strong><small>${extra || asOf(p.x.toISOString())}</small></div>`;
+  const head = `<div class="charthead"><div class="charttitle">Price history</div><div class="chartmeta">${points.length} ${points.length === 1 ? "recorded price" : "price changes"}</div></div><div class="chartsummary">${stat("current","Current",current,"checked " + asOf(current.x.toISOString()))}${stat("low","Lowest recorded",low)}${stat("high","Highest recorded",high)}</div>`;
+  if(points.length === 1) return `${head}<div class="chart-empty">We have one recorded price so far. The graph will appear after this retailer changes the price.</div>`;
+  const W=720,H=270,L=66,R=20,T=18,B=48,plotW=W-L-R,plotH=H-T-B,bottom=H-B;
+  const prices=points.map(p=>p.y), lo=Math.min(...prices), hi=Math.max(...prices);
+  const pad=Math.max((hi-lo)*.12,Math.max(hi,1)*.03), yMin=Math.max(0,lo-pad), yMax=hi+pad, ySpan=(yMax-yMin)||1;
+  const first=+points[0].x,last=+current.x,span=(last-first)||1;
+  const xAt=p=>L+((+p.x-first)/span)*plotW, yAt=v=>T+((yMax-v)/ySpan)*plotH;
+  const line=points.map((p,i)=>`${i?"H ":"M "}${xAt(p).toFixed(1)} ${i?"V ":""}${yAt(p.y).toFixed(1)}`).join(" ");
+  const area=`${line} L ${xAt(current).toFixed(1)} ${bottom} L ${xAt(points[0]).toFixed(1)} ${bottom} Z`;
+  const grid=[hi,(hi+lo)/2,lo].map(v=>{const y=yAt(v).toFixed(1);return `<line class="cgrid" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${L-8}" y="${(+y+3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`}).join("");
+  const averageGuide=points.length>=4?(()=>{const average=prices.reduce((sum,value)=>sum+value,0)/prices.length,y=yAt(average).toFixed(1);return `<line class="cavg" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${W-R}" y="${(+y-5).toFixed(1)}" text-anchor="end">avg ${money(average)}</text>`;})():"";
+  const count=innerWidth<520?2:4;
+  const ticks=Array.from({length:count},(_,i)=>{const t=first+span*i/(count-1),x=L+(t-first)/span*plotW,d=new Date(t),label=d.toLocaleDateString("en-AU",{day:"numeric",month:"short",year:i===0||i===count-1?"2-digit":undefined});return `<text class="caxis" x="${x.toFixed(1)}" y="${H-16}" text-anchor="${i===0?"start":i===count-1?"end":"middle"}">${label}</text>`}).join("");
+  const dots=points.length<=80?points.map((p,i)=>`<circle class="cpt" cx="${xAt(p).toFixed(1)}" cy="${yAt(p.y).toFixed(1)}" r="${i===points.length-1?4:3}"><title>${money(p.y)} — ${asOf(p.x.toISOString())}</title></circle>`).join(""):"";
+  return `${head}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price history: lowest ${money(low.y)}, highest ${money(high.y)}, current ${money(current.y)}">${grid}${averageGuide}<path class="carea" d="${area}"></path><path class="cline" d="${line}"></path>${dots}${ticks}</svg>`;
 }
-
 function historyTable(rows){
   // Keep the table readable without hiding the fact that we may have sampled
   // more than once a day. The most recent observation for each day wins.
@@ -216,6 +207,7 @@ function historyTable(rows){
   </details>`;
 }
 
+function showToast(message){const el=document.getElementById("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>el.classList.remove("show"),4200);}
 async function submitWatch(productId, e){
   e.preventDefault();
   const email = document.getElementById("wemail").value.trim();
@@ -234,6 +226,7 @@ async function submitWatch(productId, e){
     if(!r.ok) throw new Error(r.status);
     const token = await r.json();
     const cancelUrl = `${location.origin}${location.pathname}?retailer=${retailer}&sku=${encodeURIComponent(sku)}&cancel=${token}`;
+    showToast("Check your email to confirm your price watch.");
     out.innerHTML = `<div class="watchok">You're watching this at ${money(target)} or below —
       we'll email ${esc(email)} once, the first time it drops there.<br>
       Save this link to cancel any time: <a href="${cancelUrl}">${cancelUrl}</a></div>`;
@@ -302,7 +295,14 @@ function watchPanelHtml(productId){
   </div>`;
 }
 
-async function load(){
+
+const MATCH_STOP = new Set(["the","and","with","for","from","set","pack","size","new","table","chair","desk","bed","white","black","grey","gray","cm","mm","m","l"]);
+function matchTokens(title, brand){const brandWords=new Set(String(brand||"").toLowerCase().match(/[a-z0-9]+/g)||[]);return new Set((String(title||"").toLowerCase().match(/[a-z0-9]+/g)||[]).filter(word=>word.length>1&&!MATCH_STOP.has(word)&&!brandWords.has(word)));}
+function modelCodes(title){return new Set((String(title||"").toLowerCase().match(/\b(?=[a-z0-9-]*\d)[a-z0-9-]{4,}\b/g)||[]));}
+function overlap(a,b){let n=0;for(const v of a)if(b.has(v))n++;return n;}
+async function relatedItems(p){const base=`${SUPABASE_URL}/rest/v1/product_search?select=retailer,sku,gtin,title,brand,category,url,image_url,current_price,current_rrp,price_updated_at`,calls=[];if(/^[0-9]{8,14}$/.test(String(p.gtin||"")))calls.push(fetch(`${base}&gtin=eq.${encodeURIComponent(p.gtin)}&retailer=neq.${encodeURIComponent(p.retailer)}`,{headers:HDRS}));if(p.brand&&String(p.brand).trim().length>=3)calls.push(fetch(`${base}&brand=ilike.${encodeURIComponent(String(p.brand).trim())}&retailer=neq.${encodeURIComponent(p.retailer)}&limit=80`,{headers:HDRS}));if(!calls.length)return[];const batches=await Promise.all(calls.map(r=>r.then(x=>x.ok?x.json():[]).catch(()=>[]))),seen=new Map(),tokens=matchTokens(p.title,p.brand),codes=modelCodes(p.title);for(const candidate of batches.flat()){const key=`${candidate.retailer}/${candidate.sku}`;if(seen.has(key)||!candidate.current_price)continue;let label="",score=0;if(p.gtin&&candidate.gtin&&String(p.gtin)===String(candidate.gtin)){label="Exact barcode match";score=3;}else if(String(candidate.brand||"").toLowerCase()===String(p.brand||"").toLowerCase()){const other=matchTokens(candidate.title,candidate.brand),common=overlap(tokens,other),union=new Set([...tokens,...other]).size||1,commonCode=overlap(codes,modelCodes(candidate.title));if(commonCode){label="Same model code";score=2+commonCode/10;}else if(common>=2&&common/union>=.32){label="Similar listing";score=1+common/union;}}if(label)seen.set(key,{...candidate,label,score});}return[...seen.values()].sort((a,b)=>b.score-a.score||Number(a.current_price)-Number(b.current_price)).slice(0,5);}
+function renderRelated(p,rows){const box=document.getElementById("related");if(!rows.length){box.remove();return;}const current=Number(p.current_price);box.innerHTML=`<h2>Compare at other retailers</h2><p class="hint">Barcode matches are exact. Similar listings share the brand and distinctive product words—check size, variant and seller before buying.</p><div class="related-list">${rows.map(r=>{const store=RETAILER_LABEL[r.retailer]||r.retailer,save=current-Number(r.current_price);return `<a class="related-item" href="/p/${encodeURIComponent(r.retailer)}/${encodeURIComponent(r.sku)}"><div><strong>${esc(r.title)}</strong><small><span class="pill ${r.label==="Similar listing"?"fuzzy":"deal"}">${r.label}</span> · ${esc(store)}</small></div><div class="price">${money(r.current_price)}${save>.005?`<span class="cheaper">${money(save)} cheaper</span>`:""}</div></a>`}).join("")}</div>`;}
+function logInterest(p){const key=`dealwatch_interest_${p.retailer}_${p.sku}`,now=Date.now();try{if(now-Number(localStorage.getItem(key)||0)<4*60*60*1000)return;localStorage.setItem(key,String(now));}catch(e){}fetch(`${SUPABASE_URL}/rest/v1/rpc/log_product_interest`,{method:"POST",headers:{...HDRS,"Content-Type":"application/json"},body:JSON.stringify({p_retailer:p.retailer,p_sku:p.sku})}).catch(()=>{});}async function load(){
   const main = document.getElementById("main");
   if(!retailer || !sku){
     main.innerHTML = `<div class="empty">No product specified.<br>Follow a
@@ -333,7 +333,7 @@ async function load(){
   const store = RETAILER_LABEL[p.retailer] || p.retailer;
   const trackingSince = asOf(rows[0].scraped_at);
   const lastChecked = asOf(p.price_updated_at || rows[rows.length - 1].scraped_at);
-  const reportHref = `mailto:alerts@dealwatch.com.au?subject=${encodeURIComponent("Dealwatch price correction: " + p.title)}&body=${encodeURIComponent("Product: " + location.href + "\nRetailer: " + store + "\nWhat looks incorrect: ")}`;
+  const reportHref = `mailto:contact@dealwatch.com.au?subject=${encodeURIComponent("Dealwatch price correction: " + p.title)}&body=${encodeURIComponent("Product: " + location.href + "\nRetailer: " + store + "\nWhat looks incorrect: ")}`;
   let points = rows.map(r=>({x: new Date(r.scraped_at), y: Number(r.price)}));
   // Dense histories (many intraday flips) render as unreadable stripes -
   // collapse to one point per day at that day's LOWEST price, the number a
@@ -343,7 +343,7 @@ async function load(){
     for(const p of points){
       const day = p.x.toISOString().slice(0,10);
       const cur = byDay.get(day);
-      if(!cur || p.y < cur.y) byDay.set(day, p);
+      if(!cur || p.x > cur.x) byDay.set(day, p);
     }
     points = [...byDay.values()].sort((a,b)=>a.x-b.x);
   }
@@ -381,14 +381,18 @@ async function load(){
     </div>
 
     ${watchPanelHtml(p.product_id)}
+    <section class="related" id="related"><div class="empty" style="padding:12px 0">Finding comparable listings…</div></section>
 
     <div class="chartwrap">${priceChart(points)}<div class="historynote">Tracking since ${trackingSince} · ${rows.length} recorded ${rows.length === 1 ? "observation" : "observations"} · last checked ${lastChecked}</div></div>
     ${historyTable(rows)}
   `;
+  document.getElementById("stickyWatch")?.addEventListener("click",()=>document.getElementById("watchpanel")?.scrollIntoView({behavior:"smooth",block:"center"}));
+  logInterest(p);
+  relatedItems(p).then(rows=>renderRelated(p,rows)).catch(()=>{const box=document.getElementById("related");if(box)box.remove();});
 }
 
 load();
 </script>
 <script src="/watch-confirm.js"></script>
-</body>
+<nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><span aria-hidden="true">⌂</span>Home</a><a href="/search.html"><span aria-hidden="true">⌕</span>Search</a><a href="/search.html#scan"><span aria-hidden="true">▣</span>Scan</a><a href="/index.html#hotNow"><span aria-hidden="true">♢</span>Hot</a></nav></body>
 </html>
