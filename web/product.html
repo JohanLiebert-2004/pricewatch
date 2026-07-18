@@ -103,11 +103,6 @@
   .watchnote{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.7}
   .watchok{font-size:13px;color:var(--deal);font-weight:600;margin-top:12px;line-height:1.7}
   .watcherr{font-size:13px;color:var(--flag);font-weight:600;margin-top:12px}
-  .buyadvice,.reportpanel{background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:18px 20px;margin-top:16px;box-shadow:var(--shadow)}
-  .buyadvice{border-left:4px solid var(--flag)}
-  .buyadvice strong{font-size:15px}.buyadvice p{font-size:12px;color:var(--muted);line-height:1.65;margin:6px 0 0}
-  .reportpanel h2{font-size:16px;letter-spacing:-.01em;margin:0}.reportpanel>p{font-size:12px;color:var(--muted);line-height:1.6;margin:6px 0 0}
-  .reportbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}.reportbar input{font:500 13.5px inherit;padding:9px 14px;border:1px solid var(--hair);border-radius:10px;background:var(--card);color:var(--ink);outline:none}.reportbar input:focus{border-color:var(--ink)}.reportbar input[name=suburb]{flex:1;min-width:160px}.reportbar input[name=price]{width:112px}.reportbar button{font:700 13px inherit;cursor:pointer;background:var(--flag);color:#fff;border:1px solid var(--flag);border-radius:10px;padding:10px 16px}.reportbar button:hover{opacity:.85}.reportnote{font-size:11px;color:var(--faint);line-height:1.55;margin:9px 0 0}
 </style>
   <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
   <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
@@ -243,44 +238,6 @@ function showChartTip(evt,price,ts,isLowest){
   tip.classList.add("show");
 }
 function hideChartTip(){document.getElementById("charttip")?.classList.remove("show");}
-function buyAdvice(points){
-  const current = points.at(-1).y;
-  const allLow = Math.min(...points.map(p=>p.y));
-  const since = Date.now() - 90*24*60*60*1000;
-  const recent = points.filter(p=>+p.x >= since).map(p=>p.y);
-  const recentLow = recent.length ? Math.min(...recent) : allLow;
-  const distinctPrices = new Set(points.map(p=>p.y.toFixed(2))).size;
-  const spanDays = (+points.at(-1).x - +points[0].x) / 86400000;
-  // A handful of observations over a few days isn't enough history to
-  // confidently call something the "lowest price" - it's just the only
-  // price we've seen. Require a minimum track record before making the
-  // strong "Buy now" claim; short-history items get a softer, hedged note
-  // instead of an unqualified recommendation.
-  if(current <= allLow + .005){
-    if(points.length >= 15 && spanDays >= 14){
-      return `<section class="buyadvice"><strong>Buy now — lowest price Dealwatch has recorded.</strong><p>This is based on ${points.length} recorded price observations, not a guarantee of future stock or pricing.</p></section>`;
-    }
-    return `<section class="buyadvice"><strong>Lowest price seen so far — but tracking has only just started.</strong><p>Based on ${points.length} recorded observation${points.length===1?"":"s"} over ${Math.max(1,Math.round(spanDays))} day${spanDays<1.5?"":"s"}, not enough history yet for a confident buy signal. Set a target-price alert if you'd rather wait and see.</p></section>`;
-  }
-  if(distinctPrices >= 3 && current >= recentLow * 1.15) return `<section class="buyadvice"><strong>Consider waiting — it was ${money(recentLow)} in the last 90 days.</strong><p>This is a history-based signal, not a prediction. A lower price may not return and stock can sell out.</p></section>`;
-  return `<section class="buyadvice"><strong>Watch the trend — this is ${money(current - recentLow)} above the 90-day low.</strong><p>Set a target-price alert if you are happy to wait. Prices and availability can change at any time.</p></section>`;
-}
-function storeReportPanelHtml(productId, store){
-  return `<section class="reportpanel"><h2>Seen a cheaper in-store price?</h2><p>Help shoppers find local clearance deals at ${esc(store)}. Your report stays pending until it can be reviewed.</p><form class="reportbar" id="storeReport"><input name="suburb" maxlength="80" autocomplete="address-level2" placeholder="Store suburb or location" required aria-label="Store suburb or location"><input name="price" type="number" min="0.01" max="20000" step="0.01" inputmode="decimal" placeholder="Price ($)" required aria-label="In-store price"><button type="submit">Share price</button></form><p class="reportnote">Only report a price you can see in store. Community reports are separate from retailer-checked prices.</p><div id="storeReportResult" aria-live="polite"></div></section>`;
-}
-async function submitStoreReport(productId, e){
-  e.preventDefault();
-  const form = e.currentTarget, result = document.getElementById("storeReportResult");
-  const suburb = form.elements.suburb.value.trim(), price = Number(form.elements.price.value);
-  if(suburb.length < 2 || !Number.isFinite(price) || price <= 0){ result.innerHTML = `<div class="watcherr">Enter a store location and valid price.</div>`; return; }
-  const button = form.querySelector("button"); button.disabled = true; button.textContent = "Sharing…";
-  try{
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/submit_store_report`, {method:"POST",headers:{...HDRS,"Content-Type":"application/json"},body:JSON.stringify({p_product_id:productId,p_suburb:suburb,p_price:price})});
-    if(!r.ok) throw new Error(r.status);
-    form.reset(); result.innerHTML = `<div class="watchok">Thanks — your local price report is pending review.</div>`;
-  }catch(err){ result.innerHTML = `<div class="watcherr">Couldn’t submit that report. Please try again shortly.</div>`; }
-  finally{ button.disabled = false; button.textContent = "Share price"; }
-}
 function historyTable(rows){
   // Keep the table readable without hiding the fact that we may have sampled
   // more than once a day. The most recent observation for each day wins.
@@ -499,8 +456,6 @@ async function load(){
       <div class="stat"><b>${money(ninetyLow)}</b><span>90-day low</span></div>
     </div>
 
-    ${buyAdvice(points)}
-    ${storeReportPanelHtml(p.product_id, store)}
     ${watchPanelHtml(p)}
     <section class="related" id="related"><div class="empty" style="padding:12px 0">Finding comparable listings…</div></section>
     <section class="hot-section" id="aiSimilar" aria-labelledby="ai-similar-title">
@@ -519,7 +474,6 @@ async function load(){
       document.getElementById("wemail")?.focus();
     });
   }
-  document.getElementById("storeReport")?.addEventListener("submit",e=>submitStoreReport(p.product_id,e));
   logInterest(p);
   relatedItems(p).then(rows=>renderRelated(p,rows)).catch(()=>{const box=document.getElementById("related");if(box)box.remove();});
   loadAiSimilar(p).catch(()=>{const box=document.getElementById("aiSimilar");if(box)box.remove();});
