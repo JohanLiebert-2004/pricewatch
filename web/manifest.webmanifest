@@ -4,8 +4,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f4f6f9",
-  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "theme_color": "#1b2431",
   "description": "Compare Australian prices, scan a barcode and track price drops.",
   "icons": [
     {"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
