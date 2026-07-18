@@ -184,6 +184,34 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
   Elevated setup failed and produced no dedicated setup error in the available
   dated sandbox logs. This is why `apply_patch` refuses split writable roots;
   scoped elevated PowerShell edits were used as a fallback.
+## 18 July Claude handoff addendum — the "owner still sees blue" mystery, solved
+
+- Root cause of the palette mystery Codex flagged above: `web/style.css` had
+  a leftover `@media(prefers-color-scheme:dark)` block (under a "system dark
+  theme + mobile app polish" comment) that repainted `--flag` to `#60a5fa`
+  (light blue) on a `#0f172a` navy `--paper` for any visitor on a dark-mode
+  OS/browser — directly contradicting the `color-scheme:light` / "light-only
+  by design" comment sitting right above the `:root` block. No amount of
+  fixing the *light* palette values could have addressed this: the owner
+  was seeing the *dark* palette the whole time. This block has been deleted
+  entirely (commit `bdd979f`). There must be **no** dark-mode media query in
+  `web/style.css` going forward — if a future report says "the background
+  looks wrong" again, check for a reintroduced one before touching palette
+  values.
+- Per explicit owner instruction ("i dont like the new one... blue"), the
+  palette itself was also changed in the same commit: a plain classic
+  "Web 2.0" theme — stark white `#ffffff` background, standard primary blue
+  `#007bff` for headers/buttons/links, plain green `#28a745` for drops, and a
+  new `--bad:#dc3545` red now wired into `.row.err .off` / `.pill.err` for
+  price increases (previously these silently reused `--flag`, which meant
+  "error/increase" rendered in whatever the accent colour was that week).
+  `web/icon.svg` and every page's `theme-color` meta / manifest were updated
+  from `#faf9f7` to `#ffffff` to match.
+- Verified live on `https://dealwatch.com.au/catalogue.html` post-deploy
+  (Vercel prod alias re-pointed, `vercel deploy --prod` from `web/`): white
+  background, blue accents, Codex's Books/Auto/Cosmetics retailer groupings
+  all rendering correctly together with the new theme.
+
 ## End-of-session checklist
 
 1. Update this file's completed work/task queue with concise facts.
