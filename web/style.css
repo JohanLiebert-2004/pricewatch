@@ -5,8 +5,8 @@
   color-scheme:light;
   --paper:#ffffff; --ink:#212529; --hair:#dee2e6; --hair2:#e9ecef;
   --card:#ffffff; --soft:#f1f3f5;
-  --flag:#007bff; --flag-soft:rgba(0,123,255,.08);
-  --deal:#28a745; --deal-soft:rgba(40,167,69,.09);
+  --flag:#3b82f6; --flag-soft:rgba(59,130,246,.08);
+  --deal:#22c55e; --deal-soft:rgba(34,197,94,.09);
   --bad:#dc3545; --bad-soft:rgba(220,53,69,.09);
   --muted:#6c757d; --faint:#adb5bd;
   --shadow:0 1px 2px rgba(33,37,41,.05);
