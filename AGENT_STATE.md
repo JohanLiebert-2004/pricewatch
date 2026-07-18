@@ -27,6 +27,21 @@ Before changing anything:
 
 ## Current production state
 
+- **18 July, fixed same-day: `web/watch-confirm.js` had a live infinite-loop
+  bug** (commit `354ae62`) that froze the browser tab for any shopper who
+  successfully submitted the price-watch form. Its `MutationObserver` on
+  `#wresult` replaced its own children with new HTML that itself contained
+  the `.watchok` marker it was watching for, re-triggering itself forever.
+  Fixed with a one-shot guard flag on the container's own `dataset` (an
+  element's own attributes survive an `innerHTML` rewrite of its children).
+  Deployed to both Vercel and the OCI VM's `pricewatch-web`; verified live
+  on production with a fetch-intercepted test submission (page stayed fully
+  responsive, confirmation message rendered exactly once). This had been
+  live and undetected since the double-opt-in feature shipped - nobody had
+  exercised the actual success path in a real browser until now. If you're
+  touching this file again: never let a `MutationObserver`'s own callback
+  produce a mutation that matches its own trigger condition without a
+  guard.
 - **Live site:** https://dealwatch.com.au (custom domain, live 17 July - see
   the "Custom domain + rebrand" entry below). The old
   https://web-pi-blush-48.vercel.app alias still resolves to the same
