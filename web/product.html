@@ -36,7 +36,7 @@
   }
   .chartwrap{
     background:var(--card);border:1px solid var(--hair);border-radius:16px;
-    padding:20px;margin-top:16px;box-shadow:var(--shadow);
+    padding:20px;margin-top:16px;box-shadow:var(--shadow);position:relative;
   }
   .charthead{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:14px}
   .charttitle{font-size:14px;font-weight:800;letter-spacing:-.01em}
@@ -44,10 +44,23 @@
   .chartwrap svg{width:100%;height:auto;min-height:220px;display:block;overflow:visible}
   .chartwrap .cgrid{stroke:var(--hair);stroke-width:1;vector-effect:non-scaling-stroke}
   .chartwrap .cavg{stroke:var(--muted);stroke-width:1;stroke-dasharray:4 4;vector-effect:non-scaling-stroke}
+  .chartwrap .clow{stroke:var(--deal);stroke-width:1.25;stroke-dasharray:4 4;vector-effect:non-scaling-stroke}
+  .chartwrap .clowlabel{fill:var(--deal);font-weight:700}
   .chartwrap .cline{fill:none;stroke:var(--flag);stroke-width:2.5;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
-  .chartwrap .carea{fill:var(--flag-soft)}
+  .chartwrap .carea{fill:url(#pchartgrad)}
   .chartwrap .caxis{font-size:10px;fill:var(--faint);font-family:inherit}
   .chartwrap .cpt{fill:var(--card);stroke:var(--flag);stroke-width:2;vector-effect:non-scaling-stroke}
+  .chartwrap .cpthit{fill:transparent;cursor:pointer}
+  .charttip{
+    position:absolute;pointer-events:none;z-index:6;left:0;top:0;
+    background:#1b2431;color:#fff;font-size:12px;line-height:1.6;font-weight:600;
+    padding:8px 11px;border-radius:9px;box-shadow:0 6px 18px rgba(20,30,45,.3);
+    opacity:0;transform:translate(-50%,calc(-100% - 12px));
+    transition:opacity .12s ease;white-space:nowrap;
+  }
+  .charttip.show{opacity:1}
+  .charttip b{font-weight:800}
+  .charttip .lowest{color:#4ade80;font-weight:800}
   .chartsummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 16px}
   .chartstat{border:1px solid var(--hair);border-radius:10px;padding:10px 12px;background:var(--paper)}
   .chartstat .label{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
@@ -189,13 +202,42 @@ function priceChart(points){
   const xAt=p=>L+((+p.x-first)/span)*plotW, yAt=v=>T+((yMax-v)/ySpan)*plotH;
   const line=points.map((p,i)=>`${i?"H ":"M "}${xAt(p).toFixed(1)} ${i?"V ":""}${yAt(p.y).toFixed(1)}`).join(" ");
   const area=`${line} L ${xAt(current).toFixed(1)} ${bottom} L ${xAt(points[0]).toFixed(1)} ${bottom} Z`;
-  const grid=[hi,(hi+lo)/2,lo].map(v=>{const y=yAt(v).toFixed(1);return `<line class="cgrid" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${L-8}" y="${(+y+3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`}).join("");
+  const lowY=yAt(lo);
+  // Skip a plain axis line/label wherever it would land within 10px of the
+  // dashed "Lowest" line - with a tight price range (e.g. a $0.05 spread)
+  // they'd otherwise render on top of each other and both become unreadable.
+  const grid=[hi,(hi+lo)/2].filter(v=>Math.abs(yAt(v)-lowY)>10).map(v=>{const y=yAt(v).toFixed(1);return `<line class="cgrid" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${L-8}" y="${(+y+3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`}).join("");
+  const lowGuide=`<line class="clow" x1="${L}" x2="${W-R}" y1="${lowY.toFixed(1)}" y2="${lowY.toFixed(1)}"></line><text class="caxis clowlabel" x="${L-8}" y="${(lowY+3.5).toFixed(1)}" text-anchor="end">Lowest ${money(lo)}</text>`;
   const averageGuide=points.length>=4?(()=>{const average=prices.reduce((sum,value)=>sum+value,0)/prices.length,y=yAt(average).toFixed(1);return `<line class="cavg" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${W-R}" y="${(+y-5).toFixed(1)}" text-anchor="end">avg ${money(average)}</text>`;})():"";
   const count=innerWidth<520?2:4;
   const ticks=Array.from({length:count},(_,i)=>{const t=first+span*i/(count-1),x=L+(t-first)/span*plotW,d=new Date(t),label=d.toLocaleDateString("en-AU",{day:"numeric",month:"short",year:i===0||i===count-1?"2-digit":undefined});return `<text class="caxis" x="${x.toFixed(1)}" y="${H-16}" text-anchor="${i===0?"start":i===count-1?"end":"middle"}">${label}</text>`}).join("");
-  const dots=points.length<=80?points.map((p,i)=>`<circle class="cpt" cx="${xAt(p).toFixed(1)}" cy="${yAt(p.y).toFixed(1)}" r="${i===points.length-1?4:3}"><title>${money(p.y)} — ${asOf(p.x.toISOString())}</title></circle>`).join(""):"";
-  return `${head}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price history: lowest ${money(low.y)}, highest ${money(high.y)}, current ${money(current.y)}">${grid}${averageGuide}<path class="carea" d="${area}"></path><path class="cline" d="${line}"></path>${dots}${ticks}</svg>`;
+  // Two circles per point: a big transparent hit target (real dots are small
+  // and fiddly to hover precisely) sitting under a small visible dot with
+  // pointer-events disabled, so hover/tap on the visible dot's neighbourhood
+  // still reaches the hit target beneath it.
+  const dots=points.length<=80?points.map((p,i)=>{
+    const cx=xAt(p).toFixed(1), cy=yAt(p.y).toFixed(1);
+    const isLow=Math.abs(p.y-lo)<0.005;
+    const args=`event,${p.y},${+p.x},${isLow?1:0}`;
+    return `<circle class="cpthit" cx="${cx}" cy="${cy}" r="11" onmouseenter="showChartTip(${args})" onmouseleave="hideChartTip()" onclick="showChartTip(${args})"></circle><circle class="cpt" cx="${cx}" cy="${cy}" r="${i===points.length-1?4:3}" style="pointer-events:none"></circle>`;
+  }).join(""):"";
+  return `${head}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price history: lowest ${money(low.y)}, highest ${money(high.y)}, current ${money(current.y)}">
+    <defs><linearGradient id="pchartgrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" style="stop-color:var(--flag);stop-opacity:.32"></stop>
+      <stop offset="100%" style="stop-color:var(--flag);stop-opacity:0"></stop>
+    </linearGradient></defs>
+    ${grid}${lowGuide}${averageGuide}<path class="carea" d="${area}"></path><path class="cline" d="${line}"></path>${dots}${ticks}</svg><div class="charttip" id="charttip"></div>`;
 }
+function showChartTip(evt,price,ts,isLowest){
+  const tip=document.getElementById("charttip"), wrap=evt.currentTarget.closest(".chartwrap");
+  if(!tip||!wrap) return;
+  const wrapRect=wrap.getBoundingClientRect(), ptRect=evt.currentTarget.getBoundingClientRect();
+  tip.style.left=`${ptRect.left+ptRect.width/2-wrapRect.left}px`;
+  tip.style.top=`${ptRect.top-wrapRect.top}px`;
+  tip.innerHTML=`Date: ${asOf(new Date(ts).toISOString())}<br>Price: <b>${money(price)}</b>${isLowest?' <span class="lowest">(Lowest!)</span>':""}`;
+  tip.classList.add("show");
+}
+function hideChartTip(){document.getElementById("charttip")?.classList.remove("show");}
 function buyAdvice(points){
   const current = points.at(-1).y;
   const allLow = Math.min(...points.map(p=>p.y));
