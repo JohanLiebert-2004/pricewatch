@@ -32,6 +32,11 @@ jobs:
             budget: 900
           - retailer: bigw
             budget: 1600
+            crawl_batch: 2    # each product page is ~1.5MB decompressed of
+                               # metered proxy bytes; the default 40/run was
+                               # ~77MB/day billed - kept barely alive (it's
+                               # the only Big W image_url source, see P9)
+                               # while the byte budget is tight
           - retailer: kmart
             budget: 1400
           - retailer: target
@@ -109,11 +114,11 @@ jobs:
         run: |
           if [[ "${{ matrix.retailer }}" != "bigw" || "${{ github.event_name }}" != "schedule" ]]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif (( 10#$(date -u +%H) % 3 == 0 )); then
+          elif (( 10#$(date -u +%H) % 6 == 0 )); then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping Big W this hour; its residential-proxy refresh runs every three hours."
+            echo "Skipping Big W this hour; its residential-proxy refresh runs every six hours (was three - halved 18 July to stretch the remaining Webshare byte budget to the 9 Aug renewal)."
           fi
       # First run only: uncomment to load full catalogues into the queue.
       # - run: python run.py index all

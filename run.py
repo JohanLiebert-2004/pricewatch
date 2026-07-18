@@ -73,6 +73,25 @@ def cmd_crawl(args):
     from datetime import datetime, timezone
     conn = db.connect()
     scraper = REGISTRY[args.retailer]()
+    proxy_state = None
+    if args.retailer == "bigw":
+        # The crawl lane spends the same metered Webshare bytes as the bulk
+        # refresh - gate and record it against the shared cycle cap too (it
+        # used to be invisible to the cap: ~77MB/day billed, on track to
+        # exhaust the plan weeks before its renewal).
+        from scrapers.bigw import PROXY_CYCLE_BYTE_CAP, proxy_cycle
+        row = conn.execute("SELECT v FROM kv WHERE k=?",
+                           ("bigw_cat_state",)).fetchone()
+        proxy_state = json.loads(row["v"]) if row else {}
+        cycle = proxy_cycle()
+        if proxy_state.get("_proxy_cycle") != cycle:
+            proxy_state.pop("_proxy_month", None)
+            proxy_state["_proxy_cycle"] = cycle
+            proxy_state["_proxy_bytes"] = 0
+        if proxy_state.get("_proxy_bytes", 0) >= PROXY_CYCLE_BYTE_CAP:
+            print(f"bigw: proxy byte budget spent for cycle {cycle}, "
+                  "skipping crawl batch until it renews")
+            return
     rows = conn.execute(
         """SELECT url FROM crawl_queue WHERE retailer=? AND fails < 3
            ORDER BY last_scraped IS NOT NULL, last_scraped LIMIT ?""",
@@ -134,6 +153,14 @@ def cmd_crawl(args):
             conn.commit()
     if watch_hits:
         alerts.send_item_watch(conn, watch_hits)
+    if proxy_state is not None:
+        proxy_state["_proxy_bytes"] = (proxy_state.get("_proxy_bytes", 0)
+                                       + getattr(scraper, "_proxy_bytes_run", 0))
+        conn.execute("INSERT OR IGNORE INTO kv (k, v) VALUES (?,?)",
+                     ("bigw_cat_state", "{}"))
+        conn.execute("UPDATE kv SET v=? WHERE k=?",
+                     (json.dumps(proxy_state), "bigw_cat_state"))
+        conn.commit()
     print(f"batch done: {ok}/{len(rows)} products stored "
           f"(rerun to continue through the queue)")
 
