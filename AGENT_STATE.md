@@ -13,9 +13,35 @@ Before changing anything:
    task's files.
 4. Never print, copy, or commit `.env`, Terraform state, SSH keys, tokens, or
    secret values. See `CLAUDE.md` for the authoritative secret list.
+5. **This directory (`C:\Users\tarun\Downloads\pricewatch_4\pricewatch`) should
+   stay checked out on `master` at all times** - it's a shared working tree
+   between agents, and a stray `git checkout <branch>` here can land another
+   agent's in-progress uncommitted edits on the wrong branch (happened live
+   18 July: a Claude session checked out `v2` here mid-way through a Codex
+   scraper fix sitting uncommitted in the working tree, which nearly got
+   swept onto the wrong branch). The `v2` UI redesign branch has its own
+   separate worktree instead - see the v2 entry below. If you need a branch
+   other than `master` checked out for more than a couple of commands, use
+   `git worktree add ../pricewatch-<name> <branch>` rather than switching
+   this directory.
 
 ## Current production state
 
+- **18 July, fixed same-day: `web/watch-confirm.js` had a live infinite-loop
+  bug** (commit `354ae62`) that froze the browser tab for any shopper who
+  successfully submitted the price-watch form. Its `MutationObserver` on
+  `#wresult` replaced its own children with new HTML that itself contained
+  the `.watchok` marker it was watching for, re-triggering itself forever.
+  Fixed with a one-shot guard flag on the container's own `dataset` (an
+  element's own attributes survive an `innerHTML` rewrite of its children).
+  Deployed to both Vercel and the OCI VM's `pricewatch-web`; verified live
+  on production with a fetch-intercepted test submission (page stayed fully
+  responsive, confirmation message rendered exactly once). This had been
+  live and undetected since the double-opt-in feature shipped - nobody had
+  exercised the actual success path in a real browser until now. If you're
+  touching this file again: never let a `MutationObserver`'s own callback
+  produce a mutation that matches its own trigger condition without a
+  guard.
 - **Live site:** https://dealwatch.com.au (custom domain, live 17 July - see
   the "Custom domain + rebrand" entry below). The old
   https://web-pi-blush-48.vercel.app alias still resolves to the same
@@ -212,6 +238,37 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
   (Vercel prod alias re-pointed, `vercel deploy --prod` from `web/`): white
   background, blue accents, Codex's Books/Auto/Cosmetics retailer groupings
   all rendering correctly together with the new theme.
+
+## v2 UI redesign (owner-requested, in progress, separate worktree)
+
+- Branch `v2`, checked out in its own worktree at
+  `C:\Users\tarun\Downloads\pricewatch_4\pricewatch-v2` (NOT this directory -
+  see the worktree note in "Start here" above). `master`/production is
+  untouched by this work; nothing here is live until explicitly merged.
+- Scope (owner-provided spec, 7 sections): chart gradient/tooltip/
+  annotations, image-forward product cards, tabular-nums typography, a
+  bigger homepage search bar, mobile bottom nav + sticky track button, and
+  various micro-interactions (button morph, skeleton loaders, toast). Being
+  worked through incrementally, chart first since the owner called it the
+  "hero element".
+- Done so far (commit `53d0cb7` on `v2`): `web/product.html`'s price chart -
+  gradient area fill (SVG `linearGradient`, replaces the old flat-colour
+  fill), a custom floating dark tooltip on hover/tap (date + price +
+  "(Lowest!)" when applicable, replacing the old native-browser `<title>`
+  tooltip), and the "lowest recorded" value promoted from a plain axis
+  gridline to its own dashed/coloured/labelled annotation (matching the
+  existing average-price guide's treatment) with a collision guard so it
+  never overlaps a plain gridline label on a tight-range product. The
+  step-line shape (not a smoothed curve) was deliberately kept - it
+  represents a recorded price holding constant between observations, a real
+  accuracy property worth keeping over generic chart "smoothness".
+- Not started yet: cards, typography, search bar, mobile nav, micro-
+  interactions (spec items 3-7).
+- Before this is deployed anywhere, it needs a Vercel *preview* deploy
+  (never straight to production) for the owner to review, run from the
+  `pricewatch-v2` worktree on the OCI VM (the owner does not want deploys
+  run from their own PC), same pattern as the production deploys documented
+  above.
 
 ## End-of-session checklist
 

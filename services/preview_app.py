@@ -234,7 +234,12 @@ async def preview(request: Request, retailer: str, sku: str):
         '<meta property="product:price:currency" content="AUD">',
     ]))
 
-    if p.get("current_price"):
+    # Google flags 'image' as a critical missing field for Product rich
+    # results. Rather than fake one, only claim Product/Offer eligibility for
+    # listings we can actually back with a real product photo - image-less
+    # products (a chunk of Big W's bulk-listing lane, see P9) just don't get
+    # the JSON-LD block, same as if they had no price.
+    if p.get("current_price") and image:
         jsonld = {
             "@context": "https://schema.org",
             "@type": "Product",
@@ -242,18 +247,30 @@ async def preview(request: Request, retailer: str, sku: str):
             "description": desc,
             "sku": str(sku),
             "url": canonical,
+            "image": image,
             "offers": {
                 "@type": "Offer",
                 "price": f"{float(p['current_price']):.2f}",
                 "priceCurrency": "AUD",
                 "url": p.get("url") or canonical,
                 "seller": {"@type": "Organization", "name": RETAILER_LABEL[retailer]},
+                # product_search only returns rows with a non-null, non-zero
+                # current_price (see views.sql; $0 is a sold-out placeholder
+                # filtered out upstream), so reaching here already means the
+                # item is actively priced/listed - a genuine InStock signal,
+                # not a guess. We don't track real-time stock beyond that, so
+                # this is the only availability value ever emitted.
+                "availability": "https://schema.org/InStock",
             },
         }
-        if image:
-            jsonld["image"] = image
         if p.get("brand"):
             jsonld["brand"] = {"@type": "Brand", "name": p["brand"]}
+        # Deliberately NOT adding hasMerchantReturnPolicy, shippingDetails or
+        # review/aggregateRating: we don't hold verified per-retailer return/
+        # shipping terms, and we have no real review data to report -
+        # fabricating any of these would be inaccurate structured data (and
+        # fake reviews specifically risk a Google manual action). Google
+        # lists all three as non-critical suggestions, not blockers.
         meta += (f'\n<script type="application/ld+json">'
                  f'{json.dumps(jsonld).replace("</", "<\\/")}</script>')
 
