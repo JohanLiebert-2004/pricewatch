@@ -13,6 +13,7 @@ Fast path (July 2026):
   full ~26k catalogue in ~550 listing fetches.
 """
 import json
+import random
 import re
 import time
 
@@ -38,7 +39,11 @@ class KmartScraper(BaseScraper):
                         # (goes via Constructor.io, not kmart.com.au).
 
     # -- fast listing refresh via Constructor.io ---------------------------
-    api_delay = 0.6           # polite pause between API calls (not Akamai)
+    # Constructor is the sanctioned catalogue source. Keep one serial,
+    # human-scale lane even though it is not protected by Kmart's storefront
+    # WAF; the small jitter avoids a mechanically fixed request cadence.
+    api_delay = 0.8
+    api_jitter = 0.4
     per_page = 200
 
     def _api(self):
@@ -124,7 +129,7 @@ class KmartScraper(BaseScraper):
                         if used >= budget:
                             done = True
                             break
-                        time.sleep(self.api_delay)
+                        time.sleep(self.api_delay + random.uniform(0, self.api_jitter))
                         r = client.get(
                             f"https://ac.cnstrc.com/browse/group_id/{gid}",
                             params={"num_results_per_page": self.per_page,

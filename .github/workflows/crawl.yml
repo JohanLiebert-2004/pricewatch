@@ -38,7 +38,8 @@ jobs:
                                # the only Big W image_url source, see P9)
                                # while the byte budget is tight
           - retailer: kmart
-            budget: 1400
+            budget: 1400       # Constructor's public feed contains price, RRP, APN and images;
+                               # omit protected product-page enrichment entirely.
           - retailer: target
             budget: 700
           - retailer: jbhifi
@@ -144,7 +145,7 @@ jobs:
         if: matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true'
         run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }} || true
       - name: Product-page enrichment (${{ matrix.retailer }})
-        if: matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true'
+        if: matrix.retailer != 'kmart' && (matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true')
         run: python run.py crawl ${{ matrix.retailer }} --batch ${{ matrix.crawl_batch || 40 }} || true
 
   detect:
