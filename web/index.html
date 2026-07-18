@@ -106,9 +106,11 @@
       <button class="chip" data-r="jbhifi" aria-pressed="false">JB Hi-Fi</button>
       <button class="chip" data-r="goodguys" aria-pressed="false">The Good Guys</button>
       <button class="chip" data-r="myer" aria-pressed="false">Myer</button>
-      <button class="chip" data-r="supercheap" aria-pressed="false">Supercheap Auto</button>
-      <button class="chip" data-r="sephora" aria-pressed="false">Sephora</button>
-      <button class="chip" data-r="chemistwarehouse" aria-pressed="false">Chemist Warehouse</button><button class="chip" data-r="booktopia" aria-pressed="false">Booktopia</button><button class="chip" data-r="qbd" aria-pressed="false">QBD Books</button><button class="chip" data-r="ikea" aria-pressed="false">IKEA</button>
+      <button class="chip" data-r="chemistwarehouse" aria-pressed="false">Chemist Warehouse</button>
+      <button class="chip" data-r="ikea" aria-pressed="false">IKEA</button>
+      <button class="chip" data-r="books" data-members="qbd,booktopia" aria-pressed="false">Books · QBD + Booktopia</button>
+      <button class="chip" data-r="auto" data-members="supercheap" aria-pressed="false">Auto · Supercheap Auto</button>
+      <button class="chip" data-r="cosmetics" data-members="sephora" aria-pressed="false">Cosmetics · Sephora</button>
     </div>
     <div class="store-status network-status" id="networkStatus" hidden></div>
     <div class="store-status" id="storeStatus" hidden></div>
@@ -205,6 +207,11 @@ fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=sku&pct_off=gte.50&limit=1`,
 // ---- render ------------------------------------------------------------
 const money = n => "$"+Number(n).toFixed(2).replace(/\.00$/,"");
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse", booktopia:"Booktopia", qbd:"QBD Books", ikea:"IKEA"};
+const RETAILER_GROUPS = {
+  books:{label:"Books · QBD + Booktopia",members:["qbd","booktopia"]},
+  auto:{label:"Auto · Supercheap Auto",members:["supercheap"]},
+  cosmetics:{label:"Cosmetics · Sephora",members:["sephora"]},
+};
 const SORTS = {
   deep:  "pct_off.desc,reference_price.desc",
   price_asc:  "price.asc,pct_off.desc",
@@ -287,6 +294,17 @@ function renderQuickFilters(){
     b.setAttribute("aria-pressed", b.dataset.quick === quick));
 }
 function clearQuick(){ if(quick === "low30") only30DayLow = false; quick = ""; renderQuickFilters(); }
+
+function retailerMembers(button){
+  return (button.dataset.members || button.dataset.r).split(",").filter(Boolean);
+}
+function selectedRetailerLabel(){
+  if(selRetailers.size===0) return "All stores";
+  const selected = [...selRetailers];
+  const exact = Object.values(RETAILER_GROUPS).find(group =>
+    group.members.length===selected.length && group.members.every(r=>selRetailers.has(r)));
+  return exact ? exact.label : selected.map(r=>RETAILER_LABEL[r]||r).join(", ");
+}
 
 function feedUrl(){
   let u = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
@@ -398,9 +416,7 @@ const SORT_LABEL = {deep:"biggest discount", price_asc:"price low→high",
                     price_desc:"price high→low", fresh:"newest drops",
                     arrivals:"new arrivals"};
 function render(rows, total){
-  const retailerLabel = selRetailers.size
-    ? [...selRetailers].map(r=>RETAILER_LABEL[r]||r).join(", ")
-    : "All stores";
+  const retailerLabel = selectedRetailerLabel();
   const label = `${retailerLabel}` +
     (selCats.size ? ` · ${[...selCats].join(", ")}` : "") +
     (selSubcats.size ? ` · ${[...selSubcats].map(esc).join(", ")}` : "") +
@@ -439,11 +455,15 @@ document.getElementById("retailers").addEventListener("click", e=>{
   const b = e.target.closest(".chip"); if(!b) return;
   const val = b.dataset.r;
   if(val === "all"){ selRetailers.clear(); }
-  else if(selRetailers.has(val)){ selRetailers.delete(val); }
-  else{ selRetailers.add(val); }
+  else{
+    const members = retailerMembers(b);
+    const selected = members.every(r=>selRetailers.has(r));
+    members.forEach(r=>selected ? selRetailers.delete(r) : selRetailers.add(r));
+  }
   document.querySelectorAll("#retailers .chip").forEach(c=>{
     const v = c.dataset.r;
-    c.setAttribute("aria-pressed", v==="all" ? selRetailers.size===0 : selRetailers.has(v));
+    c.setAttribute("aria-pressed", v==="all" ? selRetailers.size===0 :
+      retailerMembers(c).every(r=>selRetailers.has(r)));
   });
   // the category row changes shape with the store selection - stale picks
   // would silently keep filtering

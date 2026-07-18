@@ -153,6 +153,37 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
   applied; `terraform plan`/`apply` after updating `ssh_allowed_cidr` fixes it
   with a clean single-rule diff, no instance recreate.
 
+## 18 July Codex handoff addendum
+
+- Commits `c4147ba`, `ff8d9ca`, `53b1f4b` and `0313eeb` added mobile
+  discovery/product matching, community in-store report foundations, Buy/Wait
+  guidance, suggested cross-retailer items, catalogue price range plus low/high
+  sorting, and faster catalogue requests.
+- Catalogue and Deals retailer filters now use the same shopping groups:
+  **Books = QBD + Booktopia**, **Auto = Supercheap Auto**, and
+  **Cosmetics = Sephora**. Product cards retain the real retailer name.
+- Crawler health markers and deduplicated incident/recovery emails now target
+  `admin@dealwatch.com.au`. Chemist Warehouse remains HTTP 403-blocked:
+  monitoring is implemented, but the scraper itself is not restored.
+- Booktopia, QBD and IKEA scraper implementations and hourly workflow jobs are
+  pushed. Their one-time crawl-queue indexing has **not** been run, so they are
+  not collecting listings yet. Dymocks was excluded because its public site
+  presented an active bot challenge; do not bypass it without an approved
+  feed/API.
+- The static site must be deployed from `web/` using the linked Vercel `web`
+  project; a Git push alone did not update `dealwatch.com.au` in this session.
+  The repo root is linked to a separate stale/error `pricewatch` Vercel project.
+- **Unresolved visual issue, explicitly deferred to Claude:** commits `2614aa3`,
+  `6151133` and `95548ea` removed blue tokens and restored the historical
+  warm-white Bellroy palette. Live HTTP checks reported `#faf9f7` paper,
+  `#33363b` ink, `#d3572b` accent and service-worker cache v6, but the owner
+  still sees blue. Reproduce in the owner's real browser/PWA and inspect
+  computed styles, the active service-worker controller and Cache Storage.
+  Do not keep guessing at palette values.
+- Windows Codex is configured with the `unelevated` restricted-token sandbox.
+  Elevated setup failed and produced no dedicated setup error in the available
+  dated sandbox logs. This is why `apply_patch` refuses split writable roots;
+  scoped elevated PowerShell edits were used as a fallback.
 ## End-of-session checklist
 
 1. Update this file's completed work/task queue with concise facts.
