@@ -85,6 +85,10 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const HDRS = {apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}`};
 
 const money = n => "$"+Number(n).toFixed(2);
+// Keep catalogue responses small: these are the only product_search fields
+// rendered below. Smaller payloads make filter changes noticeably snappier on
+// mobile connections.
+const CATALOGUE_FIELDS = "retailer,sku,title,brand,category,subcategory,url,image_url,is_marketplace,current_price,current_rrp";
 const RETAILERS = [["all","All stores"],["kmart","Kmart"],["bigw","Big W"],
                    ["officeworks","Officeworks"],["target","Target"],
                    ["jbhifi","JB Hi-Fi"],["goodguys","The Good Guys"],["myer","Myer"],
@@ -113,6 +117,8 @@ let q = "";                     // text filter (name/SKU)
 let sort = "title";             // title | price_asc | price_desc
 const SORT_ORDER = {title:"title.asc", price_asc:"current_price.asc,title.asc", price_desc:"current_price.desc,title.asc"};
 const PAGE = 50;
+let requestSerial = 0;
+let pageRequest = null;
 
 const matchRet = r => selRetailers.size===0 || selRetailers.has(r);
 const matchCat = c => selCats.size===0 || selCats.has(c);
@@ -147,24 +153,18 @@ function chips(){
     `<button class="chip" data-k="${k}" aria-pressed="${k==="all" ? selRetailers.size===0 : selRetailers.has(k)}">
        ${label}<span class="n">${fmtN(count(k,"all"))}</span></button>`).join("");
   document.getElementById("cats").innerHTML = catChips();
-  // subcategory picks also force the exact-count path: the local stats
-  // cache only knows retailer x category totals
-  const priced = pmin !== null || pmax !== null || q || selSubcats.size;
+  // The precomputed stats can only count unfiltered retailer/category
+  // combinations. Do not make a second, expensive exact-count request before
+  // showing results for a price, text, or subcategory filter.
+  const filtered = pmin !== null || pmax !== null || q || selSubcats.size;
   const retailerLabel = selRetailers.size
     ? [...selRetailers].map(r=>RETAILER_LABEL[r]||r).join(", ") : "All stores";
   const label = `${retailerLabel}${selCats.size ? " · "+[...selCats].join(", ") : ""}` +
     (selSubcats.size ? " · "+[...selSubcats].map(esc).join(", ") : "") +
     (pmin !== null || pmax !== null ? ` · $${pmin ?? 0}–${pmax !== null ? "$"+pmax : ""}` : "") +
     (q ? ` · “${esc(q)}”` : "");
-  if(priced){
-    // stats view doesn't know prices/text; ask the API for the exact filtered count
-    document.getElementById("total").innerHTML = `… items <span>· ${label}</span>`;
-    fetch(filterUrl() + "&limit=1", {headers:{...HDRS, Prefer:"count=exact"}})
-      .then(r=>{
-        const n = (r.headers.get("content-range")||"").split("/")[1];
-        if(n) document.getElementById("total").innerHTML =
-          `${fmtN(n)} items <span>· ${label}</span>`;
-      });
+  if(filtered){
+    document.getElementById("total").innerHTML = `Filtered results <span>· ${label}</span>`;
   }else{
     document.getElementById("total").innerHTML =
       `${fmtN(count("all", "all"))} items <span>· ${label}</span>`;
@@ -172,7 +172,7 @@ function chips(){
 }
 
 function filterUrl(){
-  let u = `${SUPABASE_URL}/rest/v1/product_search?select=*`;
+  let u = `${SUPABASE_URL}/rest/v1/product_search?select=${CATALOGUE_FIELDS}`;
   if(selRetailers.size) u += `&retailer=in.(${[...selRetailers].map(encodeURIComponent).join(",")})`;
   if(selCats.size) u += `&category=in.(${[...selCats].map(encodeURIComponent).join(",")})`;
   if(selSubcats.size) u += `&subcategory=in.(${[...selSubcats]
@@ -188,11 +188,21 @@ function filterUrl(){
 }
 
 async function loadPage(reset){
+  const serial = ++requestSerial;
+  if(pageRequest) pageRequest.abort();
+  pageRequest = new AbortController();
   if(reset){ offset = 0; document.getElementById("list").innerHTML =
     `<div class="empty">Curating the catalogue…</div>`; }
   const q = filterUrl() + `&order=${SORT_ORDER[sort]}&limit=${PAGE}&offset=${offset}`;
-  const r = await fetch(q, {headers:HDRS});
-  const rows = r.ok ? await r.json() : [];
+  let rows = [];
+  try {
+    const r = await fetch(q, {headers:HDRS, signal:pageRequest.signal});
+    rows = r.ok ? await r.json() : [];
+  } catch(err) {
+    if(err.name === "AbortError") return;
+  }
+  // A slower response for an earlier filter must never replace newer results.
+  if(serial !== requestSerial) return;
   const html = rows.map((p,i)=>`<div class="row plain media" style="animation-delay:${Math.min(i*30,300)}ms">
     <div class="thumb">${p.image_url
       ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt="${esc(p.title)}"
