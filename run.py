@@ -323,6 +323,13 @@ def cmd_url(args):
 
 def cmd_detect(args):
     conn = db.connect()
+    if db.DATABASE_URL:
+        # If the runner kills this job mid-transaction, the orphaned session
+        # must not sit "idle in transaction" holding deals locks - one such
+        # zombie starved every subsequent detect into statement timeouts for
+        # 2+ days (15-18 July). Server reaps the session after 5 idle minutes.
+        conn.execute("SET idle_in_transaction_session_timeout = '5min'")
+        conn.commit()
     tagged = categorize_mod.backfill(conn)
     if tagged:
         print(f"categorised {tagged} new products")

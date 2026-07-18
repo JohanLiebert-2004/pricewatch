@@ -49,6 +49,20 @@ def run(conn) -> list[dict]:
         h = history_by_pid.setdefault(s["product_id"], [])
         if len(h) < 90:
             h.append(s)
+    # Known deal keys, matching the table's UNIQUE (product_id, price, signal).
+    # Dedup is decided here instead of via per-row INSERT OR IGNORE rowcounts:
+    # one insert round trip per deal inside a single long transaction held the
+    # unique-index locks for the entire scoring pass (minutes from a US runner
+    # to Sydney), starving any concurrent detect into Supabase's 2-minute
+    # statement timeout. The constraint still backstops races.
+    existing = {(d["product_id"], round(float(d["price"]), 2), d["signal"])
+                for d in conn.execute(
+                    "SELECT product_id, price, signal FROM deals")}
+    # Close the read transaction: the loop below is minutes of pure python,
+    # and a job killed mid-loop would otherwise leave an orphaned
+    # idle-in-transaction session blocking the next run's detect.
+    conn.commit()
+    new_rows = []
     for p in products:
         snaps = history_by_pid.get(p["id"])
         if not snaps:
@@ -87,19 +101,23 @@ def run(conn) -> list[dict]:
                     checks.append((sig, med, 1 - price / med))
 
         for signal, ref, score in checks:
-            cur = conn.execute(
-                """INSERT OR IGNORE INTO deals
-                   (product_id, price, reference_price, signal, score, detected_at)
-                   VALUES (?,?,?,?,?,?)""",
-                (p["id"], price, ref, signal, round(score, 4), now),
-            )
-            if cur.rowcount:
-                found.append({
-                    "retailer": p["retailer"], "title": p["title"], "url": p["url"],
-                    "price": price, "reference": ref, "signal": signal,
-                    "off": f"{score:.0%}", "marketplace": bool(p["is_marketplace"]),
-                    "tier": "ERROR-TIER" if score >= BIG_DROP else "deal",
-                })
+            key = (p["id"], round(price, 2), signal)
+            if key in existing:
+                continue
+            existing.add(key)
+            new_rows.append(
+                (p["id"], price, ref, signal, round(score, 4), now))
+            found.append({
+                "retailer": p["retailer"], "title": p["title"], "url": p["url"],
+                "price": price, "reference": ref, "signal": signal,
+                "off": f"{score:.0%}", "marketplace": bool(p["is_marketplace"]),
+                "tier": "ERROR-TIER" if score >= BIG_DROP else "deal",
+            })
+    if new_rows:
+        conn.executemany(
+            """INSERT OR IGNORE INTO deals
+               (product_id, price, reference_price, signal, score, detected_at)
+               VALUES (?,?,?,?,?,?)""", new_rows)
     conn.commit()
     return found
 

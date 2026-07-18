@@ -129,6 +129,11 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    concurrency:
+      group: detect            # two overlapping runs' detects insert the same
+      cancel-in-progress: false # deals and deadlock/starve each other on the
+                                # unique index - serialize them; a queued
+                                # detect superseded by a newer run is fine.
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}   # optional: deal pings
