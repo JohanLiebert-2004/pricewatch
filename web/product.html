@@ -250,7 +250,18 @@ function buyAdvice(points){
   const recent = points.filter(p=>+p.x >= since).map(p=>p.y);
   const recentLow = recent.length ? Math.min(...recent) : allLow;
   const distinctPrices = new Set(points.map(p=>p.y.toFixed(2))).size;
-  if(current <= allLow + .005) return `<section class="buyadvice"><strong>Buy now — lowest price Dealwatch has recorded.</strong><p>This is based on ${points.length} recorded price observations, not a guarantee of future stock or pricing.</p></section>`;
+  const spanDays = (+points.at(-1).x - +points[0].x) / 86400000;
+  // A handful of observations over a few days isn't enough history to
+  // confidently call something the "lowest price" - it's just the only
+  // price we've seen. Require a minimum track record before making the
+  // strong "Buy now" claim; short-history items get a softer, hedged note
+  // instead of an unqualified recommendation.
+  if(current <= allLow + .005){
+    if(points.length >= 15 && spanDays >= 14){
+      return `<section class="buyadvice"><strong>Buy now — lowest price Dealwatch has recorded.</strong><p>This is based on ${points.length} recorded price observations, not a guarantee of future stock or pricing.</p></section>`;
+    }
+    return `<section class="buyadvice"><strong>Lowest price seen so far — but tracking has only just started.</strong><p>Based on ${points.length} recorded observation${points.length===1?"":"s"} over ${Math.max(1,Math.round(spanDays))} day${spanDays<1.5?"":"s"}, not enough history yet for a confident buy signal. Set a target-price alert if you'd rather wait and see.</p></section>`;
+  }
   if(distinctPrices >= 3 && current >= recentLow * 1.15) return `<section class="buyadvice"><strong>Consider waiting — it was ${money(recentLow)} in the last 90 days.</strong><p>This is a history-based signal, not a prediction. A lower price may not return and stock can sell out.</p></section>`;
   return `<section class="buyadvice"><strong>Watch the trend — this is ${money(current - recentLow)} above the 90-day low.</strong><p>Set a target-price alert if you are happy to wait. Prices and availability can change at any time.</p></section>`;
 }
