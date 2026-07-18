@@ -59,12 +59,14 @@
     <button type="submit">Apply</button>
     <button type="button" class="clear" id="pclear">Clear</button>
   </form>
-  <div class="barlabel">Sort</div>
-  <div class="pricebar"><select id="sort" aria-label="Sort catalogue">
-    <option value="title">Name: A–Z</option>
-    <option value="price_asc">Price: low to high</option>
-    <option value="price_desc">Price: high to low</option>
-  </select></div>
+  <div class="catalogue-sort">
+    <label for="sort"><strong>Sort products</strong><span>Choose cheapest or highest price</span></label>
+    <select id="sort" aria-label="Sort catalogue products">
+      <option value="title">Name: A–Z</option>
+      <option value="price_asc">Price: lowest first</option>
+      <option value="price_desc">Price: highest first</option>
+    </select>
+  </div>
   <div class="total" id="total"></div>
   <div id="list"><div class="empty">Curating the catalogue…</div></div>
   <button class="more" id="more" hidden>Show 50 more</button>

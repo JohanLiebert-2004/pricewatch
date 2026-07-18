@@ -131,6 +131,23 @@ a{color:inherit}
 .pricebar button:hover{opacity:.85}
 .pricebar button.clear{background:transparent;color:var(--muted);border-color:var(--hair)}
 .pricebar button.clear:hover{color:var(--ink);border-color:var(--faint)}
+.catalogue-sort{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  margin:24px 0 12px;padding:14px 16px;background:var(--card);
+  border:1px solid var(--hair);border-radius:14px;box-shadow:var(--shadow);
+}
+.catalogue-sort label{display:flex;flex-direction:column;gap:2px;cursor:pointer}
+.catalogue-sort label strong{font-size:15px}
+.catalogue-sort label span{font-size:12px;color:var(--muted)}
+.catalogue-sort select{
+  min-width:190px;padding:10px 38px 10px 13px;border:1px solid var(--flag);
+  border-radius:10px;background:var(--card);color:var(--ink);font:700 14px Figtree,Inter,system-ui,sans-serif;
+  cursor:pointer;
+}
+@media(max-width:560px){
+  .catalogue-sort{align-items:stretch;flex-direction:column;gap:10px}
+  .catalogue-sort select{width:100%;min-width:0;font-size:16px}
+}
 
 /* ---------- headings / counts ---------- */
 .total{
