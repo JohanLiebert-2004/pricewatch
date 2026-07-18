@@ -338,7 +338,10 @@ function renderRelated(p,rows){
   const current=Number(p.current_price);
   box.innerHTML=`<h2>Compare prices & suggested items</h2><p class="hint">“Same item” uses a matching barcode. Model and similar listings are suggestions—check size, variant, seller and delivery before buying.</p><div class="related-list">${rows.map(r=>{const store=RETAILER_LABEL[r.retailer]||r.retailer,save=current-Number(r.current_price);const label=r.label==="Exact barcode match"?"Same item":r.label;const exact=r.label==="Exact barcode match";return `<a class="related-item" href="/p/${encodeURIComponent(r.retailer)}/${encodeURIComponent(r.sku)}"><div><strong>${esc(r.title)}</strong><small><span class="pill ${exact?"deal":r.label==="Similar listing"?"fuzzy":""}">${label}</span> · ${esc(store)}</small></div><div class="price">${money(r.current_price)}${save>.005?`<span class="cheaper">${esc(store)} is ${money(save)} cheaper</span>`:""}</div></a>`}).join("")}</div>`;
 }
-function logInterest(p){const key=`dealwatch_interest_${p.retailer}_${p.sku}`,now=Date.now();try{if(now-Number(localStorage.getItem(key)||0)<4*60*60*1000)return;localStorage.setItem(key,String(now));}catch(e){}fetch(`${SUPABASE_URL}/rest/v1/rpc/log_product_interest`,{method:"POST",headers:{...HDRS,"Content-Type":"application/json"},body:JSON.stringify({p_retailer:p.retailer,p_sku:p.sku})}).catch(()=>{});}async function load(){
+function logInterest(p){const key=`dealwatch_interest_${p.retailer}_${p.sku}`,now=Date.now();try{if(now-Number(localStorage.getItem(key)||0)<4*60*60*1000)return;localStorage.setItem(key,String(now));}catch(e){}fetch(`${SUPABASE_URL}/rest/v1/rpc/log_product_interest`,{method:"POST",headers:{...HDRS,"Content-Type":"application/json"},body:JSON.stringify({p_retailer:p.retailer,p_sku:p.sku})}).catch(()=>{});}
+function hotCardLike(p){const store=RETAILER_LABEL[p.retailer]||p.retailer,href=`/p/${encodeURIComponent(p.retailer)}/${encodeURIComponent(p.sku)}`;return `<a class="hot-card" href="${href}"><strong>${esc(p.title)}</strong><div class="meta"><span class="pill">${esc(store)}</span>${p.category?`<span class="pill">${esc(p.category)}</span>`:""}</div><div class="hot-price">${money(p.current_price)}</div></a>`;}
+async function loadAiSimilar(p){const rows=await fetch(`${SUPABASE_URL}/rest/v1/rpc/similar_products`,{method:"POST",headers:{...HDRS,"Content-Type":"application/json"},body:JSON.stringify({p_retailer:p.retailer,p_sku:p.sku,p_limit:8})}).then(r=>r.ok?r.json():[]).catch(()=>[]);const box=document.getElementById("aiSimilar");if(!box)return;if(!rows.length){box.remove();return;}box.querySelector(".hot-grid").innerHTML=rows.map(hotCardLike).join("");}
+async function load(){
   const main = document.getElementById("main");
   if(!retailer || !sku){
     main.innerHTML = `<div class="empty">No product specified.<br>Follow a
@@ -420,6 +423,10 @@ function logInterest(p){const key=`dealwatch_interest_${p.retailer}_${p.sku}`,no
     ${storeReportPanelHtml(p.product_id, store)}
     ${watchPanelHtml(p.product_id)}
     <section class="related" id="related"><div class="empty" style="padding:12px 0">Finding comparable listings…</div></section>
+    <section class="hot-section" id="aiSimilar" aria-labelledby="ai-similar-title">
+      <div class="hot-head"><div><h2 id="ai-similar-title">You might also like</h2><p>AI-suggested similar products.</p></div></div>
+      <div class="hot-grid"><div class="empty" style="padding:12px 0">Finding similar items…</div></div>
+    </section>
 
     <div class="chartwrap">${priceChart(points)}<div class="historynote">Tracking since ${trackingSince} · ${rows.length} recorded ${rows.length === 1 ? "observation" : "observations"} · last checked ${lastChecked}</div></div>
     ${historyTable(rows)}
@@ -428,6 +435,7 @@ function logInterest(p){const key=`dealwatch_interest_${p.retailer}_${p.sku}`,no
   document.getElementById("storeReport")?.addEventListener("submit",e=>submitStoreReport(p.product_id,e));
   logInterest(p);
   relatedItems(p).then(rows=>renderRelated(p,rows)).catch(()=>{const box=document.getElementById("related");if(box)box.remove();});
+  loadAiSimilar(p).catch(()=>{const box=document.getElementById("aiSimilar");if(box)box.remove();});
 }
 
 load();

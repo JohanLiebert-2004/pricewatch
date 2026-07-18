@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Compare Australian Prices &amp; Track Price Drops | Dealwatch</title>
 <meta name="description" content="Compare Australian retail prices, track price history, and find notable price drops across major stores with Dealwatch.">
+<meta name="commission-factory-verification" content="a71ce1dd84e24487a8ec711917c98fc2">
 <link rel="canonical" href="https://dealwatch.com.au/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Dealwatch">
@@ -160,6 +161,10 @@
     <div id="forYouWrap" hidden>
       <div class="sectionhead"><div><h2>For you</h2><div class="hint">Deals in categories you have viewed.</div></div></div>
       <div class="scroller" id="forYou"></div>
+    </div>
+    <div id="aiSimilarWrap" hidden>
+      <div class="sectionhead"><div><h2>Similar to <span id="aiSimilarTitle"></span></h2><div class="hint">AI-suggested similar products.</div></div></div>
+      <div class="scroller" id="aiSimilarHome"></div>
     </div>
   </section>
 
@@ -391,6 +396,19 @@ function renderPersonal(){
   document.getElementById("personal").hidden = false;
   document.getElementById("recentWrap").hidden = false;
   document.getElementById("recent").innerHTML = recent.slice(0,8).map(recentHtml).join("");
+  // AI-similar is keyed by retailer+sku, not category - fetch it unconditionally
+  // rather than folding it into the category-gated "For you" block below.
+  const latest = recent[0];
+  fetch(`${SUPABASE_URL}/rest/v1/rpc/similar_products`,
+    {method:"POST", headers:{...HDRS,"Content-Type":"application/json"},
+     body:JSON.stringify({p_retailer:latest.retailer, p_sku:latest.sku, p_limit:8})})
+    .then(r=>r.ok ? r.json() : [])
+    .then(rows=>{
+      if(!rows.length) return;
+      document.getElementById("aiSimilarTitle").textContent = latest.title;
+      document.getElementById("aiSimilarWrap").hidden = false;
+      document.getElementById("aiSimilarHome").innerHTML = rows.map(hotCard).join("");
+    }).catch(()=>{});
   const categories = [...new Set(recent.map(p=>p.category).filter(c=>c && c !== "other"))].slice(0,2);
   if(!categories.length) return;
   const filter = categories.map(encodeURIComponent).join(",");
@@ -400,7 +418,7 @@ function renderPersonal(){
       if(!rows.length) return;
       document.getElementById("forYouWrap").hidden = false;
       document.getElementById("forYou").innerHTML = rows.map(cardHtml).join("");
-
+      document.getElementById("aiSimilarHome").innerHTML = rows.map(hotCard).join("");
     }).catch(()=>{});
 }
 const SORT_LABEL = {deep:"biggest discount", price_asc:"price low→high",
