@@ -9,6 +9,7 @@
 import argparse
 from datetime import datetime, timedelta, timezone
 import json
+import os
 import time
 
 import alerts
@@ -74,11 +75,12 @@ def cmd_crawl(args):
     conn = db.connect()
     scraper = REGISTRY[args.retailer]()
     proxy_state = None
-    if args.retailer == "bigw":
+    if args.retailer == "bigw" and os.environ.get("PROXY_URL"):
         # The crawl lane spends the same metered Webshare bytes as the bulk
         # refresh - gate and record it against the shared cycle cap too (it
         # used to be invisible to the cap: ~77MB/day billed, on track to
-        # exhaust the plan weeks before its renewal).
+        # exhaust the plan weeks before its renewal). With PROXY_URL unset
+        # (the home-IP local sweep) requests are direct and free: no cap.
         from scrapers.bigw import PROXY_CYCLE_BYTE_CAP, proxy_cycle
         row = conn.execute("SELECT v FROM kv WHERE k=?",
                            ("bigw_cat_state",)).fetchone()
@@ -225,6 +227,7 @@ def cmd_refresh(args):
             kwargs["state"] = cat_state
         seen = 0
         kept = 0
+        sweep_blocked = False
         snaps = 0
         batch = []
         seen_skus = set()
@@ -267,6 +270,7 @@ def cmd_refresh(args):
                         print(f"  ...{seen} listings, {snaps} price changes")
         except Blocked as e:
             print(f"  BLOCKED mid-refresh (keeping what we got): {e}")
+            sweep_blocked = True
         except Exception as e:
             print(f"  refresh error after {seen} listings: "
                   f"{type(e).__name__}: {e}")
@@ -285,7 +289,15 @@ def cmd_refresh(args):
         print(f"  -> {seen} listings seen, {kept} kept (>= ${MIN_KEEP_PRICE:.0f} "
               f"or already tracked), {snaps} snapshots written")
 
-        missing = [sku for sku in known_skus if sku not in seen_skus][:MISSING_CHECK_BUDGET]
+        # After a Blocked sweep the delist probes would run on a connection
+        # Akamai just flagged - its 404s are less trustworthy, and with few/no
+        # listings seen "missing" barely means anything. Skip them; a healthy
+        # future sweep resumes the delist backlog. (Retailers whose refresh
+        # lane is a legitimate no-op - Myer, Good Guys - are unaffected: they
+        # end with seen=0 but no Blocked, and this stays their delist path.)
+        missing = ([] if sweep_blocked else
+                   [sku for sku in known_skus if sku not in seen_skus]
+                   [:MISSING_CHECK_BUDGET])
         missing_urls = {r["sku"]: r["url"] for r in conn.execute(
             f"SELECT sku, url FROM products WHERE retailer=? "
             f"AND sku IN ({','.join('?' * len(missing))})",

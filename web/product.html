@@ -38,7 +38,7 @@
     background:var(--card);border:1px solid var(--hair);border-radius:16px;
     padding:20px;margin-top:16px;box-shadow:var(--shadow);
   }
-  .chartwrap svg{width:100%;height:auto;display:block}
+  .chartwrap svg{width:100%;height:170px;display:block}
   .chartwrap .cline{fill:none;stroke:var(--flag);stroke-width:2}
   .chartwrap .carea{fill:var(--flag-soft)}
   .chartwrap .caxis{font-size:10px;fill:var(--faint);font-family:inherit}
@@ -148,7 +148,10 @@ const TG_BOT = "underp22bot";
 
 function sparkline(points){
   // points: [{x: Date, y: price}], oldest first. Returns an SVG string.
-  const W = 600, H = 180, PAD = 8;
+  // AXIS is a band below the plot for the date labels: they must live
+  // INSIDE the viewBox - a label drawn past its height is silently
+  // clipped (the old start-date label sat at H+16 and never rendered).
+  const W = 600, H = 150, PAD = 8, AXIS = 24;
   const prices = points.map(p=>p.y);
   const lo = Math.min(...prices), hi = Math.max(...prices);
   const span = (hi - lo) || 1;
@@ -160,14 +163,22 @@ function sparkline(points){
     ? points.map((p,i)=>`<circle class="cpt" cx="${xAt(i).toFixed(1)}" cy="${yAt(p.y).toFixed(1)}" r="2.5">` +
         `<title>${money(p.y)} — ${asOf(p.x.toISOString())}</title></circle>`).join("")
     : "";
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+  const first = points[0].x, last = points[points.length-1].x;
+  const mid = points[Math.floor((points.length-1)/2)].x;
+  const dateY = H + AXIS - 9;
+  // middle tick only when the range is wide enough that it adds information
+  const midTick = points.length > 2 && (last - first) > 3*86400e3
+    ? `<text class="caxis" x="${W/2}" y="${dateY}" text-anchor="middle">${asOf(mid.toISOString())}</text>`
+    : "";
+  return `<svg viewBox="0 0 ${W} ${H+AXIS}" preserveAspectRatio="none">
     <polygon class="carea" points="${area}"></polygon>
     <polyline class="cline" points="${line}"></polyline>
     ${dots}
     <text class="caxis" x="${PAD}" y="14">${money(hi)}</text>
     <text class="caxis" x="${PAD}" y="${H-PAD-4}">${money(lo)}</text>
-    <text class="caxis" x="${W-PAD}" y="14" text-anchor="end">${asOf(points[points.length-1].x.toISOString())}</text>
-    <text class="caxis" x="${PAD}" y="${H+16}">${asOf(points[0].x.toISOString())}</text>
+    <text class="caxis" x="${PAD}" y="${dateY}">${asOf(first.toISOString())}</text>
+    ${midTick}
+    <text class="caxis" x="${W-PAD}" y="${dateY}" text-anchor="end">${asOf(last.toISOString())}</text>
   </svg>`;
 }
 

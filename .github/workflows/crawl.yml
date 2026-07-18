@@ -114,11 +114,29 @@ jobs:
         run: |
           if [[ "${{ matrix.retailer }}" != "bigw" || "${{ github.event_name }}" != "schedule" ]]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif (( 10#$(date -u +%H) % 6 == 0 )); then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
+          elif (( 10#$(date -u +%H) % 6 != 0 )); then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "Skipping Big W this hour; its residential-proxy refresh runs every six hours (was three - halved 18 July to stretch the remaining Webshare byte budget to the 9 Aug renewal)."
+          elif python - <<'PY'
+          import os, sys
+          from datetime import datetime, timedelta, timezone
+          try:
+              import psycopg
+              conn = psycopg.connect(os.environ["DATABASE_URL"], connect_timeout=10)
+              row = conn.execute(
+                  "SELECT v FROM kv WHERE k='bigw_local_heartbeat'").fetchone()
+              hb = datetime.fromisoformat(row[0]) if row else None
+          except Exception:
+              hb = None
+          sys.exit(0 if hb and datetime.now(timezone.utc) - hb < timedelta(hours=24)
+                   else 1)
+          PY
+          then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping Big W: the home-IP local sweep is alive (heartbeat < 24h). This byte-capped proxy lane is only the fallback - see local_bigw_sweep.py."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Big W local sweep heartbeat is stale or absent - running the proxy fallback lane."
           fi
       # First run only: uncomment to load full catalogues into the queue.
       # - run: python run.py index all

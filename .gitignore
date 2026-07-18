@@ -16,3 +16,4 @@ infra/oci/*.tfstate.*
 infra/oci/crash.log
 infra/oci/crash.*.log
 infra/oci/*tfplan*
+local_bigw.log

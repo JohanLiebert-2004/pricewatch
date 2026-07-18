@@ -13,6 +13,7 @@ page carries the full ~4k-node category tree for enumeration.
 """
 import html as htmllib
 import json
+import os
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -55,14 +56,23 @@ class BigWScraper(BaseScraper):
                         # (see PROXY_CYCLE_BYTE_CAP above for the tradeoff
                         # this brings)
 
+    @property
+    def _proxied(self) -> bool:
+        # The byte budget only applies to traffic that actually costs metered
+        # Webshare bytes. With PROXY_URL unset (e.g. the home-IP local sweep,
+        # which runs direct from a residential connection) requests are free
+        # and unlimited - no accounting, no caps.
+        return self.use_proxy and bool(os.environ.get("PROXY_URL"))
+
     def get(self, url: str) -> str:
         text = super().get(url)
         # Every request costs metered proxy bytes - count product-page crawls
         # too, not just listing sweeps. The old listing-only counter let the
         # crawl lane spend ~77MB/day billed invisibly, on track to exhaust
         # the plan weeks before its renewal.
-        self._proxy_bytes_run = getattr(self, "_proxy_bytes_run", 0) \
-            + len(text.encode("utf-8"))
+        if self._proxied:
+            self._proxy_bytes_run = getattr(self, "_proxy_bytes_run", 0) \
+                + len(text.encode("utf-8"))
         return text
 
     def parse_product(self, url, raw):
@@ -160,7 +170,7 @@ class BigWScraper(BaseScraper):
         def _sync():
             state["_proxy_bytes"] = _spent()
 
-        if self.use_proxy and _spent() >= PROXY_CYCLE_BYTE_CAP:
+        if self._proxied and _spent() >= PROXY_CYCLE_BYTE_CAP:
             print(f"  {self.name}: proxy byte budget spent for cycle {cycle}, "
                   "skipping bulk refresh until it renews")
             return
@@ -175,7 +185,7 @@ class BigWScraper(BaseScraper):
         for path, subcat in paths:
             page = 0
             while used < budget:
-                if self.use_proxy and (
+                if self._proxied and (
                         _spent() >= PROXY_CYCLE_BYTE_CAP
                         or self._proxy_bytes_run >= PROXY_RUN_BYTE_CAP):
                     _sync()
