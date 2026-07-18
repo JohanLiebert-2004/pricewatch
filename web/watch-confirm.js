@@ -44,8 +44,14 @@
     }
     const result = document.getElementById("wresult");
     if (!result) return;
+    // Guarded with a flag on `result` itself (its own attributes survive an
+    // innerHTML rewrite of its children): without it, this observer's own
+    // replacement re-introduces a .watchok node, which re-triggers the
+    // observer, forever - an infinite loop that freezes the tab on every
+    // successful submit. Caught live while testing the v2 redesign.
     new MutationObserver(() => {
-      if (result.querySelector(".watchok")) {
+      if (result.querySelector(".watchok") && !result.dataset.confirmationMessageShown) {
+        result.dataset.confirmationMessageShown = "true";
         result.innerHTML = '<div class="watchok">Almost there — check your email and confirm the alert before it activates.</div>';
       }
     }).observe(result, {childList: true, subtree: true});
