@@ -1,15 +1,16 @@
-/* Dealwatch — original warm-white Bellroy palette.
-   Warm white ground, charcoal ink, warm-grey hairlines and burnt-orange
-   controls. Green remains reserved for real savings. */
+/* Dealwatch — classic Web 2.0 palette.
+   Stark white ground, standard primary blue for headers/buttons/links,
+   plain green for drops and red for increases. */
 :root{
   color-scheme:light;
-  --paper:#faf9f7; --ink:#33363b; --hair:#e9e6e1; --hair2:#f1efeb;
-  --card:#ffffff; --soft:#f3f1ed;
-  --flag:#d3572b; --flag-soft:rgba(211,87,43,.08);
-  --deal:#4a8a63; --deal-soft:rgba(74,138,99,.09);
-  --muted:#6f7278; --faint:#a6a8ac;
-  --shadow:0 1px 2px rgba(51,54,59,.04);
-  --shadow-lift:0 2px 6px rgba(51,54,59,.06), 0 10px 28px rgba(51,54,59,.08);
+  --paper:#ffffff; --ink:#212529; --hair:#dee2e6; --hair2:#e9ecef;
+  --card:#ffffff; --soft:#f1f3f5;
+  --flag:#007bff; --flag-soft:rgba(0,123,255,.08);
+  --deal:#28a745; --deal-soft:rgba(40,167,69,.09);
+  --bad:#dc3545; --bad-soft:rgba(220,53,69,.09);
+  --muted:#6c757d; --faint:#adb5bd;
+  --shadow:0 1px 2px rgba(33,37,41,.05);
+  --shadow-lift:0 2px 6px rgba(33,37,41,.08), 0 10px 28px rgba(33,37,41,.1);
 }
 /* light-only by design — the dark variant was rejected */
 
@@ -238,7 +239,7 @@ a{color:inherit}
 }
 .thumb img{width:100%;height:100%;object-fit:contain;padding:4px;display:block}
 .thumb .mono{font-weight:800;font-size:20px;color:var(--faint)}
-.row.err .off{color:var(--flag)}
+.row.err .off{color:var(--bad)}
 .off{
   font-weight:800;font-size:23px;line-height:1;
   min-width:74px;color:var(--deal);font-variant-numeric:tabular-nums;
@@ -259,7 +260,7 @@ a{color:inherit}
   letter-spacing:.02em;color:var(--muted);
 }
 .pill.mkt{border-color:transparent;color:var(--flag);background:var(--flag-soft)}
-.pill.err{background:var(--flag);color:#fff;border-color:var(--flag);font-weight:700}
+.pill.err{background:var(--bad);color:#fff;border-color:var(--bad);font-weight:700}
 .pill.deal{border-color:transparent;color:var(--deal);background:var(--deal-soft);font-weight:700}
 .pill.fuzzy{border-style:dashed;background:transparent}
 .price{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -364,11 +365,8 @@ footer{
 .scanner video{display:block;width:100%;max-height:240px;object-fit:cover;background:#111;border-radius:10px}.scanner p{font-size:12px;color:var(--muted);line-height:1.6}.scanner .clear{font:inherit;font-size:12px;font-weight:800;cursor:pointer;border:1px solid var(--hair);background:var(--paper);color:var(--muted);border-radius:8px;padding:8px 12px}
 .hot-section{margin:34px 0 8px}.hot-section[hidden]{display:none}.hot-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.hot-head h2{font-size:20px;letter-spacing:-.02em;margin:0}.hot-head p{font-size:12px;color:var(--muted);margin:0}.hot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:12px;margin-top:14px}.hot-card{display:block;text-decoration:none;background:var(--card);border:1px solid var(--hair);border-radius:13px;padding:13px;box-shadow:var(--shadow)}.hot-card:hover{border-color:var(--flag);box-shadow:var(--shadow-lift)}.hot-card strong{display:block;font-size:13px;line-height:1.35}.hot-card .meta{margin-top:7px}.hot-card .hot-price{font-weight:800;font-size:18px;margin-top:9px;letter-spacing:-.02em}.hot-heat{display:block;color:var(--flag);font-size:11px;font-weight:800;margin-top:6px}.related{background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:18px 20px;margin-top:16px;box-shadow:var(--shadow)}.related h2{font-size:16px;letter-spacing:-.01em;margin:0}.related .hint{margin:5px 0 12px}.related-list{display:grid;gap:8px}.related-item{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;border-top:1px solid var(--hair);padding-top:10px;text-decoration:none}.related-item:first-child{border-top:0;padding-top:0}.related-item strong{display:block;font-size:13px}.related-item small{display:block;color:var(--muted);margin-top:3px}.related-item .price{text-align:right;font-weight:800;color:var(--ink)}.related-item .cheaper{display:block;font-size:11px;color:var(--deal);font-weight:700;margin-top:3px}
 @media(max-width:640px){.scanner{grid-template-columns:1fr}.scanner video{max-height:200px}.hot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-/* ---------- system dark theme + mobile app polish ---------- */
-@media (prefers-color-scheme:dark){
-  :root{color-scheme:dark;--paper:#0f172a;--ink:#f8fafc;--hair:#263449;--hair2:#1d293a;--card:#162235;--soft:#1d2a3d;--muted:#b3c0d1;--faint:#7f8ca0;--flag:#60a5fa;--flag-soft:rgba(96,165,250,.16);--deal:#4ade80;--deal-soft:rgba(74,222,128,.14);--shadow:0 1px 2px rgba(0,0,0,.24);--shadow-lift:0 5px 20px rgba(0,0,0,.35)}
-  .ph,.thumb,.pthumb,.recentcard img,.recentthumb,.chartstat{background:#101827}.pprice a{background:#eaf2ff;color:#13233a}.badge{background:#3b82f6}.ph .mono{color:#42516a}.topnav{background:color-mix(in srgb,var(--card) 88%,transparent)}
-}
+/* ---------- mobile app polish ---------- */
+/* light-only by design (see :root comment) - no dark-mode override */
 .mobile-nav{display:none}.skeleton{border-radius:10px;background:linear-gradient(90deg,var(--soft) 25%,var(--hair2) 40%,var(--soft) 65%);background-size:400% 100%;animation:shimmer 1.3s infinite}.skeleton-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:14px;padding:16px 0 30px}.skeleton-card{height:285px;border-radius:14px;border:1px solid var(--hair);background:var(--card);overflow:hidden}.skeleton-card .skeleton{height:56%;border-radius:0}.skeleton-card .skeleton:nth-child(2){height:18px;margin:14px}.skeleton-card .skeleton:nth-child(3){height:26px;width:45%;margin:14px}@keyframes shimmer{to{background-position:-400% 0}}
 .toast{position:fixed;left:50%;bottom:24px;z-index:300;transform:translate(-50%,18px);opacity:0;pointer-events:none;background:var(--ink);color:var(--paper);padding:12px 16px;border-radius:12px;box-shadow:var(--shadow-lift);font-size:13px;font-weight:700;transition:opacity .2s,transform .2s;max-width:min(92vw,440px);text-align:center}.toast.show{opacity:1;transform:translate(-50%,0)}
 .sticky-watch{display:none}
