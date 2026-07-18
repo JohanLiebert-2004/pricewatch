@@ -135,12 +135,31 @@ grant select on retailer_freshness to anon;
 -- Per-store category chips: each retailer's own (native or title-derived)
 -- subcategory labels with item counts, so the site can render a store's chip
 -- row from real data and skip empty chips.
-drop view if exists subcategory_stats;
-create view subcategory_stats as
+-- Materialized (was a plain view until 18 July): index.html and catalogue.html
+-- both hit this on every page load, and a live `group by` over the full
+-- products table was intermittently exceeding Supabase's statement timeout
+-- as the table grew (ikea/booktopia/qbd indexing added hundreds of thousands
+-- of rows), especially while the hourly crawl/detect jobs were writing
+-- concurrently. Same fix as catalogue_stats/retailer_freshness: precompute,
+-- refresh concurrently in run.py's detect step.
+do $$
+declare kind "char";
+begin
+  select c.relkind into kind
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relname = 'subcategory_stats';
+  if kind = 'v' then
+    execute 'drop view subcategory_stats';
+  elsif kind = 'm' then
+    execute 'drop materialized view subcategory_stats';
+  end if;
+end $$;
+create materialized view subcategory_stats as
 select retailer, subcategory, count(*) as items
 from products
 where current_price is not null and subcategory is not null
 group by 1, 2;
+create unique index subcategory_stats_pk on subcategory_stats (retailer, subcategory);
 revoke all on subcategory_stats from anon, authenticated;
 grant select on subcategory_stats to anon;
 

@@ -425,7 +425,7 @@ def cmd_detect(args):
     if db.DATABASE_URL:
         # Keep the website's precomputed aggregate feeds current. Running these
         # scans during detect keeps public page loads fast and reliable.
-        for view in ("discount_feed", "growth_daily", "catalogue_stats", "retailer_freshness"):
+        for view in ("discount_feed", "growth_daily", "catalogue_stats", "retailer_freshness", "subcategory_stats"):
             try:
                 conn.execute(f"refresh materialized view concurrently {view}")
                 conn.commit()
