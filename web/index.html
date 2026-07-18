@@ -108,6 +108,7 @@
       <button class="chip" data-r="sephora" aria-pressed="false">Sephora</button>
       <button class="chip" data-r="chemistwarehouse" aria-pressed="false">Chemist Warehouse</button>
     </div>
+    <div class="store-status network-status" id="networkStatus" hidden></div>
     <div class="store-status" id="storeStatus" hidden></div>
     <div class="barlabel">Category</div>
     <div class="bar" id="cats"></div>
@@ -147,8 +148,8 @@
     <h2 id="browse-title">Browse Australian deals by category or retailer</h2>
     <p>Explore currently tracked price drops with crawlable deal pages and full price-history links.</p>
     <nav class="landing-links" aria-label="Browse deals">
-      <a href="/deals/tech">Tech deals</a><a href="/deals/home">Home deals</a><a href="/deals/kitchen">Kitchen deals</a><a href="/deals/beauty">Beauty deals</a>
-      <a href="/retailers/kmart">Kmart deals</a><a href="/retailers/bigw">Big W deals</a><a href="/retailers/officeworks">Officeworks deals</a><a href="/retailers/jbhifi">JB Hi-Fi deals</a>
+      <a href="/deals/tech">Tech deals</a><a href="/deals/home">Home deals</a><a href="/deals/kitchen">Kitchen deals</a><a href="/deals/toys">Toys &amp; baby deals</a><a href="/deals/clothing">Clothing deals</a><a href="/deals/beauty">Beauty deals</a><a href="/deals/books">Books &amp; stationery deals</a>
+      <a href="/retailers/kmart">Kmart deals</a><a href="/retailers/bigw">Big W deals</a><a href="/retailers/officeworks">Officeworks deals</a><a href="/retailers/target">Target deals</a><a href="/retailers/jbhifi">JB Hi-Fi deals</a><a href="/retailers/goodguys">The Good Guys deals</a><a href="/retailers/myer">Myer deals</a><a href="/retailers/supercheap">Supercheap Auto deals</a><a href="/retailers/sephora">Sephora deals</a><a href="/retailers/chemistwarehouse">Chemist Warehouse deals</a>
     </nav>
   </section>
 
@@ -218,7 +219,7 @@ let FRESHNESS = {};
 fetch(`${SUPABASE_URL}/rest/v1/retailer_freshness?select=*`, {headers:HDRS})
   .then(r=>r.ok ? r.json() : [])
   .then(rows=>{ for(const row of rows) FRESHNESS[row.retailer] = row;
-    renderStoreStatus(); }).catch(()=>{});
+    renderStoreStatus(); renderNetworkStatus(); }).catch(()=>{});
 fetch(`${SUPABASE_URL}/rest/v1/subcategory_stats?select=*&order=items.desc`,
       {headers:HDRS})
   .then(r=>r.json())
@@ -254,6 +255,16 @@ function since(iso){
   if(seconds < 86400) return `${Math.round(seconds/3600)} hr ago`;
   return `${Math.round(seconds/86400)} days ago`;
 }
+function renderNetworkStatus(){
+  const el = document.getElementById("networkStatus");
+  const target = FRESHNESS.target;
+  if(!target || !target.last_seen || Number(target.fresh_products) >= Number(target.products)){
+    el.hidden = true; return;
+  }
+  el.textContent = `Target updates are delayed — only fresh listings are shown.`;
+  el.hidden = false;
+}
+
 function renderStoreStatus(){
   const el = document.getElementById("storeStatus");
   const retailer = selRetailers.size === 1 ? [...selRetailers][0] : null;

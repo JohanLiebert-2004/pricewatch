@@ -53,13 +53,15 @@ CREATE TABLE IF NOT EXISTS watches (
     product_id BIGINT NOT NULL REFERENCES products(id),
     email TEXT NOT NULL,
     target_price NUMERIC(10,2) NOT NULL,
-    token TEXT NOT NULL UNIQUE,          -- unguessable id, used for the unsubscribe link
+    token TEXT NOT NULL UNIQUE,          -- confirmation/cancellation capability
     created_at TIMESTAMPTZ DEFAULT now(),
+    confirmed_at TIMESTAMPTZ,            -- set only after the email link is opened
+    confirmation_sent_at TIMESTAMPTZ,
     fired_at TIMESTAMPTZ,                -- stamped once the alert email is sent
     cancelled_at TIMESTAMPTZ             -- stamped by the anon unsubscribe action
 );
-CREATE INDEX IF NOT EXISTS idx_watches_unfired ON watches(product_id)
-    WHERE fired_at IS NULL AND cancelled_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_watches_confirmed_unfired ON watches(product_id)
+    WHERE confirmed_at IS NOT NULL AND fired_at IS NULL AND cancelled_at IS NULL;
 -- Anonymous search terms only: powers 7-day trending suggestion chips. No
 -- visitor identity, IP address, cookie, or account data is stored.
 CREATE TABLE IF NOT EXISTS search_terms (

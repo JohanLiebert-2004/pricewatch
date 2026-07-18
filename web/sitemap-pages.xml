@@ -31,7 +31,22 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://dealwatch.com.au/deals/toys</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://dealwatch.com.au/deals/clothing</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://dealwatch.com.au/deals/beauty</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://dealwatch.com.au/deals/books</loc>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
@@ -51,7 +66,37 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://dealwatch.com.au/retailers/target</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://dealwatch.com.au/retailers/jbhifi</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://dealwatch.com.au/retailers/goodguys</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://dealwatch.com.au/retailers/myer</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://dealwatch.com.au/retailers/supercheap</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://dealwatch.com.au/retailers/sephora</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://dealwatch.com.au/retailers/chemistwarehouse</loc>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>

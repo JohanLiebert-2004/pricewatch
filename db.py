@@ -72,11 +72,13 @@ CREATE TABLE IF NOT EXISTS watches (
     target_price REAL NOT NULL,
     token TEXT NOT NULL UNIQUE,
     created_at TEXT NOT NULL,
+    confirmed_at TEXT,
+    confirmation_sent_at TEXT,
     fired_at TEXT,
     cancelled_at TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_watches_unfired ON watches(product_id)
-    WHERE fired_at IS NULL AND cancelled_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_watches_confirmed_unfired ON watches(product_id)
+    WHERE confirmed_at IS NOT NULL AND fired_at IS NULL AND cancelled_at IS NULL;
 """
 
 
@@ -150,6 +152,39 @@ def _migrate(conn):
             conn.commit()
         except Exception:
             conn.rollback()
+    if DATABASE_URL:
+        have_watches = {r["column_name"] for r in conn.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='watches'").fetchall()}
+        watch_type = "TIMESTAMPTZ"
+    else:
+        have_watches = {r["name"] for r in conn.execute(
+            "PRAGMA table_info(watches)").fetchall()}
+        watch_type = "TEXT"
+    # Existing watches predate confirmation; preserve their opted-in status.
+    added_confirmation = "confirmed_at" not in have_watches
+    for col in ("confirmed_at", "confirmation_sent_at"):
+        if col in have_watches:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE watches ADD COLUMN {col} {watch_type}")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+    if added_confirmation:
+        try:
+            conn.execute("UPDATE watches SET confirmed_at=created_at "
+                         "WHERE confirmed_at IS NULL")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_watches_confirmed_unfired "
+                     "ON watches(product_id) WHERE confirmed_at IS NOT NULL "
+                     "AND fired_at IS NULL AND cancelled_at IS NULL")
+        conn.commit()
+    except Exception:
+        conn.rollback()
 
 
 def _connect_postgres():

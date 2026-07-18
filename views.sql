@@ -268,6 +268,65 @@ $$;
 revoke all on function cancel_watch(text) from public;
 grant execute on function cancel_watch(text) to anon;
 
+-- Double opt-in for email watches. New watches do not receive price alerts
+-- until their recipient opens the unguessable confirmation link. The runtime
+-- migration in db.py marks legacy watches confirmed once, preserving them.
+alter table watches add column if not exists confirmed_at timestamptz;
+alter table watches add column if not exists confirmation_sent_at timestamptz;
+create index if not exists idx_watches_confirmed_unfired on watches(product_id)
+  where confirmed_at is not null and fired_at is null and cancelled_at is null;
+
+create or replace function create_watch(p_product_id bigint, p_email text, p_target_price numeric)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_token text;
+  v_email text := lower(trim(p_email));
+begin
+  if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+    raise exception 'invalid email';
+  end if;
+  if p_target_price is null or p_target_price <= 0 or p_target_price > 100000 then
+    raise exception 'invalid target price';
+  end if;
+  if not exists (select 1 from products where id = p_product_id) then
+    raise exception 'invalid product';
+  end if;
+  if (select count(*) from watches where email = v_email) >= 25 then
+    raise exception 'too many watches for this email';
+  end if;
+  if exists (select 1 from watches where product_id = p_product_id and email = v_email
+             and cancelled_at is null and fired_at is null) then
+    raise exception 'already watching this product';
+  end if;
+  v_token := gen_random_uuid()::text;
+  insert into watches (product_id, email, target_price, token)
+  values (p_product_id, v_email, p_target_price, v_token);
+  return v_token;
+end;
+$$;
+revoke all on function create_watch(bigint, text, numeric) from public;
+grant execute on function create_watch(bigint, text, numeric) to anon;
+
+create or replace function confirm_watch(p_token text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare affected int;
+begin
+  update watches set confirmed_at = now()
+  where token = p_token and confirmed_at is null and cancelled_at is null and fired_at is null;
+  get diagnostics affected = row_count;
+  return affected > 0;
+end;
+$$;
+revoke all on function confirm_watch(text) from public;
+grant execute on function confirm_watch(text) to anon;
 -- Trending searches: anonymous term counting, no visitor identity of any
 -- kind (term + timestamp only). search.html fires log_search() on every
 -- query (fire-and-forget) and shows trending_searches as suggestion chips.
