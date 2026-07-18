@@ -1,8 +1,9 @@
 """Chemist Warehouse scraper.
 
 Next.js storefront (commercetools) - product pages are fully server-rendered
-with price, RRP, SKU, brand and stock inside __NEXT_DATA__, and no bot
-challenge was seen on impersonated requests. There is NO fast listing path:
+with price, RRP, SKU, brand and stock inside __NEXT_DATA__. The crawler uses
+a transparent Dealwatch user agent and stops immediately on an access block.
+There is NO fast listing path:
 robots.txt disallows /api/ (so the JSON API is off-limits), and category
 pages don't embed their product lists server-side. Coverage therefore comes
 entirely from the crawl-queue lane, seeded once from the products sitemap
@@ -13,6 +14,8 @@ their PBS/concession pricing isn't a "deal", and advertising prescription
 medicine prices to the public is restricted in Australia.
 """
 import json
+import random
+import time
 import re
 
 from db import ProductRecord
@@ -30,9 +33,20 @@ class ChemistWarehouseScraper(BaseScraper):
     name = "chemistwarehouse"
     sitemap_index = "https://static.chemistwarehouse.com.au/AMS/sitemap/cwh_sitemap.xml"
     product_url_pattern = r"/buy/\d+/"
-    delay = 1.5
-    needs_impersonation = True
-    impersonate = "chrome124"
+    # Public product pages only: identify Dealwatch, crawl slowly, and do not
+    # proxy, imitate a browser, or retry after a block.
+    delay = 10.0
+    needs_impersonation = False
+    request_headers = {
+        "User-Agent": "DealwatchBot/1.0 (+https://dealwatch.com.au/contact.html; contact@dealwatch.com.au)",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-AU,en;q=0.8",
+    }
+
+    def get(self, url: str) -> str:
+        """One transparent request at a time, including sitemap reads."""
+        time.sleep(self.delay + random.uniform(0, 1.5))
+        return super().get(url)
 
     def parse_product(self, url, html):
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',

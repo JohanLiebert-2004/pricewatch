@@ -87,8 +87,8 @@ jobs:
             budget: 50        # refresh lane is a no-op (robots.txt disallows
                                # /api/, category pages aren't SSR'd) - all
                                # coverage via the crawl (queue) lane
-            crawl_batch: 500  # ~26k-URL queue seeded from products.xml;
-                               # full sweep in ~26h of half-hourly runs
+            crawl_batch: 75   # transparent 10-second crawl: ~12.5 minutes/run;
+                               # stops on the first 403/429/503, no retries
           - retailer: booktopia
             budget: 25
             crawl_batch: 180  # robots.txt requires a 10-second crawl delay

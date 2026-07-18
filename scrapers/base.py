@@ -65,6 +65,7 @@ class BaseScraper:
     warmup_url = None               # homepage to visit once for cookies
     max_child_sitemaps = 3          # cap when following generic child sitemaps
     use_proxy = False               # opt in per-retailer; only meaningful w/ PROXY_URL set
+    request_headers = HEADERS        # retailers may override with a transparent bot identity
 
     def __init__(self):
         if self.needs_impersonation and HAVE_CFFI:
@@ -77,7 +78,7 @@ class BaseScraper:
             self._cffi = True
         else:
             self.session = httpx.Client(
-                http2=True, headers=HEADERS, timeout=25, follow_redirects=True
+                http2=True, headers=self.request_headers, timeout=25, follow_redirects=True
             )
             self._cffi = False
         if self.needs_impersonation and not HAVE_CFFI:
