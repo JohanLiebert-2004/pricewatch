@@ -2,7 +2,12 @@
   "redirects": [
     {
       "source": "/(.*)",
-      "has": [{"type": "host", "value": "www.dealwatch.com.au"}],
+      "has": [
+        {
+          "type": "host",
+          "value": "www.dealwatch.com.au"
+        }
+      ],
       "destination": "https://dealwatch.com.au/$1",
       "permanent": true
     }
@@ -30,6 +35,15 @@
     }
   ],
   "headers": [
+    {
+      "source": "/p/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store, max-age=0"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [

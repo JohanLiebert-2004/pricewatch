@@ -257,8 +257,10 @@ async def preview(request: Request, retailer: str, sku: str):
     out = template.replace("<title>", f"{meta}\n<title>", 1)
     out = re.sub(r"<title>.*?</title>", f"<title>{e(title)}</title>", out,
                  count=1, flags=re.S)
+    # Product pages contain a live price and can include a one-use watch token
+    # in the query string. Never let a shared CDN cache replay that response.
     return Response(out, media_type="text/html",
-                    headers={"Cache-Control": "public, max-age=600"})
+                    headers={"Cache-Control": "private, no-store, max-age=0"})
 
 
 @app.get("/img")
