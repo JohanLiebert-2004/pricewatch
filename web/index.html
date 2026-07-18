@@ -333,7 +333,7 @@ function cardHtml(d, i){
         <span class="cwas">${money(d.reference_price)}</span></div>
       <div class="cfoot"><span>${RETAILER_LABEL[d.retailer]||esc(d.retailer)}</span>
         <span class="save">save ${money(save)}</span></div>
-      <div class="trustline">${d.is_marketplace ? "Marketplace seller · " : ""}Compared with ${esc(d.reference_source || "recorded price")} · checked ${ago(d.price_updated_at)}</div>
+      <div class="trustline">${d.is_marketplace ? "Marketplace seller · " : ""}Compared with ${esc(d.reference_source || "recorded price")} · checked ${since(d.price_updated_at)}</div>
       <a class="track-btn" href="${histUrl}">🔔 Track price &amp; get alerts</a>
     </div>
   </div>`;
