@@ -1,12 +1,12 @@
 /* Dealwatch — design system v5 "sportsbook-data"
    Palette after betsapi.com: cool light-grey ground, white cards, crisp
-   hairlines, one confident blue accent for active/primary states.
+   hairlines, one confident charcoal accent for active/primary states.
    High-contrast text: near-navy ink, slate for secondary. */
 :root{
   color-scheme:light;   /* keep native controls light even in OS dark mode */
   --paper:#ffffff; --ink:#1b2431; --hair:#e2e6ec; --hair2:#edf0f4;
   --card:#ffffff; --soft:#eef1f6;
-  --flag:#2563eb; --flag-soft:rgba(37,99,235,.08);
+  --flag:#1b2431; --flag-soft:rgba(27,36,49,.07);
   --deal:#1a9d63; --deal-soft:rgba(26,157,99,.09);
   --muted:#5b6572; --faint:#9aa3ae;
   --shadow:0 1px 2px rgba(20,30,45,.05);
@@ -188,7 +188,7 @@ a{color:inherit}
 .track-btn{
   position:relative;z-index:2;display:block;text-align:center;
   margin-top:10px;padding:9px 12px;border-radius:10px;
-  background:var(--flag-soft, rgba(37,99,235,.08));color:var(--flag);
+  background:var(--flag-soft, rgba(27,36,49,.07));color:var(--flag);
   font-size:12.5px;font-weight:700;text-decoration:none;
   border:1px solid transparent;transition:background .15s,border-color .15s;
 }
