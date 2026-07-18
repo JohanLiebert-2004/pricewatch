@@ -241,13 +241,14 @@ a{color:inherit}
 }
 .badge.mild{background:var(--ink)}
 .badge.lowest{
-  position:absolute;top:10px;right:10px;left:auto;background:var(--deal);color:#fff;
-  font-weight:800;font-size:11px;padding:5px 9px;border-radius:9px;letter-spacing:-.01em;
-  animation:badgeGlow 2.2s ease-in-out infinite;
+  position:absolute;top:10px;right:10px;left:auto;
+  background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;
+  font-weight:800;font-size:11px;padding:4px 9px;border-radius:9px;letter-spacing:-.01em;
+  animation:badgeGlow 2.6s ease-in-out infinite;
 }
 @keyframes badgeGlow{
-  0%,100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--deal) 55%, transparent)}
-  50%{box-shadow:0 0 10px 3px color-mix(in srgb, var(--deal) 55%, transparent)}
+  0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.25)}
+  50%{box-shadow:0 0 7px 1px rgba(34,197,94,.25)}
 }
 .cbody{padding:13px 14px 15px;display:flex;flex-direction:column;gap:8px;flex:1}
 .cname{
