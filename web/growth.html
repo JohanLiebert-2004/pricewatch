@@ -55,9 +55,25 @@
   .gnums .plus{font-weight:650;font-size:19px;color:var(--deal);letter-spacing:-.01em}
   .gnums .cum{font-family:"Spline Sans Mono",monospace;font-size:10px;
     color:var(--faint);letter-spacing:.06em;margin-top:2px}
+  .coverage{margin:44px 0 24px}
+  .coverage-row{display:grid;grid-template-columns:minmax(130px,1fr) 110px 126px 132px;
+    gap:16px;align-items:center;padding:13px 14px;margin:0 -14px;border-top:1px solid var(--hair2);
+    font-variant-numeric:tabular-nums}
+  .coverage-row:first-child{border-top:0}
+  .coverage-row.is-stale{background:color-mix(in srgb,var(--warn,#c67c00) 7%,transparent)}
+  .coverage-head{font-family:"Spline Sans Mono",monospace;font-size:9.5px;font-weight:500;
+    color:var(--faint);letter-spacing:.12em;text-transform:uppercase}
+  .coverage-store{font-weight:650}
+  .coverage-num{text-align:right;font-family:"Spline Sans Mono",monospace;font-size:12px}
+  .coverage-fresh{font-size:12px;color:var(--muted);text-align:right}
+  .coverage-fresh b{color:var(--ink);font-weight:600}
+  .coverage-checked{font-size:12px;color:var(--muted);text-align:right}
   @media(max-width:640px){
     .growrow{grid-template-columns:1fr auto}
     .gbarwrap{grid-column:1 / -1}
+    .coverage-row{grid-template-columns:1fr auto;gap:5px 14px;padding:12px 0;margin:0}
+    .coverage-head .coverage-fresh,.coverage-head .coverage-checked{display:none}
+    .coverage-fresh,.coverage-checked{grid-column:1 / -1;text-align:left}
   }
 </style>
   <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
@@ -90,6 +106,15 @@
 <main class="wrap">
   <div class="total" style="margin-top:38px">Daily Log <span>· newest first · UTC days</span></div>
   <div id="list"><div class="empty">Compiling the daily log…</div></div>
+
+  <section class="coverage" aria-labelledby="coverage-title">
+    <div class="total" id="coverage-title">Retailer coverage <span>· live catalogue availability</span></div>
+    <div class="coverage-row coverage-head" aria-hidden="true">
+      <div>Retailer</div><div class="coverage-num">Products</div>
+      <div class="coverage-fresh">Fresh listings</div><div class="coverage-checked">Last checked</div>
+    </div>
+    <div id="coverageRows"><div class="empty">Checking retailer coverage…</div></div>
+  </section>
 </main>
 
 <footer><div class="wrap footgrid">
@@ -119,6 +144,35 @@ function weekday(iso){
   const d = new Date(iso + "T00:00:00Z");
   return d.toLocaleDateString("en-AU", {weekday:"long", timeZone:"UTC"});
 }
+
+function since(iso){
+  if(!iso) return "not yet";
+  const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if(seconds < 90) return "just now";
+  if(seconds < 3600) return `${Math.round(seconds/60)} min ago`;
+  if(seconds < 86400) return `${Math.round(seconds/3600)} hr ago`;
+  return `${Math.round(seconds/86400)} days ago`;
+}
+
+fetch(`${SUPABASE_URL}/rest/v1/retailer_freshness?select=retailer,products,fresh_products,last_seen`, {headers:HDRS})
+  .then(r=>r.ok ? r.json() : Promise.reject(new Error("coverage unavailable")))
+  .then(rows=>{
+    const byRetailer = Object.fromEntries(rows.map(r=>[r.retailer,r]));
+    const ordered = RETAILERS.map(retailer=>byRetailer[retailer]).filter(Boolean)
+      .sort((a,b)=>Number(b.products)-Number(a.products));
+    document.getElementById("coverageRows").innerHTML = ordered.map(r=>{
+      const total = Number(r.products), fresh = Number(r.fresh_products);
+      const stale = !r.last_seen || fresh < total;
+      return `<div class="coverage-row${stale ? " is-stale" : ""}">
+        <div class="coverage-store">${RLAB[r.retailer] || r.retailer}</div>
+        <div class="coverage-num">${fmtN(total)}</div>
+        <div class="coverage-fresh"><b>${fmtN(fresh)}</b> current</div>
+        <div class="coverage-checked">${since(r.last_seen)}</div>
+      </div>`;
+    }).join("") || `<div class="empty">No retailer coverage data is available yet.</div>`;
+  })
+  .catch(()=>{document.getElementById("coverageRows").innerHTML =
+    `<div class="empty">We couldn't load retailer coverage right now.</div>`;});
 
 fetch(`${SUPABASE_URL}/rest/v1/growth_daily?select=*&order=day.asc`, {headers:HDRS})
   .then(r=>r.json())
