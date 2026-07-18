@@ -91,15 +91,22 @@ const money = n => "$"+Number(n).toFixed(2);
 // rendered below. Smaller payloads make filter changes noticeably snappier on
 // mobile connections.
 const CATALOGUE_FIELDS = "retailer,sku,title,brand,category,subcategory,url,image_url,is_marketplace,current_price,current_rrp";
-const RETAILERS = [["all","All stores"],["kmart","Kmart"],["bigw","Big W"],
-                   ["officeworks","Officeworks"],["target","Target"],
-                   ["jbhifi","JB Hi-Fi"],["goodguys","The Good Guys"],["myer","Myer"],
-                   ["supercheap","Supercheap Auto"],
-                   ["sephora","Sephora"],["chemistwarehouse","Chemist Warehouse"],["booktopia","Booktopia"],["qbd","QBD Books"],["ikea","IKEA"]];
+const RETAILER_LABEL = {kmart:"Kmart",bigw:"Big W",officeworks:"Officeworks",
+  target:"Target",jbhifi:"JB Hi-Fi",goodguys:"The Good Guys",myer:"Myer",
+  supercheap:"Supercheap Auto",sephora:"Sephora",
+  chemistwarehouse:"Chemist Warehouse",booktopia:"Booktopia",qbd:"QBD Books",ikea:"IKEA"};
+const RETAILER_FILTERS = [
+  {key:"all", label:"All stores", members:[]},
+  ...["kmart","bigw","officeworks","target","jbhifi","goodguys","myer","chemistwarehouse","ikea"]
+    .map(key=>({key,label:RETAILER_LABEL[key],members:[key]})),
+  {key:"books", label:"Books · QBD + Booktopia", members:["qbd","booktopia"]},
+  {key:"auto", label:"Auto · Supercheap Auto", members:["supercheap"]},
+  {key:"cosmetics", label:"Cosmetics · Sephora", members:["sephora"]},
+];
 const CATS = [["all","All"],["tech","Tech"],["home","Home"],["kitchen","Kitchen"],
               ["toys","Toys & Baby"],["clothing","Clothing"],["beauty","Beauty"],
               ["books","Books"],["other","Other"]];
-const RETAILER_LABEL = Object.fromEntries(RETAILERS);
+
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmtN = n => Number(n).toLocaleString("en-AU");
@@ -133,6 +140,20 @@ function count(r, c){
     .reduce((a,s)=>a+Number(s.items), 0);
 }
 
+function retailerFilterCount(members){
+  return STATS.filter(s =>
+    (members.length===0 || members.includes(s.retailer)) && matchCat(s.category))
+    .reduce((a,s)=>a+Number(s.items), 0);
+}
+
+function selectedRetailerLabel(){
+  if(selRetailers.size===0) return "All stores";
+  const selected = [...selRetailers];
+  const exactGroup = RETAILER_FILTERS.find(f => f.key!=="all" &&
+    f.members.length===selected.length && f.members.every(r=>selRetailers.has(r)));
+  return exactGroup ? exactGroup.label : selected.map(r=>RETAILER_LABEL[r]||r).join(", ");
+}
+
 function catChips(){
   // one store selected and we know its own sections -> that store's chips
   const solo = selRetailers.size===1 ? [...selRetailers][0] : null;
@@ -151,16 +172,16 @@ function catChips(){
 }
 
 function chips(){
-  document.getElementById("retailers").innerHTML = RETAILERS.map(([k,label])=>
-    `<button class="chip" data-k="${k}" aria-pressed="${k==="all" ? selRetailers.size===0 : selRetailers.has(k)}">
-       ${label}<span class="n">${fmtN(count(k,"all"))}</span></button>`).join("");
+  document.getElementById("retailers").innerHTML = RETAILER_FILTERS.map(({key,label,members})=>
+    `<button class="chip" data-k="${key}" data-members="${members.join(",")}"
+       aria-pressed="${key==="all" ? selRetailers.size===0 : members.every(r=>selRetailers.has(r))}">
+       ${label}<span class="n">${fmtN(retailerFilterCount(members))}</span></button>`).join("");
   document.getElementById("cats").innerHTML = catChips();
   // The precomputed stats can only count unfiltered retailer/category
   // combinations. Do not make a second, expensive exact-count request before
   // showing results for a price, text, or subcategory filter.
   const filtered = pmin !== null || pmax !== null || q || selSubcats.size;
-  const retailerLabel = selRetailers.size
-    ? [...selRetailers].map(r=>RETAILER_LABEL[r]||r).join(", ") : "All stores";
+  const retailerLabel = selectedRetailerLabel();
   const label = `${retailerLabel}${selCats.size ? " · "+[...selCats].join(", ") : ""}` +
     (selSubcats.size ? " · "+[...selSubcats].map(esc).join(", ") : "") +
     (pmin !== null || pmax !== null ? ` · $${pmin ?? 0}–${pmax !== null ? "$"+pmax : ""}` : "") +
@@ -241,8 +262,11 @@ document.getElementById("retailers").addEventListener("click", e=>{
   const b = e.target.closest(".chip"); if(!b) return;
   const val = b.dataset.k;
   if(val === "all"){ selRetailers.clear(); }
-  else if(selRetailers.has(val)){ selRetailers.delete(val); }
-  else{ selRetailers.add(val); }
+  else{
+    const members = b.dataset.members.split(",").filter(Boolean);
+    const selected = members.every(r=>selRetailers.has(r));
+    members.forEach(r=>selected ? selRetailers.delete(r) : selRetailers.add(r));
+  }
   // the category row is about to change shape - stale picks would silently
   // filter a store that doesn't even show those chips
   selCats.clear(); selSubcats.clear();

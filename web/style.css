@@ -4,7 +4,7 @@
    High-contrast text: near-navy ink, slate for secondary. */
 :root{
   color-scheme:light;   /* keep native controls light even in OS dark mode */
-  --paper:#f4f6f9; --ink:#1b2431; --hair:#e2e6ec; --hair2:#edf0f4;
+  --paper:#ffffff; --ink:#1b2431; --hair:#e2e6ec; --hair2:#edf0f4;
   --card:#ffffff; --soft:#eef1f6;
   --flag:#2563eb; --flag-soft:rgba(37,99,235,.08);
   --deal:#1a9d63; --deal-soft:rgba(26,157,99,.09);

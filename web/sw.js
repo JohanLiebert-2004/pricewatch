@@ -1,4 +1,4 @@
-const CACHE = 'dealwatch-static-v2';
+const CACHE = 'dealwatch-static-v3';
 const CORE = ['/', '/index.html', '/search.html', '/catalogue.html', '/style.css', '/manifest.webmanifest', '/icon.svg'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(
@@ -11,7 +11,7 @@ self.addEventListener('fetch', event => {
   // Navigation and HTML must check the network first, otherwise a returning
   // shopper can remain stuck on an old catalogue after a deployment.
   const url = new URL(event.request.url);
-  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html')) {
+  if (event.request.mode === 'navigate' || url.pathname.match(/\.(?:html|css|js)$/)) {
     event.respondWith(fetch(event.request).then(response => {
       const copy = response.clone();
       if (response.ok) caches.open(CACHE).then(cache => cache.put(event.request, copy));
