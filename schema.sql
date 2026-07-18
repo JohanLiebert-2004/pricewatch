@@ -16,6 +16,13 @@ CREATE TABLE IF NOT EXISTS products (
     last_seen TIMESTAMPTZ DEFAULT now(),
     UNIQUE (retailer, sku, region)
 );
+-- AI "similar items": sentence embedding of title/brand/category, backfilled
+-- by embed_products.py (fastembed, all-MiniLM-L6-v2, 384-dim). NULL until a
+-- product is embedded; SQLite dev has no equivalent (production-only).
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS embedding vector(384);
+CREATE INDEX IF NOT EXISTS idx_products_embedding ON products
+  USING hnsw (embedding vector_cosine_ops);
 CREATE TABLE IF NOT EXISTS price_snapshots (
     id BIGSERIAL PRIMARY KEY,
     product_id BIGINT NOT NULL REFERENCES products(id),

@@ -157,20 +157,32 @@ jobs:
         if: matrix.retailer != 'kmart' && (matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true')
         run: python run.py crawl ${{ matrix.retailer }} --batch ${{ matrix.crawl_batch || 40 }} || true
 
+  # AI "similar items" embedding backfill. Not gated on `crawl` finishing -
+  # the ~245k-row backlog dwarfs one cycle's worth of new products, so
+  # running it in parallel keeps the pipeline's wall-clock time down.
+  # fastembed/onnxruntime are heavier than the crawl matrix's deps, hence
+  # their own requirements file so the 14 retailer jobs stay light.
+  embed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: embed              # don't stack runs if one is still embedding
+      cancel-in-progress: false # when the next hourly trigger fires
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-embed.txt
+      - run: python embed_products.py --budget 20000
+
   detect:
     needs: crawl
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
-          - retailer: booktopia
-            budget: 25
-            crawl_batch: 180  # robots.txt requires a 10-second crawl delay
-          - retailer: qbd
-            budget: 25
-            crawl_batch: 250
-          - retailer: ikea
-            budget: 25
-            crawl_batch: 80   # product pages are approximately 1 MB each
     concurrency:
       group: detect            # two overlapping runs' detects insert the same
       cancel-in-progress: false # deals and deadlock/starve each other on the

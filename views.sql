@@ -455,3 +455,38 @@ end;
 $$;
 revoke all on function submit_store_report(bigint, text, numeric) from public;
 grant execute on function submit_store_report(bigint, text, numeric) to anon;
+
+-- AI "similar items" (product page + homepage "For you"), backed by
+-- products.embedding (pgvector, backfilled by embed_products.py). Resolves
+-- to a single product_id server-side first rather than joining on a raw
+-- retailer+sku match, since products is only unique on (retailer, sku,
+-- region) - avoids fanning out if a region variant ever exists.
+create or replace function similar_products(p_retailer text, p_sku text, p_limit int default 8)
+returns table(retailer text, sku text, title text, brand text, category text,
+              image_url text, current_price numeric, current_rrp numeric)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare pid bigint;
+begin
+  if p_retailer !~ '^[a-z]{2,32}$' or p_sku !~ '^[A-Za-z0-9_-]{1,48}$' then
+    return;
+  end if;
+  select p1.id into pid from products p1
+  where p1.retailer = p_retailer and p1.sku = p_sku and p1.embedding is not null
+  limit 1;
+  if pid is null then
+    return;
+  end if;
+  return query
+    select p2.retailer, p2.sku, p2.title, p2.brand, p2.category, p2.image_url,
+           p2.current_price, p2.current_rrp
+    from products p2
+    where p2.id <> pid and p2.embedding is not null and p2.current_price is not null
+    order by p2.embedding <=> (select embedding from products where id = pid)
+    limit least(coalesce(p_limit, 8), 12);
+end;
+$$;
+revoke all on function similar_products(text, text, int) from public;
+grant execute on function similar_products(text, text, int) to anon;
