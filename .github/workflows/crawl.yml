@@ -97,7 +97,15 @@ jobs:
             crawl_batch: 250
           - retailer: ikea
             budget: 25
-            crawl_batch: 80   # product pages are approximately 1 MB each
+            crawl_batch: 400  # product pages are ~1MB each; real per-item time
+                               # measured at ~4.9s (2x the 2.5s delay floor, page
+                               # download + parse overhead) - 400 * 4.9s ~= 33min,
+                               # leaving ~27min margin before the next hourly
+                               # trigger (see the myer comment above for what
+                               # happens when a batch doesn't leave that margin).
+                               # Was 80 (22k-URL queue would've taken ~11.5 days);
+                               # 400 clears it in ~2.3 days. Raise further only
+                               # after confirming a few runs stay well under an hour.
     concurrency:
       group: crawl-${{ matrix.retailer }}
       cancel-in-progress: false

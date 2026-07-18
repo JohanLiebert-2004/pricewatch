@@ -333,11 +333,12 @@ def _brand(b):
 
 def _image(img):
     """Schema.org Product.image: a URL string, a list of either, or an
-    ImageObject ({"url": ...}). Take the first usable URL."""
+    ImageObject ({"url": ...} or {"contentUrl": ...} - IKEA uses the latter).
+    Take the first usable URL."""
     if isinstance(img, list):
         img = img[0] if img else None
     if isinstance(img, dict):
-        img = img.get("url")
+        img = img.get("url") or img.get("contentUrl")
     return img if isinstance(img, str) and img.startswith("http") else None
 
 
