@@ -65,7 +65,44 @@ Before changing anything:
   `curl https://dealwatch.com.au/rest/v1/discount_feed...` returns real
   rows. **`DATABASE_URL` GitHub secret updated** to point at
   `pricewatch-db-x86` (public IP, `sslmode=require`, own `pricewatch` role)
-  — crawl-and-detect should pick it up on its next scheduled run.
+  — verified end-to-end via a manual `gh workflow run crawl-and-detect`
+  (run `29676782660`): crawl_queue and price_snapshots both show fresh
+  rows on `pricewatch-db-x86` from that run.
+  **Two bugs found and fixed post-cutover, both worth knowing about if you
+  touch this box again:**
+  (1) `pg_restore --clean --if-exists` (used for the data migration) drops
+  and recreates every object in the dump, and since the dump was taken with
+  `--no-privileges`, that wiped out grants made *before* the restore —
+  hit this twice, once for `anon`'s SELECT on the views (fixed by
+  re-running `views.sql` after the restore, not before) and once for the
+  `pricewatch` role's own table grants (fixed with an explicit re-`GRANT
+  ALL ... TO pricewatch` plus `ALTER DEFAULT PRIVILEGES` so it can't
+  recur). If you ever redo this restore, grant privileges *after*
+  `pg_restore`, not before.
+  (2) The `pricewatch` role lacked `BYPASSRLS`. Supabase's `DATABASE_URL`
+  was always the `postgres` superuser (which bypasses RLS automatically),
+  so this never surfaced before — but several tables have RLS enabled
+  (`crawl_queue`, `kv`, etc.) and the new least-privilege `pricewatch` role
+  was getting silently blocked from them, which would have broken the
+  crawler itself, not just backups. Fixed with `ALTER ROLE pricewatch WITH
+  BYPASSRLS` — matches the trust boundary Supabase always had (RLS gates
+  the anon/PostgREST layer, not the trusted backend role).
+  Also dropped a pile of unrelated Supabase-internal schemas (`auth`,
+  `storage`, `realtime`, `vault`, `graphql`, `graphql_public`) that came
+  along for the ride because the original `pg_dump` wasn't scoped to
+  `--schema=public` — harmless clutter, but also what was blocking
+  `pg_dump`'s default whole-database lock. `extensions` schema (holds
+  `pg_stat_statements`, `pgcrypto`, `uuid-ossp`) was kept.
+  **Also done:** added a 2GB swapfile (cloud-init's swap setup hit the same
+  YAML bug as the crawl timer, so this box booted with zero swap despite
+  sitting at ~550/954MB used from Postgres+PostgREST alone) and installed
+  `pricewatch-backup.timer` here too (daily, same 30-day retention) — the
+  dynamic group `pricewatch-backup-writer`'s matching rule now covers both
+  `pricewatch` and `pricewatch_db_x86` (not yet `pricewatch_db`/ARM, since
+  referencing its `.id` before it exists would couple this resource's
+  apply to creating that instance — add it back once ARM actually lands).
+  Manually verified the backup end-to-end (98MB dump landed in Object
+  Storage) rather than trusting the timer blindly.
   Old instance (`pricewatch`, 159.13.59.184) and the Supabase project are
   both left running untouched as fallbacks, per the "no rush to
   decommission" convention — Supabase in particular still has a live

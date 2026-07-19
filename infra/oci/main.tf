@@ -287,8 +287,12 @@ resource "oci_objectstorage_object_lifecycle_policy" "pricewatch_backups" {
 resource "oci_identity_dynamic_group" "pricewatch_backup_writer" {
   compartment_id = var.tenancy_ocid
   name           = "pricewatch-backup-writer"
-  description    = "Lets the Pricewatch VM upload database backups only."
-  matching_rule  = "All {instance.id = '${oci_core_instance.pricewatch.id}'}"
+  description    = "Lets Pricewatch DB-hosting instances upload database backups only."
+  # Not yet including oci_core_instance.pricewatch_db (ARM) - it doesn't
+  # exist yet (still capacity-blocked), and referencing its .id here would
+  # couple this resource's apply to creating that instance. Add it back
+  # once it's actually provisioned.
+  matching_rule = "Any {instance.id = '${oci_core_instance.pricewatch.id}', instance.id = '${oci_core_instance.pricewatch_db_x86.id}'}"
 }
 
 resource "oci_identity_policy" "pricewatch_backup_writer" {
