@@ -34,18 +34,54 @@ def run(conn) -> list[dict]:
         cross_peers = _cross_peers(conn)
     else:
         cross_peers = {}
-    # explicit columns: SELECT * shipped ~62MB out of Supabase per run (the
-    # single biggest egress line in the whole system - blew the free-tier
-    # quota); these seven cost ~1.6MB
-    products = conn.execute(
-        "SELECT id, retailer, title, url, is_marketplace, "
-        "current_price, current_rrp FROM products").fetchall()
+    # Incremental: a product whose price didn't move since the last detect
+    # run can't newly trip rrp_gap/history_drop (both compare the CURRENT
+    # price against a reference that also hasn't moved), so only products
+    # with a fresh price_snapshots row since last time need rescoring.
+    # Rescanning the full catalogue every hour regardless - explicit columns
+    # or not - grew into the single biggest line in Supabase's egress bill
+    # as the catalogue passed a quarter million rows (~65MB/run x 24/day).
+    # price_snapshots only gets a new row on a real change (db.py's
+    # bulk_upsert), so this stays cheap however large the table gets.
+    cutoff_row = conn.execute(
+        "SELECT v FROM kv WHERE k = 'anomaly_last_detect_at'").fetchone()
+    cutoff = cutoff_row["v"] if cutoff_row else None
+    changed_ids = None
+    if cutoff:
+        changed_ids = [r["product_id"] for r in conn.execute(
+            "SELECT DISTINCT product_id FROM price_snapshots "
+            "WHERE scraped_at > ?", (cutoff,))]
+
+    if changed_ids is not None and not changed_ids:
+        products = []
+    elif changed_ids is not None:
+        ph = ",".join("?" * len(changed_ids))
+        products = conn.execute(
+            f"SELECT id, retailer, title, url, is_marketplace, "
+            f"current_price, current_rrp FROM products WHERE id IN ({ph})",
+            changed_ids).fetchall()
+    else:
+        # no marker yet (first run after this change) - one full pass, then
+        # every run after this becomes incremental
+        products = conn.execute(
+            "SELECT id, retailer, title, url, is_marketplace, "
+            "current_price, current_rrp FROM products").fetchall()
+
     # one bulk pass instead of a per-product query: with change-only
     # snapshots the whole table stays small enough to group in memory
     history_by_pid = {}
-    for s in conn.execute(
+    if changed_ids:
+        ph = ",".join("?" * len(changed_ids))
+        hist_rows = conn.execute(
+            f"SELECT product_id, price, rrp FROM price_snapshots "
+            f"WHERE product_id IN ({ph}) ORDER BY scraped_at DESC", changed_ids)
+    elif changed_ids is None:
+        hist_rows = conn.execute(
             "SELECT product_id, price, rrp FROM price_snapshots "
-            "ORDER BY scraped_at DESC"):
+            "ORDER BY scraped_at DESC")
+    else:
+        hist_rows = []
+    for s in hist_rows:
         h = history_by_pid.setdefault(s["product_id"], [])
         if len(h) < 90:
             h.append(s)
@@ -118,6 +154,11 @@ def run(conn) -> list[dict]:
             """INSERT OR IGNORE INTO deals
                (product_id, price, reference_price, signal, score, detected_at)
                VALUES (?,?,?,?,?,?)""", new_rows)
+    # captured before this run's reads, so a snapshot written mid-run is
+    # simply picked up next cycle instead of risking a gap
+    conn.execute(
+        "INSERT INTO kv (k, v) VALUES ('anomaly_last_detect_at', ?) "
+        "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (now,))
     conn.commit()
     return found
 
