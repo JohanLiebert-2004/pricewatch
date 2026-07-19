@@ -36,7 +36,6 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 # blew - see AGENT_STATE.md). anon-only, no JWT, so no key is needed here
 # any more either - matches web/*.html's SUPABASE_URL cutover.
 SUPABASE_URL = os.environ.get("PRICEWATCH_API_URL", "https://192-9-163-208.sslip.io")
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SITE_URL = os.environ.get("SITE_URL", "https://web-pi-blush-48.vercel.app").rstrip("/")
 SELF_URL = os.environ.get("SELF_URL", "https://159-13-59-184.sslip.io").rstrip("/")
 TEMPLATE_PATH = Path(os.environ.get(
@@ -71,9 +70,7 @@ client = httpx.AsyncClient(timeout=20, follow_redirects=True)
 async def fetch_product(retailer: str, sku: str) -> dict | None:
     r = await client.get(
         f"{SUPABASE_URL}/rest/v1/product_search",
-        params={"retailer": f"eq.{retailer}", "sku": f"eq.{sku}", "limit": 1},
-        headers={"apikey": SUPABASE_ANON_KEY,
-                 "Authorization": f"Bearer {SUPABASE_ANON_KEY}"})
+        params={"retailer": f"eq.{retailer}", "sku": f"eq.{sku}", "limit": 1})
     rows = r.json() if r.status_code == 200 else []
     return rows[0] if rows else None
 
@@ -144,9 +141,7 @@ async def _fetch_landing_deals(field: str, value: str) -> list[dict]:
         f"{SUPABASE_URL}/rest/v1/discount_feed",
         params={"select": "retailer,sku,title,category,image_url,price,reference_price,pct_off,price_updated_at,is_30d_low",
                 field: f"eq.{value}", "order": "pct_off.desc,reference_price.desc",
-                "limit": 36},
-        headers={"apikey": SUPABASE_ANON_KEY,
-                 "Authorization": f"Bearer {SUPABASE_ANON_KEY}"})
+                "limit": 36})
     if r.status_code != 200:
         raise HTTPException(503, "deal feed unavailable")
     return r.json()
@@ -336,9 +331,7 @@ async def _sitemap_products(page: int):
         params={"select": "retailer,sku,price_updated_at",
                 "order": "price_updated_at.desc",
                 "limit": SITEMAP_PAGE_SIZE,
-                "offset": (page - 1) * SITEMAP_PAGE_SIZE},
-        headers={"apikey": SUPABASE_ANON_KEY,
-                 "Authorization": f"Bearer {SUPABASE_ANON_KEY}"})
+                "offset": (page - 1) * SITEMAP_PAGE_SIZE})
     if r.status_code != 200:
         raise HTTPException(503, "product sitemap unavailable")
     rows = r.json()
