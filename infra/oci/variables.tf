@@ -102,13 +102,13 @@ variable "db_instance_shape" {
 }
 
 variable "db_ocpus" {
-  description = "OCPUs for the DB instance. This is the only A1.Flex instance planned, so it takes the full Always Free allowance (max 4 total across A1 instances)."
+  description = "OCPUs for the DB instance. Dropped from the full 4 to 1 on 19 July after the full-size request exhausted a 48-attempt/~4h retry window with zero success in ap-sydney-1 - a smaller request has a better chance of finding free capacity, at the cost of headroom versus the original plan. Still well within the 4-OCPU Always Free A1 allowance, so room to grow back later if capacity eases."
   type        = number
-  default     = 4
+  default     = 1
 }
 
 variable "db_memory_gb" {
-  description = "Memory in GB for the DB instance. This is the only A1.Flex instance planned, so it takes the full Always Free allowance (max 24GB total across A1 instances)."
+  description = "Memory in GB for the DB instance. Dropped from 24 to 6 alongside db_ocpus (see its description) - still 6x the current pricewatch-db-x86 fallback's 1GB."
   type        = number
-  default     = 24
+  default     = 6
 }
