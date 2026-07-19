@@ -24,31 +24,42 @@ def embed_batch(model, rows):
     return [_to_pgvector(v) for v in model.embed(texts)]
 
 
-def _update_with_retry(conn, row_id, vector, attempts=3):
-    """Commit one row at a time (not batched): the `embed` CI job runs
-    concurrently with the 14-job crawl matrix, which also writes to
-    `products`. A single UPDATE's lock is held for milliseconds, so
-    collisions are rare; holding many rows' locks across one big commit (the
-    original design) is exactly the lock-contention pattern that caused the
-    2-day detect outage documented in anomaly.py - same fix, applied here.
-    Deadlocks are still possible, just unlikely, so retry a couple of times
-    before giving up on this one row (it stays NULL and is picked up next run).
+def _update_batch_with_retry(conn, rows, vectors, attempts=3):
+    """Commit in small batches (COMMIT_BATCH rows), not one row at a time.
+
+    The `embed` CI job runs concurrently with the 14-job crawl matrix, which
+    also writes to `products`, so this still deliberately keeps each
+    transaction's lock window short - the original one-big-commit design
+    was the lock-contention pattern that caused the 2-day detect outage
+    documented in anomaly.py. But committing every single row (the first
+    fix for that) meant one Postgres round trip per row, which is why the
+    `embed` job was hitting its time budget and getting cancelled before
+    finishing a batch: confirmed live via `gh run list` - every recent run's
+    embed job got cancelled at almost exactly its timeout. A batch of
+    COMMIT_BATCH UPDATEs still completes in well under a second (nowhere
+    near the multi-second lock hold that caused the original outage), while
+    cutting round trips ~50x.
     """
     import psycopg
     for attempt in range(attempts):
         try:
-            conn.execute("UPDATE products SET embedding = ?::vector WHERE id = ?",
-                         (vector, row_id))
+            for row, vector in zip(rows, vectors):
+                conn.execute("UPDATE products SET embedding = ?::vector WHERE id = ?",
+                             (vector, row["id"]))
             conn.commit()
-            return True
+            return len(rows)
         except psycopg.errors.DeadlockDetected:
             conn.rollback()
             if attempt == attempts - 1:
-                print(f"embed_products: giving up on product {row_id} after "
-                      f"{attempts} deadlock retries, will retry next run")
-                return False
+                print(f"embed_products: giving up on a batch of {len(rows)} "
+                      f"products after {attempts} deadlock retries, "
+                      "will retry next run")
+                return 0
             time.sleep(0.5 * (attempt + 1))
-    return False
+    return 0
+
+
+COMMIT_BATCH = 100
 
 
 def run(budget=20000, embed_batch_size=500):
@@ -72,9 +83,10 @@ def run(budget=20000, embed_batch_size=500):
     for start in range(0, len(rows), embed_batch_size):
         chunk = rows[start:start + embed_batch_size]
         vectors = embed_batch(model, chunk)  # CPU-bound, no open transaction
-        for row, vector in zip(chunk, vectors):
-            if _update_with_retry(conn, row["id"], vector):
-                done += 1
+        for bstart in range(0, len(chunk), COMMIT_BATCH):
+            brows = chunk[bstart:bstart + COMMIT_BATCH]
+            bvectors = vectors[bstart:bstart + COMMIT_BATCH]
+            done += _update_batch_with_retry(conn, brows, bvectors)
         print(f"embed_products: {done}/{len(rows)} embedded")
     print(f"embed_products: done, {done} products embedded")
 

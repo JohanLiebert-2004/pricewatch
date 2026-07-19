@@ -198,7 +198,7 @@ jobs:
   # their own requirements file so the 14 retailer jobs stay light.
   embed:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     concurrency:
       group: embed              # don't stack runs if one is still embedding
       cancel-in-progress: false # when the next hourly trigger fires

@@ -159,42 +159,78 @@ document.getElementById("f").addEventListener("submit", e=>{
   }
 });
 
-let scanStream = null, scanFrame = null;
+let scanStream = null, scanFrame = null, zxingReader = null, zxingLoad = null;
 function stopScanner(){
   if(scanFrame) cancelAnimationFrame(scanFrame);
   scanFrame = null;
   if(scanStream) scanStream.getTracks().forEach(track=>track.stop());
   scanStream = null;
+  if(zxingReader){ try{zxingReader.reset();}catch(e){} zxingReader = null; }
   document.getElementById("scanner").hidden = true;
+}
+function loadZXing(){
+  // Lazy-loaded only on browsers without BarcodeDetector (all of iOS/Safari,
+  // since WebKit has never implemented that API) - keeps page weight down
+  // for the majority of visitors who never need this fallback.
+  if(window.ZXing) return Promise.resolve();
+  if(zxingLoad) return zxingLoad;
+  zxingLoad = new Promise((resolve, reject)=>{
+    const s = document.createElement("script");
+    s.src = "/vendor/zxing.min.js";
+    s.onload = ()=>resolve();
+    s.onerror = ()=>reject(new Error("scanner library failed to load"));
+    document.head.appendChild(s);
+  });
+  return zxingLoad;
+}
+async function startScannerNative(video, status){
+  scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
+  video.srcObject = scanStream;
+  await video.play();
+  const detector = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39"]});
+  status.textContent = "Scanning…";
+  const tick = async ()=>{
+    if(!scanStream) return;
+    try{
+      const codes = await detector.detect(video);
+      const code = codes[0] && String(codes[0].rawValue || "").trim();
+      if(code){
+        document.getElementById("q").value = code;
+        stopScanner();
+        search(code);
+        return;
+      }
+    }catch(e){}
+    scanFrame = requestAnimationFrame(tick);
+  };
+  tick();
+}
+async function startScannerZXing(video, status){
+  status.textContent = "Loading scanner…";
+  await loadZXing();
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+    ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+    ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39]);
+  zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+  status.textContent = "Scanning…";
+  await zxingReader.decodeFromVideoDevice(undefined, video, (result)=>{
+    if(!result) return; // per-frame miss (NotFoundException) - keep scanning
+    const code = String(result.getText() || "").trim();
+    if(!code) return;
+    document.getElementById("q").value = code;
+    stopScanner();
+    search(code);
+  });
 }
 async function startScanner(){
   const box = document.getElementById("scanner"), video = document.getElementById("scanVideo"), status = document.getElementById("scanStatus");
   box.hidden = false;
-  if(!("BarcodeDetector" in window)){
-    status.textContent = "Camera barcode scanning is not available in this browser. Enter the barcode in the search box instead.";
-    return;
-  }
+  status.textContent = "Starting camera…";
   try{
-    scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
-    video.srcObject = scanStream;
-    await video.play();
-    const detector = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39"]});
-    status.textContent = "Scanning…";
-    const tick = async ()=>{
-      if(!scanStream) return;
-      try{
-        const codes = await detector.detect(video);
-        const code = codes[0] && String(codes[0].rawValue || "").trim();
-        if(code){
-          document.getElementById("q").value = code;
-          stopScanner();
-          search(code);
-          return;
-        }
-      }catch(e){}
-      scanFrame = requestAnimationFrame(tick);
-    };
-    tick();
+    if("BarcodeDetector" in window) await startScannerNative(video, status);
+    else await startScannerZXing(video, status);
   }catch(e){
     status.textContent = "Camera access was unavailable. You can still enter the barcode in the search box.";
   }
