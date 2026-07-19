@@ -32,7 +32,10 @@ from urllib.parse import quote
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 
-SUPABASE_URL = "https://eklfgwalyfugpeieeqwz.supabase.co"
+# Self-hosted PostgREST (replaces Supabase, whose free-tier egress quota
+# blew - see AGENT_STATE.md). anon-only, no JWT, so no key is needed here
+# any more either - matches web/*.html's SUPABASE_URL cutover.
+SUPABASE_URL = os.environ.get("PRICEWATCH_API_URL", "https://192-9-163-208.sslip.io")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SITE_URL = os.environ.get("SITE_URL", "https://web-pi-blush-48.vercel.app").rstrip("/")
 SELF_URL = os.environ.get("SELF_URL", "https://159-13-59-184.sslip.io").rstrip("/")
