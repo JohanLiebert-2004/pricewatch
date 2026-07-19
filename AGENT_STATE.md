@@ -156,11 +156,18 @@ Before changing anything:
   `DATABASE_URL` line. Contained to the transcript, not sent anywhere, but
   **the Supabase Postgres password should still be rotated** — it hasn't
   been confirmed done despite being flagged twice now.
-  **Still claiming `infra/oci/`** — the ARM retry loop is still running and
-  `pricewatch_db_x86` is live production infra now; please don't edit
-  `main.tf`/`variables.tf`/`outputs.tf` or `infra/oci/services/` until this
-  note is removed (will be, once the ARM box lands or the retry window
-  expires).
+  **19 July, ~08:49 UTC — ARM retry loop gave up after all 48 attempts
+  (~4 hours, 04:48–08:49 UTC), every single one still "out of host
+  capacity" in `ap-sydney-1`.** Not a session interruption this time - the
+  script hit its own designed exit condition cleanly. `pricewatch_db`
+  (A1.Flex, 4 OCPU/24GB) remains unprovisioned; `pricewatch_db_x86`
+  (E2.1.Micro, 1GB) is the standing production DB host, no longer just an
+  interim fallback until someone deliberately retries ARM capacity (no
+  retry loop is currently running - relaunch `infra/oci/`'s bounded retry
+  pattern, see git history around commit `b581cc0`, if picking this back
+  up). **Dropping the `infra/oci/` claim** - `main.tf`/`variables.tf`/
+  `outputs.tf`/`infra/oci/services/` are open again, no background process
+  touching them anymore.
 
 - **19 July — RESOLVED: Supabase free-tier egress quota exhaustion is why
   the migration above happened.** Was: 14.22GB of 5.5GB, REST API returning
