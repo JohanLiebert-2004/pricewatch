@@ -27,6 +27,49 @@ Before changing anything:
 
 ## Current production state
 
+- **19 July — SITE IS CURRENTLY DOWN: Supabase free-tier egress quota
+  exhausted (14.22GB of 5.5GB), REST API returning HTTP 402 project-wide.**
+  Confirmed live: `curl .../rest/v1/discount_feed...` -> 402. Every page that
+  reads from Supabase (home, catalogue, product, search) will show empty/error
+  states for real visitors until the quota resets **4 August 2026**, or the
+  owner upgrades to Pro, or Supabase support grants a one-off reset — none of
+  which an agent can do (billing decision, owner's call only). Direct Postgres
+  connections via `DATABASE_URL` are NOT blocked (crawl-and-detect keeps
+  running fine) — only the PostgREST/anon API layer the website depends on.
+  Root cause found via `pg_stat_statements` on production: `anomaly.py`'s
+  `run()` did an **unfiltered full-table read of `products` AND
+  `price_snapshots` on every hourly detect run**, growing linearly with
+  catalogue size (265K products / 483K snapshots -> ~65MB/run x 24/day, by far
+  the single biggest line in the account's egress). This was a *recurrence* of
+  a problem partially fixed once before (see the "SELECT * shipped ~62MB"
+  comment already in the file) — the earlier fix trimmed columns but left the
+  scan itself unbounded, and it caught back up as the catalogue grew.
+  **Fixed in `1c3e84c`**: `price_snapshots` only gets a new row on a genuine
+  price change (`db.py`'s `bulk_upsert`), so a product whose price didn't move
+  since the last detect run can't newly trip `rrp_gap`/`history_drop` either.
+  Added a `kv` row (`anomaly_last_detect_at`) and now only rescan products
+  with a fresh snapshot since that timestamp. Verified against production
+  (via a supervised, non-destructive test run on the OCI VM, reverted after):
+  first run after deploy does one full pass (no marker yet) and writes the
+  marker; the very next run pulled **22 rows instead of ~220,000** for the
+  same two queries. Pushed to `master` and live for the next scheduled
+  `crawl-and-detect` run — this stops further egress growth going forward,
+  but does **not** restore service for the rest of this billing cycle; that
+  needs the owner's decision (wait for reset / upgrade / contact support).
+  Not investigated further this session, flagged for whoever picks this up:
+  `existing = SELECT product_id, price, signal FROM deals` (also a full-table
+  read every run, currently small but same unbounded-growth shape) and the
+  ~3-4 client-side Supabase REST calls per `product.html` view (`product_history`
+  with no `select=` filter, `relatedItems`'s up-to-80-row brand match, AI
+  similar RPC) are smaller but real contributors worth a look if egress
+  creeps back up after the reset.
+  Also: a diagnostic command mid-investigation accidentally printed the live
+  `DATABASE_URL` (with password) and `PROXY_URL` (Webshare creds) in plaintext
+  to a Claude Code session transcript. Not leaked externally, but the owner
+  was advised to rotate the Postgres password and Webshare credentials out of
+  caution — check with the owner whether that's been done before trusting
+  either credential is still the live one.
+
 - **18 July, fixed same-day: `web/watch-confirm.js` had a live infinite-loop
   bug** (commit `354ae62`) that froze the browser tab for any shopper who
   successfully submitted the price-watch form. Its `MutationObserver` on
