@@ -63,7 +63,28 @@ Before changing anything:
   `vercel --prod --yes` (this project deploys via the Vercel CLI, not git
   integration — a plain push does not redeploy it). Verified live:
   `curl https://dealwatch.com.au/rest/v1/discount_feed...` returns real
-  rows. **`DATABASE_URL` GitHub secret updated** to point at
+  rows.
+  **Important — that first verification was incomplete and the site was
+  actually broken for ~3 hours after this point.** The `curl` above sent no
+  `Authorization` header, but the real client JS still built and sent
+  `Authorization: Bearer ` (empty, from the blanked `SUPABASE_ANON_KEY`) on
+  every fetch — and self-hosted PostgREST, with no `jwt-secret` configured,
+  rejects **any** `Authorization` header, even an empty one, with `500
+  PGRST300 "Server lacks JWT secret"`. So the deployed site's actual data
+  fetches were failing the whole time despite the passing curl check. Found
+  while separately fixing `preview_app.py` (below) and hitting the same
+  error there. **Fixed** (`e2fe762`): `HDRS` is now `{}` in all 5 HTML
+  files and `search.html`'s three inline header builds were dropped
+  entirely — self-hosted anon-only PostgREST expects clients to send *no*
+  Authorization header at all, not an empty Bearer. Re-verified this time
+  by replicating the exact header the browser sends
+  (`curl -H "Authorization: Bearer "` still 500s deliberately, confirming
+  the server's strictness; a bare curl and the redeployed page's actual
+  `const HDRS = {}` both confirmed clean). **Lesson for future
+  verification: test with the exact headers/requests the real client
+  sends, not a bare curl** — a passing bare-curl check missed this
+  entirely.
+  **`DATABASE_URL` GitHub secret updated** to point at
   `pricewatch-db-x86` (public IP, `sslmode=require`, own `pricewatch` role)
   — verified end-to-end via a manual `gh workflow run crawl-and-detect`
   (run `29676782660`): crawl_queue and price_snapshots both show fresh
@@ -107,10 +128,34 @@ Before changing anything:
   both left running untouched as fallbacks, per the "no rush to
   decommission" convention — Supabase in particular still has a live
   Postgres connection worth keeping if anything here needs re-checking.
-  **Not yet done:** Phase 6 (moving pricewatch-web/bot/embed services and
-  `services/preview_app.py`'s Supabase call onto the new box — the OCI
-  VM's own SSR previews/Telegram bot/image proxy still point at Supabase,
-  unaffected by this cutover since they're separate from the Vercel site).
+  **19 July, later same day — `services/preview_app.py` (SSR `/p/:retailer/
+  :sku` pages + `/deals`/`/retailers` landing pages + dynamic product
+  sitemap, all on the OCI VM, separate from the Vercel static site) was
+  missed by the original cutover and was actively broken for a while:**
+  every real product URL 404'd (`fetch_product` silently treats a failed
+  Supabase call as not-found) and `sitemap-products-*.xml` 503'd — these
+  are exactly the URLs Google crawls, so this was a real indexing risk,
+  not just staleness. Fixed (`eedf0dd`): `SUPABASE_URL` →
+  `PRICEWATCH_API_URL` env var, default `https://192-9-163-208.sslip.io`.
+  Same empty-Bearer-header bug as above hit here too (`headers={"apikey":
+  ..., "Authorization": f"Bearer {SUPABASE_ANON_KEY}"}` on every fetch) —
+  dropped entirely in the same commit as the HDRS fix (`e2fe762`). Deployed
+  via `git pull` + `systemctl restart pricewatch-web.service` on
+  159.13.59.184 (needed `sudo git config --system --add safe.directory
+  /opt/pricewatch` first — the repo is root-owned and www-data has no
+  writable `$HOME/.gitconfig`, so pull as `sudo`/root, not `sudo -u
+  www-data`). Verified live: `/p/officeworks/CA20387200` returns 200 with
+  real title/JSON-LD, `sitemap-products-1.xml` returns 200 with real URLs.
+  **Phase 6 still not done:** pricewatch-bot/embed services still point at
+  Supabase (Telegram bot, embeddings) — lower urgency, not user-facing/SEO,
+  left for later.
+  **Also: `DATABASE_URL`'s plaintext password got printed to a session
+  transcript again** (same credential flagged once already this project —
+  see the "self-caused credential exposure" pattern) via a `grep -i
+  'SUPABASE...'` that matched `pooler.supabase.com` inside the
+  `DATABASE_URL` line. Contained to the transcript, not sent anywhere, but
+  **the Supabase Postgres password should still be rotated** — it hasn't
+  been confirmed done despite being flagged twice now.
   **Still claiming `infra/oci/`** — the ARM retry loop is still running and
   `pricewatch_db_x86` is live production infra now; please don't edit
   `main.tf`/`variables.tf`/`outputs.tf` or `infra/oci/services/` until this
