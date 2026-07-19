@@ -220,6 +220,43 @@ resource "oci_core_instance" "pricewatch_db" {
   }
 }
 
+# Fallback DB host: a second Always Free E2.1.Micro (x86), same shape as the
+# original runner (up to 2 allowed on this tier). Unlike A1.Flex, x86
+# capacity has been available on demand, so this can provision immediately
+# while the ARM pricewatch_db instance above keeps retrying in the
+# background. Only 1GB RAM - much tighter than the 24GB ARM target, but
+# enough to hold Postgres for the current 704MB DB if the ARM capacity
+# shortage drags on. Whichever instance is ready first gets used; the other
+# stays idle as a spare, per the same "keep the fallback around" pattern as
+# the original runner vs. this migration.
+resource "oci_core_instance" "pricewatch_db_x86" {
+  compartment_id      = var.compartment_ocid
+  availability_domain = local.availability_domain
+  display_name        = "pricewatch-db-x86"
+  shape               = "VM.Standard.E2.1.Micro"
+
+  create_vnic_details {
+    subnet_id        = oci_core_subnet.public.id
+    assign_public_ip = true
+    display_name     = "pricewatch-db-x86-vnic"
+    hostname_label   = "pricewatch-db-x86"
+  }
+
+  source_details {
+    source_type = "image"
+    source_id   = local.image_id
+  }
+
+  metadata = {
+    ssh_authorized_keys = file(pathexpand(var.ssh_public_key_path))
+    user_data           = base64encode(local.cloud_init)
+  }
+
+  lifecycle {
+    ignore_changes = [metadata]
+  }
+}
+
 data "oci_objectstorage_namespace" "pricewatch" {
   compartment_id = var.compartment_ocid
 }

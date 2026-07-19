@@ -102,13 +102,13 @@ variable "db_instance_shape" {
 }
 
 variable "db_ocpus" {
-  description = "OCPUs for the DB instance. Combined with the runner's usage, stay <= 4 total across Always Free A1 instances."
+  description = "OCPUs for the DB instance. This is the only A1.Flex instance planned, so it takes the full Always Free allowance (max 4 total across A1 instances)."
   type        = number
-  default     = 2
+  default     = 4
 }
 
 variable "db_memory_gb" {
-  description = "Memory in GB for the DB instance. Combined with the runner's usage, stay <= 24GB total across Always Free A1 instances."
+  description = "Memory in GB for the DB instance. This is the only A1.Flex instance planned, so it takes the full Always Free allowance (max 24GB total across A1 instances)."
   type        = number
-  default     = 12
+  default     = 24
 }

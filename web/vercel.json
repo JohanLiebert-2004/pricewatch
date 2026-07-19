@@ -32,6 +32,10 @@
     {
       "source": "/sitemap-products-:page.xml",
       "destination": "https://159-13-59-184.sslip.io/sitemap-products-:page.xml"
+    },
+    {
+      "source": "/rest/v1/:path*",
+      "destination": "https://192-9-163-208.sslip.io/rest/v1/:path*"
     }
   ],
   "headers": [
@@ -49,7 +53,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; connect-src https://eklfgwalyfugpeieeqwz.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
         },
         {
           "key": "Referrer-Policy",
