@@ -27,6 +27,30 @@ Before changing anything:
 
 ## Current production state
 
+- **19 July — IN PROGRESS (Claude): migrating off Supabase entirely to
+  self-hosted Postgres + PostgREST on a new OCI instance.** Owner's decision,
+  given the egress outage below and no interest in paying a vendor for a
+  quota this project doesn't consistently need. Full plan/rationale:
+  `C:\Users\tarun\.claude\plans\foamy-drifting-walrus.md` (local to the
+  owner's machine, not in the repo). **Claiming `infra/oci/` for the
+  duration — please don't edit `main.tf`/`variables.tf`/`outputs.tf` or
+  anything under `infra/oci/services/` until this note is removed.**
+  Status: `infra/oci/main.tf` now defines a second instance
+  (`oci_core_instance.pricewatch_db`, `VM.Standard.A1.Flex`, 2 OCPU/12GB,
+  Always Free) plus a 5432 security-list rule for it, alongside the existing
+  untouched `pricewatch` (E2.1.Micro) instance. **Not provisioned yet** -
+  `ap-sydney-1` is out of A1.Flex host capacity (tried 2 OCPU/12GB and 1
+  OCPU/6GB, both failed; only one AD in this region so no alternate to try;
+  tenancy has no other region subscribed). A bounded retry loop (every 5 min,
+  up to ~4h) is running in the owner's Claude Code session. PostgREST systemd
+  unit, config template, nginx routing template, and a `bootstrap_roles.sql`
+  (self-hosted Postgres needs `anon`/`authenticated`/`authenticator` roles
+  created explicitly - Supabase pre-creates these, schema.sql never does)
+  are written and committed (`b581cc0`) but nothing is deployed. The old
+  instance/Supabase project both stay untouched and serving whatever they
+  can until the new one is verified end-to-end - no rush to decommission
+  either.
+
 - **19 July — SITE IS CURRENTLY DOWN: Supabase free-tier egress quota
   exhausted (14.22GB of 5.5GB), REST API returning HTTP 402 project-wide.**
   Confirmed live: `curl .../rest/v1/discount_feed...` -> 402. Every page that
