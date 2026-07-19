@@ -27,39 +27,66 @@ Before changing anything:
 
 ## Current production state
 
-- **19 July — IN PROGRESS (Claude): migrating off Supabase entirely to
-  self-hosted Postgres + PostgREST on a new OCI instance.** Owner's decision,
-  given the egress outage below and no interest in paying a vendor for a
-  quota this project doesn't consistently need. Full plan/rationale:
+- **19 July — DONE (Claude): site cut over to self-hosted Postgres +
+  PostgREST, running again on `dealwatch.com.au`.** Migrated off Supabase
+  entirely (see the outage entry below for why). Full plan/rationale:
   `C:\Users\tarun\.claude\plans\foamy-drifting-walrus.md` (local to the
-  owner's machine, not in the repo). **Claiming `infra/oci/` for the
-  duration — please don't edit `main.tf`/`variables.tf`/`outputs.tf` or
-  anything under `infra/oci/services/` until this note is removed.**
-  Status: `infra/oci/main.tf` now defines a second instance
-  (`oci_core_instance.pricewatch_db`, `VM.Standard.A1.Flex`, 2 OCPU/12GB,
-  Always Free) plus a 5432 security-list rule for it, alongside the existing
-  untouched `pricewatch` (E2.1.Micro) instance. **Not provisioned yet** -
-  `ap-sydney-1` is out of A1.Flex host capacity (tried 2 OCPU/12GB and 1
-  OCPU/6GB, both failed; only one AD in this region so no alternate to try;
-  tenancy has no other region subscribed). A bounded retry loop (every 5 min,
-  up to ~4h) is running in the owner's Claude Code session. PostgREST systemd
-  unit, config template, nginx routing template, and a `bootstrap_roles.sql`
-  (self-hosted Postgres needs `anon`/`authenticated`/`authenticator` roles
-  created explicitly - Supabase pre-creates these, schema.sql never does)
-  are written and committed (`b581cc0`) but nothing is deployed. The old
-  instance/Supabase project both stay untouched and serving whatever they
-  can until the new one is verified end-to-end - no rush to decommission
-  either.
+  owner's machine, not in the repo).
+  **What's live now:** a *third* OCI instance, `pricewatch-db-x86`
+  (`VM.Standard.E2.1.Micro`, 1 OCPU/1GB, Always Free, public IP
+  `192.9.163.208`) — created as an interim fallback because the intended
+  `pricewatch_db` A1.Flex instance (2/4 OCPU, 12/24GB) is still blocked on
+  `ap-sydney-1` ARM host-capacity exhaustion (a bounded retry loop keeps
+  trying it every 5 min in the background; if/when it succeeds, data should
+  be re-synced from `pricewatch-db-x86` onto it and everything repointed —
+  that box has real headroom, this one doesn't). On `pricewatch-db-x86`:
+  Postgres 17 + pgvector installed, `schema.sql` + the 8 `_migrate()`
+  columns + `bootstrap_roles.sql` + `views.sql` applied, full dataset
+  restored from Supabase's still-reachable direct Postgres connection
+  (267,877 products / 488,282 snapshots / 6,943 deals, all matviews
+  refreshed and verified), PostgREST running via systemd bound to
+  `127.0.0.1:3000`, nginx + Let's Encrypt in front of it at
+  `https://192-9-163-208.sslip.io/rest/v1/`. Note: cloud-init's own
+  provisioning failed silently on this box (pre-existing YAML-indentation
+  bug in `cloud-init.yaml.tftpl`'s `/opt/pricewatch.env` heredoc around
+  line 140 — blank `KEY=` lines break out of the `runcmd` block scalar; the
+  same bug will hit `pricewatch_db` too whenever it provisions), so port
+  80/443/5432 also had to be opened by hand in the box's local iptables
+  (OCI's security list already allowed them at the VCN level — this was a
+  host-level gap, not a network one) and the crawl-cycle timer was
+  confirmed never active (good — avoids the GH-Actions-vs-VM-timer deadlock
+  from `81c6250`). **Frontend cutover done:** `web/{index,catalogue,growth,
+  product,search}.html` have `SUPABASE_URL`/`SUPABASE_ANON_KEY` blanked to
+  `""` (all fetches are same-origin `/rest/v1/...` now), `web/vercel.json`
+  got a `/rest/v1/:path*` rewrite to the new box and its CSP `connect-src`
+  changed to `'self'` — commit `3dc5cba`, pushed, then deployed with
+  `vercel --prod --yes` (this project deploys via the Vercel CLI, not git
+  integration — a plain push does not redeploy it). Verified live:
+  `curl https://dealwatch.com.au/rest/v1/discount_feed...` returns real
+  rows. **`DATABASE_URL` GitHub secret updated** to point at
+  `pricewatch-db-x86` (public IP, `sslmode=require`, own `pricewatch` role)
+  — crawl-and-detect should pick it up on its next scheduled run.
+  Old instance (`pricewatch`, 159.13.59.184) and the Supabase project are
+  both left running untouched as fallbacks, per the "no rush to
+  decommission" convention — Supabase in particular still has a live
+  Postgres connection worth keeping if anything here needs re-checking.
+  **Not yet done:** Phase 6 (moving pricewatch-web/bot/embed services and
+  `services/preview_app.py`'s Supabase call onto the new box — the OCI
+  VM's own SSR previews/Telegram bot/image proxy still point at Supabase,
+  unaffected by this cutover since they're separate from the Vercel site).
+  **Still claiming `infra/oci/`** — the ARM retry loop is still running and
+  `pricewatch_db_x86` is live production infra now; please don't edit
+  `main.tf`/`variables.tf`/`outputs.tf` or `infra/oci/services/` until this
+  note is removed (will be, once the ARM box lands or the retry window
+  expires).
 
-- **19 July — SITE IS CURRENTLY DOWN: Supabase free-tier egress quota
-  exhausted (14.22GB of 5.5GB), REST API returning HTTP 402 project-wide.**
-  Confirmed live: `curl .../rest/v1/discount_feed...` -> 402. Every page that
-  reads from Supabase (home, catalogue, product, search) will show empty/error
-  states for real visitors until the quota resets **4 August 2026**, or the
-  owner upgrades to Pro, or Supabase support grants a one-off reset — none of
-  which an agent can do (billing decision, owner's call only). Direct Postgres
-  connections via `DATABASE_URL` are NOT blocked (crawl-and-detect keeps
-  running fine) — only the PostgREST/anon API layer the website depends on.
+- **19 July — RESOLVED: Supabase free-tier egress quota exhaustion is why
+  the migration above happened.** Was: 14.22GB of 5.5GB, REST API returning
+  HTTP 402 project-wide, quota reset not due until **4 August 2026**. Direct
+  Postgres connections via `DATABASE_URL` were NOT blocked (crawl-and-detect
+  kept running fine throughout) — only the PostgREST/anon API layer the
+  website depends on, which is exactly the layer now replaced by
+  self-hosted PostgREST above.
   Root cause found via `pg_stat_statements` on production: `anomaly.py`'s
   `run()` did an **unfiltered full-table read of `products` AND
   `price_snapshots` on every hourly detect run**, growing linearly with
