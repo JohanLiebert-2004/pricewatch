@@ -1,0 +1,26 @@
+# /etc/nginx/sites-available/pricewatch — for the new pricewatch-db instance.
+# Replace REPLACE_WITH_DASHED_IP with the instance's public IP, dashes
+# instead of dots (matches the existing sslip.io convention, e.g.
+# 159-13-59-184 for 159.13.59.184). certbot adds the TLS bits afterward.
+server {
+    listen 80;
+    server_name REPLACE_WITH_DASHED_IP.sslip.io;
+
+    location / {
+        proxy_pass http://127.0.0.1:8300;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Self-hosted PostgREST, replacing Supabase's REST API. Prefix stripped
+    # the same way Supabase's own gateway does it, so existing frontend call
+    # paths like /rest/v1/rpc/<fn> keep working unchanged - only the origin
+    # they're fetched from is new.
+    location /rest/v1/ {
+        proxy_pass http://127.0.0.1:3000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}

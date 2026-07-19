@@ -1,0 +1,23 @@
+# Template for /etc/postgrest/postgrest.conf on the pricewatch-db instance.
+# Not committed with real values - copy this, fill in the generated
+# `authenticator` role password, and chmod 600 (it's a credential file).
+#
+# db-anon-role = anon with no JWT requirement: the existing RLS policies and
+# `grant select ... to anon` statements in views.sql already define exactly
+# what an anonymous request can see, matching how Supabase's anon key worked
+# (that key was never a real secret - already public in client-side JS).
+# `authenticator` only needs LOGIN + the ability to SET ROLE anon; it should
+# NOT be a superuser, even though this only binds to 127.0.0.1.
+
+db-uri = "postgres://authenticator:REPLACE_ME@127.0.0.1:5432/pricewatch"
+db-schemas = "public"
+db-anon-role = "anon"
+
+server-host = "127.0.0.1"
+server-port = 3000
+
+# Matches the pgbouncer-transaction-mode assumptions db.py already codes
+# around (see db.py's prepare_threshold=None comment) - safe even though
+# this deployment has no pooler in front of it.
+db-pool = 10
+db-pool-timeout = 10

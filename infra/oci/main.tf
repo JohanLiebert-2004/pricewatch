@@ -25,6 +25,17 @@ data "oci_core_images" "ubuntu" {
   sort_order               = "DESC"
 }
 
+# Separate image lookup: the DB instance is Arm (A1.Flex) while the original
+# runner may be x86 (E2.1.Micro) - Ubuntu image OCIDs differ per architecture.
+data "oci_core_images" "ubuntu_arm" {
+  compartment_id           = var.compartment_ocid
+  operating_system         = "Canonical Ubuntu"
+  operating_system_version = var.ubuntu_version
+  shape                    = var.db_instance_shape
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
+}
+
 locals {
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[var.availability_domain_index].name
   image_id            = var.image_ocid != "" ? var.image_ocid : data.oci_core_images.ubuntu.images[0].id
@@ -99,6 +110,21 @@ resource "oci_core_security_list" "public" {
     }
   }
 
+  # Self-hosted Postgres on the DB instance, reachable from GitHub Actions
+  # runners (crawl-and-detect deliberately runs there, not on this VCN, and
+  # GH Actions runner IPs aren't allowlist-able) - hardened by Postgres auth
+  # (scram-sha-256 + sslmode=require), not by network restriction. See
+  # AGENT_STATE.md / the Supabase-migration plan for the full trade-off.
+  ingress_security_rules {
+    protocol = "6"
+    source   = "0.0.0.0/0"
+
+    tcp_options {
+      min = 5432
+      max = 5432
+    }
+  }
+
   egress_security_rules {
     protocol    = "all"
     destination = "0.0.0.0/0"
@@ -155,6 +181,45 @@ resource "oci_core_instance" "pricewatch" {
     ignore_changes = [metadata]
   }
 }
+# Self-hosted Postgres + PostgREST instance, replacing Supabase (its free-
+# tier egress quota blew and locked the site out - see AGENT_STATE.md). Sized
+# for a full production Postgres + all the existing web/bot/embed services
+# with real headroom, unlike the original 1GB E2.1.Micro runner. Kept as a
+# second instance rather than resizing the original in place, so the
+# original stays up as a fallback until this one is verified stable.
+resource "oci_core_instance" "pricewatch_db" {
+  compartment_id      = var.compartment_ocid
+  availability_domain = local.availability_domain
+  display_name        = "pricewatch-db"
+  shape               = var.db_instance_shape
+
+  shape_config {
+    ocpus         = var.db_ocpus
+    memory_in_gbs = var.db_memory_gb
+  }
+
+  create_vnic_details {
+    subnet_id        = oci_core_subnet.public.id
+    assign_public_ip = true
+    display_name     = "pricewatch-db-vnic"
+    hostname_label   = "pricewatch-db"
+  }
+
+  source_details {
+    source_type = "image"
+    source_id   = data.oci_core_images.ubuntu_arm.images[0].id
+  }
+
+  metadata = {
+    ssh_authorized_keys = file(pathexpand(var.ssh_public_key_path))
+    user_data           = base64encode(local.cloud_init)
+  }
+
+  lifecycle {
+    ignore_changes = [metadata]
+  }
+}
+
 data "oci_objectstorage_namespace" "pricewatch" {
   compartment_id = var.compartment_ocid
 }

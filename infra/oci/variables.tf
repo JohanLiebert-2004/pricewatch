@@ -94,3 +94,21 @@ variable "backup_bucket_name" {
   type        = string
   default     = "pricewatch-database-backups"
 }
+
+variable "db_instance_shape" {
+  description = "Shape for the self-hosted Postgres/PostgREST instance. Always Free Arm shape, separate from the original E2.1.Micro runner."
+  type        = string
+  default     = "VM.Standard.A1.Flex"
+}
+
+variable "db_ocpus" {
+  description = "OCPUs for the DB instance. Combined with the runner's usage, stay <= 4 total across Always Free A1 instances."
+  type        = number
+  default     = 2
+}
+
+variable "db_memory_gb" {
+  description = "Memory in GB for the DB instance. Combined with the runner's usage, stay <= 24GB total across Always Free A1 instances."
+  type        = number
+  default     = 12
+}

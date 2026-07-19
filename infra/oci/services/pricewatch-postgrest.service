@@ -1,0 +1,19 @@
+[Unit]
+Description=Pricewatch self-hosted PostgREST (replaces Supabase's REST API)
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=postgrest
+Group=postgrest
+ExecStart=/usr/local/bin/postgrest /etc/postgrest/postgrest.conf
+Restart=always
+RestartSec=5
+# PostgREST itself is lightweight (~30-50MB typical) - this cap is generous
+# headroom, not a tight fit like the old 1GB VM's service limits.
+MemoryMax=150M
+
+[Install]
+WantedBy=multi-user.target
