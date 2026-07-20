@@ -168,6 +168,21 @@ Before changing anything:
   up). **Dropping the `infra/oci/` claim** - `main.tf`/`variables.tf`/
   `outputs.tf`/`infra/oci/services/` are open again, no background process
   touching them anymore.
+  **19 July, ~12:59 UTC - second ARM retry loop, at the reduced 1 OCPU/6GB
+  size (commit `0477787`), also gave up after all 48 attempts (~4 hours,
+  08:59-12:59 UTC), every attempt still "out of host capacity" in
+  `ap-sydney-1`.** Confirms the shortage isn't specific to the original
+  4 OCPU/24GB ask - `ap-sydney-1` had no free A1.Flex capacity at any size
+  across two consecutive ~4h windows spanning 04:48-12:59 UTC on 19 July.
+  Verified directly via `terraform state list` on 20 July ~09:00 UTC:
+  `oci_core_instance.pricewatch_db` does not exist in state, only
+  `pricewatch_db_x86`. No retry loop is running. `pricewatch_db_x86`
+  remains the standing production DB host with no changeover planned unless
+  someone deliberately relaunches `infra/oci/`'s bounded retry pattern
+  (`retry_provision.sh`, recreate from git history around commit
+  `b581cc0`) - worth spacing future attempts out (e.g. once daily at
+  varying times) rather than another immediate 4h burst, since back-to-back
+  windows just re-hit the same shortage.
 
 - **19 July — RESOLVED: Supabase free-tier egress quota exhaustion is why
   the migration above happened.** Was: 14.22GB of 5.5GB, REST API returning
