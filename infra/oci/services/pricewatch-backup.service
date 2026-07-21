@@ -1,5 +1,5 @@
 [Unit]
-Description=Back up Pricewatch Supabase database to OCI Object Storage
+Description=Back up the Dealwatch PostgreSQL database to OCI Object Storage
 Wants=network-online.target
 After=network-online.target
 

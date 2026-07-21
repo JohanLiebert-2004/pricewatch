@@ -1,0 +1,67 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+packages:
+  - git
+  - python3
+  - python3-venv
+  - python3-pip
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - ca-certificates
+  - curl
+  - jq
+  - fail2ban
+  - postgresql-client
+
+write_files:
+  - path: /opt/pricewatch.env
+    owner: root:root
+    permissions: '0600'
+    content: |
+      DATABASE_URL=
+      PRICEWATCH_API_URL=
+      PROXY_URL=
+      TELEGRAM_BOT_TOKEN=
+      TELEGRAM_CHAT_ID=
+      RESEND_API_KEY=
+      RESEND_FROM=
+      SITE_URL=${site_url}
+
+  - path: /etc/pricewatch-backup.env
+    owner: root:root
+    permissions: '0600'
+    content: |
+      OCI_BACKUP_BUCKET=${backup_bucket_name}
+
+runcmd:
+  - test -f /swapfile || fallocate -l 2G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile || true
+  - swapon /swapfile || true
+  - grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  - mkdir -p /opt
+  - test -d /opt/pricewatch/.git || git clone --branch ${repo_branch} ${repo_url} /opt/pricewatch
+  - cd /opt/pricewatch && git fetch origin ${repo_branch} && git checkout ${repo_branch} && git pull --ff-only origin ${repo_branch}
+  - cd /opt/pricewatch && python3 -m venv .venv
+  - cd /opt/pricewatch && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -r requirements.txt
+  - install -d -o www-data -g www-data /var/cache/pricewatch-img
+  - install -m 0644 /opt/pricewatch/infra/oci/services/pricewatch-web.service /etc/systemd/system/pricewatch-web.service
+  - install -m 0644 /opt/pricewatch/infra/oci/services/pricewatch-bot.service /etc/systemd/system/pricewatch-bot.service
+  - install -m 0644 /opt/pricewatch/infra/oci/services/pricewatch-embed.service /etc/systemd/system/pricewatch-embed.service
+  - install -m 0644 /opt/pricewatch/infra/oci/services/pricewatch-kmart.service /etc/systemd/system/pricewatch-kmart.service
+  - install -m 0644 /opt/pricewatch/infra/oci/services/pricewatch-kmart.timer /etc/systemd/system/pricewatch-kmart.timer
+  - install -m 0644 /opt/pricewatch/infra/oci/services/pricewatch-backup.service /etc/systemd/system/pricewatch-backup.service
+  - install -m 0644 /opt/pricewatch/infra/oci/services/pricewatch-backup.timer /etc/systemd/system/pricewatch-backup.timer
+  - install -m 0755 /opt/pricewatch/scripts/backup_postgres_to_oci.sh /usr/local/sbin/pricewatch-backup
+  - install -m 0755 /opt/pricewatch/infra/oci/scripts/configure_nginx_sslip.sh /usr/local/sbin/configure-nginx-sslip
+  - install -m 0644 /opt/pricewatch/infra/oci/services/fail2ban-pricewatch-postgres.filter /etc/fail2ban/filter.d/pricewatch-postgres.conf
+  - install -m 0644 /opt/pricewatch/infra/oci/services/fail2ban-pricewatch-postgres.jail /etc/fail2ban/jail.d/pricewatch-postgres.local
+  - /usr/local/sbin/configure-nginx-sslip web
+  - systemctl daemon-reload
+  - systemctl enable --now nginx fail2ban pricewatch-web.service
+  # Optional bot/embed/Kmart/backup units are installed but deliberately not
+  # enabled until their secrets and DB-private URL have been restored.
+
+final_message: "Dealwatch web role provisioned. Restore /opt/pricewatch.env, then enable optional units."

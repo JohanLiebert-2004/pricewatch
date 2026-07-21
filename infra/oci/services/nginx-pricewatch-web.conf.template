@@ -1,0 +1,13 @@
+# REPLACE_WITH_HOST is populated from OCI instance metadata on first boot.
+server {
+    listen 80;
+    server_name REPLACE_WITH_HOST;
+
+    location / {
+        proxy_pass http://127.0.0.1:8300;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}

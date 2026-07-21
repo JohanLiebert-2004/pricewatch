@@ -28,6 +28,7 @@ data "oci_core_images" "ubuntu" {
 # Separate image lookup: the DB instance is Arm (A1.Flex) while the original
 # runner may be x86 (E2.1.Micro) - Ubuntu image OCIDs differ per architecture.
 data "oci_core_images" "ubuntu_arm" {
+  count                    = var.enable_arm_db ? 1 : 0
   compartment_id           = var.compartment_ocid
   operating_system         = "Canonical Ubuntu"
   operating_system_version = var.ubuntu_version
@@ -36,15 +37,29 @@ data "oci_core_images" "ubuntu_arm" {
   sort_order               = "DESC"
 }
 
+data "oci_core_images" "ubuntu_x86" {
+  compartment_id           = var.compartment_ocid
+  operating_system         = "Canonical Ubuntu"
+  operating_system_version = var.ubuntu_version
+  shape                    = "VM.Standard.E2.1.Micro"
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
+}
+
 locals {
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[var.availability_domain_index].name
   image_id            = var.image_ocid != "" ? var.image_ocid : data.oci_core_images.ubuntu.images[0].id
-  cloud_init = templatefile("${path.module}/cloud-init.yaml.tftpl", {
+  web_cloud_init = templatefile("${path.module}/cloud-init-web.yaml.tftpl", {
     repo_url           = var.repo_url
     repo_branch        = var.repo_branch
     site_url           = var.site_url
-    crawl_schedule     = var.crawl_schedule
     backup_bucket_name = var.backup_bucket_name
+  })
+  db_cloud_init = templatefile("${path.module}/cloud-init-db.yaml.tftpl", {
+    repo_url           = var.repo_url
+    repo_branch        = var.repo_branch
+    backup_bucket_name = var.backup_bucket_name
+    postgrest_version  = var.postgrest_version
   })
 }
 
@@ -110,14 +125,11 @@ resource "oci_core_security_list" "public" {
     }
   }
 
-  # Self-hosted Postgres on the DB instance, reachable from GitHub Actions
-  # runners (crawl-and-detect deliberately runs there, not on this VCN, and
-  # GH Actions runner IPs aren't allowlist-able) - hardened by Postgres auth
-  # (scram-sha-256 + sslmode=require), not by network restriction. See
-  # AGENT_STATE.md / the Supabase-migration plan for the full trade-off.
+  # PostgreSQL is private to the VCN. GitHub Actions reaches it through an
+  # SSH local-forward on the web host; it is never exposed directly.
   ingress_security_rules {
     protocol = "6"
-    source   = "0.0.0.0/0"
+    source   = var.database_allowed_cidr
 
     tcp_options {
       min = 5432
@@ -170,7 +182,7 @@ resource "oci_core_instance" "pricewatch" {
 
   metadata = {
     ssh_authorized_keys = file(pathexpand(var.ssh_public_key_path))
-    user_data           = base64encode(local.cloud_init)
+    user_data           = base64encode(local.web_cloud_init)
   }
 
   lifecycle {
@@ -178,7 +190,10 @@ resource "oci_core_instance" "pricewatch" {
     # by hand (secrets in /opt/pricewatch.env were deliberately removed from
     # Terraform state). Without this, any cloud-init template drift forces a
     # full instance replacement - destroying the provisioned VM and its IP.
-    ignore_changes = [metadata]
+    # Image data sources track the newest Ubuntu release. Changing that ID on
+    # an existing boot volume is not an upgrade mechanism and can stop/reboot
+    # a production instance, so upgrades are performed explicitly instead.
+    ignore_changes = [metadata, source_details[0].source_id]
   }
 }
 # Self-hosted Postgres + PostgREST instance, replacing Supabase (its free-
@@ -188,6 +203,7 @@ resource "oci_core_instance" "pricewatch" {
 # second instance rather than resizing the original in place, so the
 # original stays up as a fallback until this one is verified stable.
 resource "oci_core_instance" "pricewatch_db" {
+  count               = var.enable_arm_db ? 1 : 0
   compartment_id      = var.compartment_ocid
   availability_domain = local.availability_domain
   display_name        = "pricewatch-db"
@@ -207,16 +223,16 @@ resource "oci_core_instance" "pricewatch_db" {
 
   source_details {
     source_type = "image"
-    source_id   = data.oci_core_images.ubuntu_arm.images[0].id
+    source_id   = data.oci_core_images.ubuntu_arm[0].images[0].id
   }
 
   metadata = {
     ssh_authorized_keys = file(pathexpand(var.ssh_public_key_path))
-    user_data           = base64encode(local.cloud_init)
+    user_data           = base64encode(local.db_cloud_init)
   }
 
   lifecycle {
-    ignore_changes = [metadata]
+    ignore_changes = [metadata, source_details[0].source_id]
   }
 }
 
@@ -244,16 +260,16 @@ resource "oci_core_instance" "pricewatch_db_x86" {
 
   source_details {
     source_type = "image"
-    source_id   = local.image_id
+    source_id   = data.oci_core_images.ubuntu_x86.images[0].id
   }
 
   metadata = {
     ssh_authorized_keys = file(pathexpand(var.ssh_public_key_path))
-    user_data           = base64encode(local.cloud_init)
+    user_data           = base64encode(local.db_cloud_init)
   }
 
   lifecycle {
-    ignore_changes = [metadata]
+    ignore_changes = [metadata, source_details[0].source_id]
   }
 }
 
@@ -288,11 +304,13 @@ resource "oci_identity_dynamic_group" "pricewatch_backup_writer" {
   compartment_id = var.tenancy_ocid
   name           = "pricewatch-backup-writer"
   description    = "Lets Pricewatch DB-hosting instances upload database backups only."
-  # Not yet including oci_core_instance.pricewatch_db (ARM) - it doesn't
-  # exist yet (still capacity-blocked), and referencing its .id here would
-  # couple this resource's apply to creating that instance. Add it back
-  # once it's actually provisioned.
-  matching_rule = "Any {instance.id = '${oci_core_instance.pricewatch.id}', instance.id = '${oci_core_instance.pricewatch_db_x86.id}'}"
+  matching_rule = "Any {${join(", ", concat(
+    [
+      "instance.id = '${oci_core_instance.pricewatch.id}'",
+      "instance.id = '${oci_core_instance.pricewatch_db_x86.id}'"
+    ],
+    var.enable_arm_db ? ["instance.id = '${oci_core_instance.pricewatch_db[0].id}'"] : []
+  ))}}"
 }
 
 resource "oci_identity_policy" "pricewatch_backup_writer" {

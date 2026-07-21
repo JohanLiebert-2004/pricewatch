@@ -1,104 +1,127 @@
-# Oracle Cloud runner for Pricewatch
+# Dealwatch on Oracle Cloud
 
-This provisions one Oracle Cloud Infrastructure VM and runs Pricewatch from
-`systemd` every 30 minutes. It keeps Supabase and Vercel unchanged; only the
-crawler/detector moves off GitHub Actions.
+Terraform describes the two production roles and one optional replacement:
 
-## Do not paste secrets into chat
+- `pricewatch`: public nginx + SSR/image proxy, Telegram bot, optional
+  embedding server, Kmart timer, and backup tooling.
+- `pricewatch_db_x86`: PostgreSQL 17 + pgvector, PostgREST, nginx, fail2ban,
+  and daily Object Storage backups. This is the current production database.
+- `pricewatch_db`: optional A1.Flex database replacement. It is disabled by
+  default because Sydney Always Free ARM capacity is unreliable.
 
-OCI API access uses a local config file and private key. Keep both on your
-machine only:
+The website remains a Vercel static deployment. GitHub Actions performs
+hourly catalogue refresh/detection and separate three-hour product-page
+enrichment. CI connects to PostgreSQL through an SSH tunnel via the web host;
+port 5432 is restricted to the OCI VCN.
 
-```text
-C:\Users\tarun\.oci\config
-C:\Users\tarun\.oci\oci_api_key.pem
-```
+## Secret handling
 
-Oracle's config file has these fields:
+Terraform never receives runtime passwords or tokens. Keep these files out of
+Git and do not print them:
 
-```ini
-[DEFAULT]
-user=ocid1.user.oc1...
-fingerprint=aa:bb:cc:...
-tenancy=ocid1.tenancy.oc1...
-region=ap-sydney-1
-key_file=C:\Users\tarun\.oci\oci_api_key.pem
-```
+- Web role: `/opt/pricewatch.env`, root-owned mode `0600`.
+- Database role: `/etc/pricewatch-db.env`, root-owned mode `0600`.
+- Kmart override: `/etc/pricewatch-kmart.env`, root-owned mode `0600`.
+- Local Terraform values: `terraform.tfvars` (gitignored).
 
-The API private key is not the SSH key for the VM. Do not commit it.
+The repository contains examples/placeholders only. Terraform state and the
+local OCI configuration/private key are also sensitive and gitignored.
 
-## One-time prerequisites
-
-Install Terraform and create an OCI API key in the Oracle console:
-
-1. Oracle Console -> Profile -> User settings -> API Keys -> Add API Key.
-2. Download the private key into `C:\Users\tarun\.oci\`.
-3. Copy Oracle's config snippet into `C:\Users\tarun\.oci\config`.
-4. Make sure you have an SSH public key at `C:\Users\tarun\.ssh\id_rsa.pub` or set `ssh_public_key_path`.
-
-## Configure
-
-Copy the example vars file:
+## Configure and validate
 
 ```powershell
 Copy-Item infra\oci\terraform.tfvars.example infra\oci\terraform.tfvars
+terraform -chdir=infra\oci init
+terraform -chdir=infra\oci fmt -check
+terraform -chdir=infra\oci validate
+terraform -chdir=infra\oci plan
 ```
 
-Edit `infra\oci\terraform.tfvars` and fill in:
-
-- `tenancy_ocid`
-- `compartment_ocid` - use tenancy OCID if you are not using a separate compartment
-
-Runtime secrets are not managed by Terraform. Put them only in
-`/opt/pricewatch.env` on the VM:
-
-```bash
-sudoedit /opt/pricewatch.env
-sudo chmod 600 /opt/pricewatch.env
-sudo chown root:root /opt/pricewatch.env
-```
-
-## Deploy
-
-```powershell
-cd infra\oci
-terraform init
-terraform apply
-```
-
-After apply finishes, Terraform prints the VM IP and SSH command.
-
-## Check the runner
-
-```bash
-sudo systemctl status pricewatch-cycle.timer
-sudo journalctl -u pricewatch-cycle.service -n 200 --no-pager
-```
-
-The VM pulls the latest repo code before every run, then runs refresh/crawl for
-each retailer and `python run.py detect`.
-
-## Security notes
-
-- The VM only exposes SSH. No public app/API port is opened.
-- Replace `ssh_allowed_cidr = "0.0.0.0/0"` with your current public IP plus `/32` after setup.
-- Secrets are written to `/opt/pricewatch.env` on the VM with `0600` permissions.
-- Terraform cloud-init does not include crawler secrets. Local `.tfstate` files are still gitignored.
-- If the repo becomes private, switch `repo_url` to a deploy-key or token flow before destroying GitHub Actions.
-## Shape fallback
-
-Sydney often has no free `VM.Standard.A1.Flex` capacity. The Terraform module
-also supports `VM.Standard.E2.1.Micro` by setting:
+Set `ssh_allowed_cidr` to the operator's current public `/32` whenever
+possible. Leave these safety defaults unchanged for routine operation:
 
 ```hcl
-instance_shape = "VM.Standard.E2.1.Micro"
-enable_shape_config = false
-ocpus = 1
-memory_gb = 1
+enable_arm_db        = false
+database_allowed_cidr = "10.42.0.0/16"
 ```
 
-The cloud-init template creates a 2GB swapfile so dependency installation can
-complete on the micro VM.
+Enabling ARM is a deliberate migration action, not a capacity retry loop:
 
-Big W is skipped when `PROXY_URL` is blank. Add the Webshare proxy URL to
-`/opt/pricewatch.env` before expecting Big W coverage from OCI.
+```hcl
+enable_arm_db = true
+```
+
+Review the plan before applying. The existing instances ignore metadata
+changes because cloud-init is first-boot-only; editing a template must not
+replace a live host.
+
+## Role-specific bootstrap
+
+`cloud-init-web.yaml.tftpl` installs the repository, Python environment,
+nginx/TLS helper, service units, fail2ban, and an empty root-only environment
+file. It enables only nginx, fail2ban, and the SSR service. Restore secrets
+before enabling the bot, Kmart, embedding, or backup units.
+
+`cloud-init-db.yaml.tftpl` installs PostgreSQL 17, pgvector, the pinned
+PostgREST binary, nginx/TLS, fail2ban, service units, secure `pg_hba` rules,
+and an empty root-only DB environment file. After restoring two generated
+passwords, finish the idempotent setup with:
+
+```bash
+sudoedit /etc/pricewatch-db.env
+sudo chmod 600 /etc/pricewatch-db.env
+sudo pricewatch-finalize-db
+```
+
+The finalizer creates/updates least-privilege roles, applies `schema.sql` and
+`views.sql`, writes the protected PostgREST configuration, and enables the API
+and backup timer. Restore a database dump before applying `views.sql` when
+recovering production data.
+
+Both roles derive their `sslip.io` hostname from OCI instance metadata; no
+instance IP is embedded in cloud-init or a committed systemd unit.
+
+## GitHub Actions private database path
+
+The local composite action `.github/actions/database-tunnel` requires:
+
+- secrets `OCI_SSH_PRIVATE_KEY` and `OCI_SSH_KNOWN_HOSTS`;
+- variables `OCI_SSH_HOST` and `OCI_DB_PRIVATE_HOST`.
+
+It opens a pinned-host-key local forward and rewrites `DATABASE_URL` only for
+subsequent job steps. The original database credential stays in GitHub
+Secrets. Verify a workflow through the tunnel before restricting an existing
+public 5432 rule.
+
+## Production checks
+
+Web role:
+
+```bash
+systemctl --no-pager status pricewatch-web pricewatch-bot
+systemctl --no-pager status pricewatch-kmart.timer
+journalctl -u pricewatch-kmart.service -n 100 --no-pager
+```
+
+Database role:
+
+```bash
+pg_isready
+curl --fail http://127.0.0.1:3000/
+systemctl --no-pager status postgresql pricewatch-postgrest nginx
+systemctl --no-pager status pricewatch-backup.timer
+journalctl -u pricewatch-backup.service -n 100 --no-pager
+```
+
+## Recovery and migration rules
+
+1. Never destroy the x86 database during the first ARM migration pass.
+2. Restore the newest checksummed Object Storage dump to the candidate.
+3. Apply schema/views, compare counts and freshness, then test PostgREST.
+4. Update private endpoint configuration and run a complete CI cycle.
+5. Cut over public API routing with an explicit rollback target.
+6. Retain the former database until a new backup from the replacement has
+   completed and been verified.
+
+Local configuration backups can accelerate recovery, but the committed
+role-specific templates are the rebuild source of truth.

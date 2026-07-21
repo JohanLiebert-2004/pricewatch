@@ -84,15 +84,28 @@ variable "site_url" {
   default = "https://web-pi-blush-48.vercel.app"
 }
 
-variable "crawl_schedule" {
-  description = "systemd OnCalendar expression."
-  type        = string
-  default     = "*:0/30"
-}
 variable "backup_bucket_name" {
   description = "Private OCI Object Storage bucket for daily database backups."
   type        = string
   default     = "pricewatch-database-backups"
+}
+
+variable "enable_arm_db" {
+  description = "Provision the optional A1.Flex database replacement. Keep false until an owner-approved capacity/migration window."
+  type        = bool
+  default     = false
+}
+
+variable "database_allowed_cidr" {
+  description = "CIDR allowed to connect directly to PostgreSQL. Keep private; GitHub Actions uses an SSH tunnel through the web host."
+  type        = string
+  default     = "10.42.0.0/16"
+}
+
+variable "postgrest_version" {
+  description = "Pinned PostgREST release installed by database cloud-init."
+  type        = string
+  default     = "14.15"
 }
 
 variable "db_instance_shape" {

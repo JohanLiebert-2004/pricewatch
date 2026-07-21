@@ -12,8 +12,16 @@ ssh_public_key_path = "~/.ssh/id_rsa.pub"
 repo_url    = "https://github.com/JohanLiebert-2004/pricewatch.git"
 repo_branch = "master"
 
-site_url           = "https://web-pi-blush-48.vercel.app"
+site_url           = "https://dealwatch.com.au"
 
 # Always Free A1 total limit after trial: <= 2 OCPUs and <= 12 GB memory.
 ocpus     = 2
 memory_gb = 12
+
+# The x86 DB host is production. ARM creation is opt-in so routine plans do
+# not retry scarce capacity or create surprise instances.
+enable_arm_db = false
+
+# PostgreSQL accepts direct traffic only from the OCI VCN. CI uses SSH
+# forwarding through the web host.
+database_allowed_cidr = "10.42.0.0/16"

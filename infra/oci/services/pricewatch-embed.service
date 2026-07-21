@@ -8,7 +8,7 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/opt/pricewatch/services
-ExecStart=/opt/pricewatch-venv/bin/uvicorn embed_server:app --host 127.0.0.1 --port 8301 --workers 1
+ExecStart=/opt/pricewatch/.venv/bin/uvicorn embed_server:app --host 127.0.0.1 --port 8301 --workers 1
 Restart=always
 RestartSec=5
 # Same 1GB-RAM VM as pricewatch-web/pricewatch-bot - separate cgroup from
