@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clearance — Dealwatch</title>
+<meta name="description" content="Products retailers have themselves labeled clearance or outlet stock, tracked by Dealwatch.">
+<link rel="canonical" href="https://dealwatch.com.au/clearance.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Dealwatch">
+<meta property="og:title" content="Clearance — Dealwatch">
+<meta property="og:description" content="Products retailers have themselves labeled clearance or outlet stock, tracked by Dealwatch.">
+<meta property="og:url" content="https://dealwatch.com.au/clearance.html">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
+<script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#ffffff"><script defer src="/pwa.js"></script>
+</head>
+<body>
+
+<nav class="topnav"><div class="wrap navrow">
+  <a class="logo" href="index.html">Deal<em>watch</em></a>
+  <div class="navlinks">
+    <a href="index.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.58a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.82Z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/></svg>Deals</a>
+    <a href="catalogue.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Catalogue</a>
+    <a href="clearance.html" class="active"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>Clearance</a>
+    <a href="search.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>Search</a>
+  </div>
+</div></nav>
+
+<header class="hero compact"><div class="wrap">
+  <div class="eyebrow">retailer-labeled · not a computed discount</div>
+  <h1 class="display">Clearance <em>stock</em></h1>
+  <p class="sub">Products the retailer itself has put in a clearance or outlet
+    section — not just something Dealwatch calculated as a big discount.
+    Coverage depends on whether a retailer exposes this as real data; today
+    that's Kmart, and we'll add others as we confirm they expose the same
+    kind of signal.</p>
+</div></header>
+
+<main class="wrap">
+  <div class="barlabel">Retailer</div>
+  <div class="bar" id="retailers"></div>
+  <div class="catalogue-sort">
+    <label for="sort"><strong>Sort products</strong><span>Choose cheapest or highest discount</span></label>
+    <select id="sort" aria-label="Sort clearance products">
+      <option value="recent">Recently checked</option>
+      <option value="pct_desc">Discount: highest first</option>
+      <option value="price_asc">Price: lowest first</option>
+      <option value="price_desc">Price: highest first</option>
+    </select>
+  </div>
+  <div class="total" id="total"></div>
+  <div id="list"><div class="empty">Loading clearance stock…</div></div>
+  <button class="more" id="more" hidden>Show 50 more</button>
+</main>
+
+<footer><div class="wrap footgrid">
+  <div class="fbrand">Deal<em>watch</em></div>
+  <div class="note">
+    "Clearance" here means the retailer's own storefront placed the item in a
+    clearance/outlet section — Dealwatch does not decide this. A product can
+    leave clearance (or sell out) between our checks; always confirm price
+    and availability on the retailer's page before buying.
+  </div>
+</div><nav class="footlinks" aria-label="Site information"><a href="/how-it-works.html">How it works</a><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></footer>
+
+<script>
+const SUPABASE_URL = "";
+const SUPABASE_ANON_KEY = "";
+const HDRS = {};
+
+const money = n => "$"+Number(n).toFixed(2);
+const CLEARANCE_FIELDS = "retailer,sku,title,brand,category,subcategory,url,image_url,is_marketplace,price,rrp,pct_off,price_updated_at";
+const RETAILER_LABEL = {kmart:"Kmart",bigw:"Big W",officeworks:"Officeworks",
+  target:"Target",jbhifi:"JB Hi-Fi",goodguys:"The Good Guys",myer:"Myer",
+  supercheap:"Supercheap Auto",sephora:"Sephora",
+  chemistwarehouse:"Chemist Warehouse",booktopia:"Booktopia",qbd:"QBD Books",ikea:"IKEA"};
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtN = n => Number(n).toLocaleString("en-AU");
+const IMG_PROXY = "https://159-13-59-184.sslip.io/img";  // OCI image cache
+function thumbSrc(u){
+  if(u.includes("cdn.shopify.com")) u = u + (u.includes("?")?"&":"?") + "width=200";
+  else if(u.includes("JPEG_1000x1000")) u = u.replace("JPEG_1000x1000","JPEG_300x300");
+  else if(u.includes("assets.kmart.com.au")) u = u.replace(/width:\d+,height:\d+/,"width:200,height:250");
+  return `${IMG_PROXY}?u=${encodeURIComponent(u)}`;
+}
+
+// Populated from whichever retailers actually appear in clearance_feed -
+// so a newly-added retailer's clearance chip shows up with zero code changes.
+let RETAILERS_SEEN = [];
+let selRetailers = new Set(), offset = 0;
+let sort = "recent";
+const SORT_ORDER = {recent:"price_updated_at.desc", pct_desc:"pct_off.desc.nullslast",
+  price_asc:"price.asc", price_desc:"price.desc"};
+const PAGE = 50;
+let requestSerial = 0;
+let pageRequest = null;
+let TOTAL = null;   // exact count from the first page's Content-Range
+
+function chips(){
+  document.getElementById("retailers").innerHTML =
+    `<button class="chip" data-k="all" aria-pressed="${selRetailers.size===0}">
+       All stores</button>` +
+    RETAILERS_SEEN.map(r =>
+      `<button class="chip" data-k="${r}" aria-pressed="${selRetailers.has(r)}">
+         ${esc(RETAILER_LABEL[r]||r)}</button>`).join("");
+  const label = selRetailers.size
+    ? [...selRetailers].map(r=>RETAILER_LABEL[r]||r).join(", ") : "All stores";
+  document.getElementById("total").innerHTML = TOTAL === null
+    ? `<span>· ${label}</span>`
+    : `${fmtN(TOTAL)} items <span>· ${label}</span>`;
+}
+
+function filterUrl(){
+  let u = `${SUPABASE_URL}/rest/v1/clearance_feed?select=${CLEARANCE_FIELDS}`;
+  if(selRetailers.size) u += `&retailer=in.(${[...selRetailers].map(encodeURIComponent).join(",")})`;
+  return u;
+}
+
+async function loadPage(reset){
+  const serial = ++requestSerial;
+  if(pageRequest) pageRequest.abort();
+  pageRequest = new AbortController();
+  if(reset){
+    offset = 0; TOTAL = null;
+    document.getElementById("list").innerHTML = `<div class="empty">Loading clearance stock…</div>`;
+  }
+  const q = filterUrl() + `&order=${SORT_ORDER[sort]}&limit=${PAGE}&offset=${offset}`;
+  let rows = [];
+  try {
+    const r = await fetch(q, {headers:{...HDRS, Prefer:"count=exact"}, signal:pageRequest.signal});
+    rows = r.ok ? await r.json() : [];
+    if(r.ok && offset === 0){
+      const range = r.headers.get("Content-Range");   // "0-49/1234"
+      const total = range && range.split("/")[1];
+      if(total && total !== "*") TOTAL = Number(total);
+      if(!RETAILERS_SEEN.length){
+        RETAILERS_SEEN = [...new Set(rows.map(p=>p.retailer))].sort();
+        chips();
+      }
+    }
+  } catch(err) {
+    if(err.name === "AbortError") return;
+  }
+  if(serial !== requestSerial) return;
+  const html = rows.map((p,i)=>`<div class="row plain media" style="animation-delay:${Math.min(i*30,300)}ms">
+    <div class="thumb">${p.image_url
+      ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt="${esc(p.title)}"
+           onerror="this.outerHTML='<span class=mono>${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>'">`
+      : `<span class="mono">${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>`}</div>
+    <div>
+      <div class="title"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a>
+        <a class="history-link" href="/p/${encodeURIComponent(p.retailer)}/${encodeURIComponent(p.sku)}">🔔 track price</a></div>
+      <div class="meta">
+        <span class="pill">${RETAILER_LABEL[p.retailer]||esc(p.retailer)}</span>
+        <span class="pill">Clearance</span>
+        <span class="pill">${esc(p.subcategory||p.category||"other")}</span>
+        <span>SKU ${esc(p.sku)}</span>
+        ${p.brand?`<span>${esc(p.brand)}</span>`:''}
+        ${p.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
+      </div>
+    </div>
+    <div class="price">
+      <div class="now">${money(p.price)}</div>
+      ${p.rrp && Number(p.rrp) > Number(p.price)
+        ? `<div class="was">${money(p.rrp)}</div>` : ''}
+      ${p.pct_off ? `<div class="pill">${Math.round(p.pct_off)}% off</div>` : ''}
+    </div>
+  </div>`).join("");
+  const list = document.getElementById("list");
+  if(reset) list.innerHTML = html ||
+    `<div class="empty">No clearance stock tracked for this retailer right now.<br>
+     Check back later — clearance sections change often.</div>`;
+  else list.insertAdjacentHTML("beforeend", html);
+  offset += rows.length;
+  chips();
+  const more = document.getElementById("more");
+  more.hidden = rows.length < PAGE;
+}
+
+document.getElementById("retailers").addEventListener("click", e=>{
+  const b = e.target.closest(".chip"); if(!b) return;
+  const val = b.dataset.k;
+  if(val === "all") selRetailers.clear();
+  else if(selRetailers.has(val)) selRetailers.delete(val);
+  else selRetailers.add(val);
+  chips();
+  loadPage(true);
+});
+document.getElementById("more").addEventListener("click", ()=>loadPage(false));
+document.getElementById("sort").addEventListener("change", e=>{
+  sort = SORT_ORDER[e.target.value] ? e.target.value : "recent";
+  loadPage(true);
+});
+
+chips();
+loadPage(true).catch(()=>{document.getElementById("list").innerHTML =
+  `<div class="empty">We couldn't load clearance stock — please try again shortly.</div>`;});
+</script>
+<nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><span aria-hidden="true">⌂</span>Home</a><a href="/search.html"><span aria-hidden="true">⌕</span>Search</a><a href="/alerts.html"><span aria-hidden="true">🔔</span>Alerts</a><a href="/search.html#scan"><span aria-hidden="true">▣</span>Scan</a></nav></body>
+</html>

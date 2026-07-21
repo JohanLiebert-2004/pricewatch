@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS products (
     url TEXT,
     image_url TEXT,
     is_marketplace INTEGER DEFAULT 0,
+    is_clearance INTEGER DEFAULT 0,
     region TEXT,
     first_seen TEXT,
     last_seen TEXT,
@@ -106,6 +107,8 @@ class ProductRecord:
     image_url: str | None = None
     in_stock: bool | None = None
     is_marketplace: bool = False
+    is_clearance: bool = False   # retailer-labeled clearance/outlet group,
+                                  # not a computed discount - see kmart_group.py
     region: str | None = None
 
 
@@ -140,7 +143,7 @@ def _migrate(conn):
             "PRAGMA table_info(products)").fetchall()}
     for col, typ in (("current_price", "REAL"), ("current_rrp", "REAL"),
                      ("price_updated_at", "TEXT"), ("image_url", "TEXT"),
-                     ("subcategory", "TEXT")):
+                     ("subcategory", "TEXT"), ("is_clearance", "INTEGER")):
         if col in have:
             continue
         try:
@@ -230,21 +233,22 @@ def upsert(conn: sqlite3.Connection, rec: ProductRecord) -> int | None:
     conn.execute(
         f"""INSERT INTO products (retailer, sku, gtin, title, brand, category,
                                  subcategory, url,
-                                 image_url, is_marketplace, region, first_seen,
+                                 image_url, is_marketplace, is_clearance, region, first_seen,
                                  last_seen, current_price, current_rrp,
                                  price_updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?{bool_cast},?,?,?,?,?,?)
+           VALUES (?,?,?,?,?,?,?,?,?,?{bool_cast},?{bool_cast},?,?,?,?,?,?)
            ON CONFLICT(retailer, sku, region) DO UPDATE SET
              gtin=COALESCE(excluded.gtin, products.gtin), title=excluded.title,
              brand=COALESCE(excluded.brand, products.brand), url=excluded.url,
              subcategory=COALESCE(excluded.subcategory, products.subcategory),
              image_url=COALESCE(excluded.image_url, products.image_url),
-             is_marketplace=excluded.is_marketplace{bool_cast}, last_seen=excluded.last_seen,
+             is_marketplace=excluded.is_marketplace{bool_cast},
+             is_clearance=excluded.is_clearance{bool_cast}, last_seen=excluded.last_seen,
              current_price=excluded.current_price, current_rrp=excluded.current_rrp,
              price_updated_at=excluded.price_updated_at""",
         (rec.retailer, rec.sku, rec.gtin, rec.title, rec.brand, rec.category,
          rec.subcategory,
-         rec.url, rec.image_url, rec.is_marketplace, rec.region or "", now, now,
+         rec.url, rec.image_url, rec.is_marketplace, rec.is_clearance, rec.region or "", now, now,
          rec.price, rec.rrp, now),
     )
     row = conn.execute(
@@ -314,22 +318,23 @@ def _upsert_chunk(conn, chunk, now) -> list:
 
     conn.executemany(
         f"""INSERT INTO products (retailer, sku, gtin, title, brand, category,
-                subcategory, url, image_url, is_marketplace, region, first_seen,
+                subcategory, url, image_url, is_marketplace, is_clearance, region, first_seen,
                 last_seen, current_price, current_rrp, price_updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?{bool_cast},?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?{bool_cast},?{bool_cast},?,?,?,?,?,?)
             ON CONFLICT(retailer, sku, region) DO UPDATE SET
               gtin=COALESCE(excluded.gtin, products.gtin), title=excluded.title,
               brand=COALESCE(excluded.brand, products.brand), url=excluded.url,
               subcategory=COALESCE(excluded.subcategory, products.subcategory),
               image_url=COALESCE(excluded.image_url, products.image_url),
               is_marketplace=excluded.is_marketplace{bool_cast},
+              is_clearance=excluded.is_clearance{bool_cast},
               last_seen=excluded.last_seen,
               current_price=excluded.current_price,
               current_rrp=excluded.current_rrp,
               price_updated_at=excluded.price_updated_at""",
         [(r.retailer, r.sku, r.gtin, r.title, r.brand, r.category,
           r.subcategory, r.url,
-          r.image_url, r.is_marketplace, r.region or "", now, now,
+          r.image_url, r.is_marketplace, r.is_clearance, r.region or "", now, now,
           r.price, r.rrp, now) for r in chunk])
 
     # ids for rows we hadn't seen before
@@ -372,16 +377,16 @@ def _upsert_chunk_pg(conn, chunk, now) -> list:
     and only the keys of rows whose price actually changed come back.
     """
     by_key = {(r.retailer, r.sku, r.region or ""): r for r in chunk}
-    row_sql = "(" + ",".join(["%s"] * 14) + ")"
+    row_sql = "(" + ",".join(["%s"] * 15) + ")"
     values_sql = ",".join([row_sql] * len(chunk))
     params = []
     for r in chunk:
         params += [r.retailer, r.sku, r.gtin, r.title, r.brand, r.category,
                    r.subcategory, r.url, r.image_url, r.is_marketplace,
-                   r.region or "", r.price, r.rrp, r.in_stock]
+                   r.is_clearance, r.region or "", r.price, r.rrp, r.in_stock]
     sql = f"""
     WITH v (retailer, sku, gtin, title, brand, category, subcategory, url,
-            image_url, is_marketplace, region, price, rrp, in_stock) AS (
+            image_url, is_marketplace, is_clearance, region, price, rrp, in_stock) AS (
       VALUES {values_sql}
     ),
     old AS (
@@ -394,10 +399,10 @@ def _upsert_chunk_pg(conn, chunk, now) -> list:
     ),
     up AS (
       INSERT INTO products (retailer, sku, gtin, title, brand, category,
-          subcategory, url, image_url, is_marketplace, region, first_seen,
+          subcategory, url, image_url, is_marketplace, is_clearance, region, first_seen,
           last_seen, current_price, current_rrp, price_updated_at)
       SELECT retailer, sku, gtin, title, brand, category, subcategory, url,
-             image_url, is_marketplace::boolean, region, %s, %s,
+             image_url, is_marketplace::boolean, is_clearance::boolean, region, %s, %s,
              price::numeric(10,2), rrp::numeric(10,2), %s
       FROM v
       ON CONFLICT (retailer, sku, region) DO UPDATE SET
@@ -406,6 +411,7 @@ def _upsert_chunk_pg(conn, chunk, now) -> list:
         subcategory=COALESCE(excluded.subcategory, products.subcategory),
         image_url=COALESCE(excluded.image_url, products.image_url),
         is_marketplace=excluded.is_marketplace,
+        is_clearance=excluded.is_clearance,
         last_seen=excluded.last_seen,
         current_price=excluded.current_price,
         current_rrp=excluded.current_rrp,

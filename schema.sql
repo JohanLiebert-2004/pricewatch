@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS products (
     last_seen TIMESTAMPTZ DEFAULT now(),
     UNIQUE (retailer, sku, region)
 );
+-- Retailer-labeled clearance/outlet status (not a computed discount - see
+-- kmart_group.py). Only Kmart populates this today; the column is
+-- retailer-agnostic so others can join in if a similar signal is ever found.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS is_clearance BOOLEAN DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_products_is_clearance ON products(is_clearance) WHERE is_clearance;
 -- AI "similar items": sentence embedding of title/brand/category, backfilled
 -- by embed_products.py (fastembed, all-MiniLM-L6-v2, 384-dim). NULL until a
 -- product is embedded; SQLite dev has no equivalent (production-only).

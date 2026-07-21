@@ -139,14 +139,24 @@ class KmartScraper(BaseScraper):
                             break
                         results = (r.json().get("response") or {}).get("results") or []
                         for item in results:
-                            rec = self._record_from_api(item, subcat)
+                            rec = self._record_from_api(
+                                item, subcat, is_clearance=(section == "Clearance"))
                             if not rec:
                                 continue
                             cur = sweep.get(rec.sku)
-                            if cur is None or (rec.price is not None
-                                               and (cur.price is None
-                                                    or rec.price < cur.price)):
+                            if cur is None:
                                 sweep[rec.sku] = rec
+                            else:
+                                # A product can appear in the Clearance group
+                                # AND other groups; whichever occurrence wins
+                                # the min-price comparison below must not
+                                # lose the clearance flag if either one had it.
+                                if rec.is_clearance:
+                                    cur.is_clearance = True
+                                if (rec.price is not None
+                                        and (cur.price is None or rec.price < cur.price)):
+                                    rec.is_clearance = rec.is_clearance or cur.is_clearance
+                                    sweep[rec.sku] = rec
                         if len(results) < self.per_page:
                             break
             except Exception as e:
@@ -156,7 +166,7 @@ class KmartScraper(BaseScraper):
                       f"keeping {len(sweep)} collected products")
         yield from sweep.values()
 
-    def _record_from_api(self, item, subcat=None) -> ProductRecord | None:
+    def _record_from_api(self, item, subcat=None, is_clearance=False) -> ProductRecord | None:
         d = item.get("data") or {}
         price = d.get("price")
         if price is None:
@@ -199,6 +209,7 @@ class KmartScraper(BaseScraper):
             rrp=rrp,
             in_stock=None,
             is_marketplace=str(seller).lower() != "kmart",
+            is_clearance=is_clearance,
         )
 
 

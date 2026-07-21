@@ -70,6 +70,33 @@ create unique index discount_feed_pk on discount_feed (retailer, sku);
 revoke all on discount_feed from anon, authenticated;
 grant select on discount_feed to anon;
 
+-- Clearance page: products the retailer itself has labeled clearance/outlet
+-- (not a computed discount - see kmart_group.py). Only Kmart populates
+-- is_clearance today; the view stays retailer-agnostic so others show up
+-- automatically if a similar signal is ever added for them. A plain view
+-- (not materialized) is fine here: is_clearance is a small partial index,
+-- unlike discount_feed's 90-day price_snapshots aggregate.
+drop view if exists clearance_feed;
+create view clearance_feed as
+select p.retailer, p.sku, p.title, p.brand,
+       coalesce(nullif(p.category,''),'other') as category,
+       p.subcategory, p.url, p.image_url, p.is_marketplace,
+       p.current_price as price, p.current_rrp as rrp,
+       case when p.current_rrp > p.current_price
+            then round((1 - p.current_price/p.current_rrp)*100) end as pct_off,
+       coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at,
+       p.first_seen
+from products p
+where p.is_clearance
+  and p.current_price is not null
+  and p.current_price > 0     -- $0 = sold-out placeholder, not a live price
+  -- Each fast feed runs at least daily; keep only items confirmed in the
+  -- last 36 hours, matching discount_feed's freshness rule.
+  and p.last_seen > now() - interval '36 hours'
+order by p.last_seen desc;
+revoke all on clearance_feed from anon, authenticated;
+grant select on clearance_feed to anon;
+
 -- Search page: latest price + date for any tracked product.
 drop view if exists product_search;
 create view product_search as

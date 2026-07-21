@@ -11,6 +11,11 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://dealwatch.com.au/clearance.html</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://dealwatch.com.au/search.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
