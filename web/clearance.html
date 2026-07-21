@@ -13,9 +13,6 @@
 <meta property="og:url" content="https://dealwatch.com.au/clearance.html">
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
@@ -88,7 +85,7 @@ const RETAILER_LABEL = {kmart:"Kmart",bigw:"Big W",officeworks:"Officeworks",
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmtN = n => Number(n).toLocaleString("en-AU");
-const IMG_PROXY = "https://159-13-59-184.sslip.io/img";  // OCI image cache
+const IMG_PROXY = "/img";  // same-origin OCI image cache
 function thumbSrc(u){
   if(u.includes("cdn.shopify.com")) u = u + (u.includes("?")?"&":"?") + "width=200";
   else if(u.includes("JPEG_1000x1000")) u = u.replace("JPEG_1000x1000","JPEG_300x300");
@@ -180,9 +177,9 @@ async function loadStats(){
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/clearance_feed?select=retailer,category,subcategory`, {headers:HDRS});
     const rows = r.ok ? await r.json() : [];
-    const key = new Map();   // "retailer category" -> count
+    const key = new Map();   // "retailer\u0000category" -> count
     for(const row of rows){
-      const k = row.retailer + " " + row.category;
+      const k = row.retailer + "\u0000" + row.category;
       key.set(k, (key.get(k)||0) + 1);
       if(row.subcategory){
         const subs = (SUBSTATS[row.retailer] = SUBSTATS[row.retailer] || []);
@@ -192,7 +189,7 @@ async function loadStats(){
       }
     }
     STATS = [...key].map(([k,items])=>{
-      const [retailer,category] = k.split(" ");
+      const [retailer,category] = k.split("\u0000");
       return {retailer, category, items};
     });
     for(const r in SUBSTATS) SUBSTATS[r].sort((a,b)=>b.items-a.items).splice(12);
@@ -225,7 +222,7 @@ async function loadPage(reset){
   if(serial !== requestSerial) return;
   const html = rows.map((p,i)=>`<div class="row plain media" style="animation-delay:${Math.min(i*30,300)}ms">
     <div class="thumb">${p.image_url
-      ? `<img src="${esc(thumbSrc(p.image_url))}" loading="lazy" alt="${esc(p.title)}"
+      ? `<img src="${esc(thumbSrc(p.image_url))}" width="96" height="96" loading="lazy" alt="${esc(p.title)}"
            onerror="this.outerHTML='<span class=mono>${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>'">`
       : `<span class="mono">${(RETAILER_LABEL[p.retailer]||"?")[0]}</span>`}</div>
     <div>

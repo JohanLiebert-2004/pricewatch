@@ -459,6 +459,40 @@ limit 12;
 revoke all on trending_products from anon, authenticated;
 grant select on trending_products to anon;
 
+-- One compact homepage bootstrap response replaces four independent browser
+-- requests. Only the twelve largest native categories per retailer are sent;
+-- returning the full materialized view was unnecessary transfer and parsing.
+create or replace function homepage_bootstrap()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with ranked_subcategories as (
+    select retailer, subcategory, items,
+           row_number() over (partition by retailer order by items desc) as rank
+    from subcategory_stats
+  )
+  select jsonb_build_object(
+    'catalogue_items', coalesce((select sum(items) from catalogue_stats), 0),
+    'deal_count', coalesce((select count(*) from discount_feed where pct_off >= 50), 0),
+    'freshness', coalesce((
+      select jsonb_agg(to_jsonb(f) order by f.retailer)
+      from retailer_freshness f
+    ), '[]'::jsonb),
+    'subcategories', coalesce((
+      select jsonb_agg(to_jsonb(s) - 'rank' order by s.retailer, s.items desc)
+      from ranked_subcategories s where s.rank <= 12
+    ), '[]'::jsonb),
+    'trending', coalesce((
+      select jsonb_agg(to_jsonb(t)) from trending_products t
+    ), '[]'::jsonb)
+  );
+$$;
+revoke all on function homepage_bootstrap() from public;
+grant execute on function homepage_bootstrap() to anon;
+
 -- Community in-store reports are never writable through the public table.
 -- The narrow RPC validates the product and report shape, then saves it as
 -- pending. Pending reports are deliberately not shown as retailer prices.

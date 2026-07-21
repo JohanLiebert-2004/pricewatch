@@ -33,12 +33,11 @@ from urllib.parse import quote
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 
-# Self-hosted PostgREST (replaces Supabase, whose free-tier egress quota
-# blew - see AGENT_STATE.md). anon-only, no JWT, so no key is needed here
-# any more either - matches web/*.html's SUPABASE_URL cutover.
-SUPABASE_URL = os.environ.get("PRICEWATCH_API_URL", "https://192-9-163-208.sslip.io")
 SITE_URL = os.environ.get("SITE_URL", "https://dealwatch.com.au").rstrip("/")
-SELF_URL = os.environ.get("SELF_URL", "https://159-13-59-184.sslip.io").rstrip("/")
+# PostgREST is reachable through the public site's same-origin /rest rewrite.
+# PRICEWATCH_API_URL remains available for a private/internal origin, but no
+# infrastructure IP is baked into application code.
+SUPABASE_URL = os.environ.get("PRICEWATCH_API_URL", SITE_URL).rstrip("/")
 TEMPLATE_PATH = Path(os.environ.get(
     "PRODUCT_TEMPLATE", "/opt/pricewatch/web/product.html"))
 LANDING_TEMPLATE_PATH = Path(os.environ.get(
@@ -134,7 +133,7 @@ def _product_ssr_body(p: dict, retailer: str, sku: str, canonical: str,
     checked = _display_date(p.get("last_seen"))
     freshness = (f"Last checked {checked}." if checked else
                  "The latest recorded price is shown below.")
-    media = (f'<img src="{e(image, quote=True)}" alt="{e(title, quote=True)}" '
+    media = (f'<img src="{e(image, quote=True)}" width="320" height="400" alt="{e(title, quote=True)}" '
              'loading="eager" fetchpriority="high">' if image else
              f'<span class="mono">{e((label or "?")[0])}</span>')
     price_html = f'<div class="now">${price:.2f}</div>' if price is not None else ""
@@ -183,8 +182,8 @@ def _landing_card(row: dict) -> str:
     pct_off = int(round(float(row.get("pct_off") or 0)))
     image = row.get("image_url") or ""
     if image:
-        image = f"{SELF_URL}/img?u={quote(str(image), safe='')}"
-        media = (f'<img src="{html.escape(image, quote=True)}" loading="lazy" '
+        image = f"{SITE_URL}/img?u={quote(str(image), safe='')}"
+        media = (f'<img src="{html.escape(image, quote=True)}" width="320" height="320" loading="lazy" '
                  f'alt="{html.escape(title, quote=True)}">')
     else:
         media = f'<span class="mono">{html.escape((label or "?")[0])}</span>'
@@ -312,7 +311,7 @@ async def preview(request: Request, retailer: str, sku: str):
     canonical = f"{SITE_URL}/p/{retailer}/{sku}"
     image = _safe_http_url(p.get("image_url"), "")
     if image:
-        image = f"{SELF_URL}/img?u={quote(image, safe='')}"
+        image = f"{SITE_URL}/img?u={quote(image, safe='')}"
 
     e = html.escape
     meta = "\n".join(filter(None, [

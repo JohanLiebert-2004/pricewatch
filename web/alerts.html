@@ -7,9 +7,6 @@
 <meta name="description" content="Price watches you've set on this device.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <style>
   .alertrow{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
@@ -70,7 +67,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const money = n => "$"+Number(n).toFixed(2);
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse", booktopia:"Booktopia", qbd:"QBD Books", ikea:"IKEA"};
-const IMG_PROXY = "https://159-13-59-184.sslip.io/img";
+const IMG_PROXY = "/img";
 function thumbSrc(u){
   if(u.includes("cdn.shopify.com")) u = u + (u.includes("?")?"&":"?") + "width=200";
   else if(u.includes("JPEG_1000x1000")) u = u.replace("JPEG_1000x1000","JPEG_300x300");
@@ -88,7 +85,7 @@ function alertRow(a){
   const href = `/p/${encodeURIComponent(a.retailer)}/${encodeURIComponent(a.sku)}`;
   const mono = (store || "?")[0];
   const thumb = a.image_url
-    ? `<img src="${esc(thumbSrc(a.image_url))}" loading="lazy" alt="${esc(a.title||"")}"
+    ? `<img src="${esc(thumbSrc(a.image_url))}" width="96" height="96" loading="lazy" alt="${esc(a.title||"")}"
          onerror="this.outerHTML='<span class=mono>${mono}</span>'">`
     : `<span class="mono">${mono}</span>`;
   return `<div class="alertrow">
