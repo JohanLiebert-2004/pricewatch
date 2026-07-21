@@ -14,6 +14,9 @@ jobs:
     timeout-minutes: 150
     strategy:
       fail-fast: false
+      # Avoid overwhelming the small OCI database and SSH bastion when the
+      # slower retailer enrichers run together.
+      max-parallel: 3
       matrix:
         include:
           - retailer: officeworks

@@ -32,10 +32,19 @@ runs:
         chmod 0600 "$HOME/.ssh/dealwatch_oci"
         printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
         chmod 0600 "$HOME/.ssh/known_hosts"
-        ssh -i "$HOME/.ssh/dealwatch_oci" -o BatchMode=yes \
-          -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
-          -fNT -L "127.0.0.1:6543:${PRIVATE_DATABASE_HOST}:5432" \
-          "${SSH_USER}@${SSH_HOST}"
+        connected=false
+        for attempt in 1 2 3 4 5; do
+          if ssh -i "$HOME/.ssh/dealwatch_oci" -o BatchMode=yes \
+            -o ConnectTimeout=20 -o ConnectionAttempts=2 \
+            -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
+            -fNT -L "127.0.0.1:6543:${PRIVATE_DATABASE_HOST}:5432" \
+            "${SSH_USER}@${SSH_HOST}"; then
+            connected=true
+            break
+          fi
+          sleep $((attempt * 2))
+        done
+        [[ "$connected" == true ]]
         python - <<'PY'
         import os
         from urllib.parse import urlsplit, urlunsplit
