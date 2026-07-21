@@ -191,7 +191,8 @@ web/                         static Dealwatch frontend and Vercel configuration
 services/preview_app.py      SSR product/landing pages and dynamic sitemaps
 services/telegram_bot.py     Telegram subscriptions and notifications
 embed_products.py            optional product-embedding batch job
-.github/workflows/crawl.yml  scheduled crawling, embeddings, detection, alerts
+ .github/workflows/crawl.yml  hourly refresh, embeddings, detection, alerts
+ .github/workflows/enrich.yml slower product-page enrichment every three hours
 infra/oci/                   Terraform and systemd service definitions
 tests/                       focused automated tests
 ```
@@ -209,10 +210,11 @@ stock, price accuracy, or retailer acceptance of an order.
 
 ## Claude handover: live site and OCI audit
 
-Snapshot taken **21 July 2026 AWST**. This is a point-in-time operational
-handover, not a replacement for `AGENT_STATE.md`. Re-check external state before
-acting, preserve the existing uncommitted P16 SEO work, and do not print or copy
-runtime secrets while diagnosing hosts.
+Initial snapshot taken **21 July 2026 AWST**, followed by remediation later the
+same day. The original findings are retained below for audit history; the final
+Claude handover at the end of this section supersedes their old status. Re-check
+external state before acting and do not print or copy runtime secrets while
+diagnosing hosts.
 
 ### Verified live state
 
@@ -233,7 +235,7 @@ Myer 13,406/112,593 (11.9%), and Target 81/299 (27.1%). This metric counts
 products seen within 36 hours; a low percentage is a coverage warning, not
 proof that every older product is invalid.
 
-### Confirmed problems and risks
+### Original audit findings (historical)
 
 1. **Cloud-init is invalid.** `infra/oci/cloud-init.yaml.tftpl` fails YAML
    parsing at the unindented `/opt/pricewatch.env` heredoc (`DATABASE_URL=`,
@@ -318,7 +320,7 @@ proof that every older product is invalid.
   workflow overrun - Myer/Supercheap enrichment still the long pole), #7
   (hardcoded endpoints), the website performance/accessibility list below.
 
-### Website improvements, in order
+### Original website improvement list (completed)
 
 1. Fix accessible contrast for `--flag` usage. Lighthouse measured only 3.67:1
    for white text on `#3b82f6` and 3.35:1 for track-link text on the soft blue
@@ -343,7 +345,7 @@ proof that every older product is invalid.
    `sslip.io` host in every card. This simplifies CSP, hides backend addressing,
    and makes future host migration independent of frontend HTML.
 
-### Suggested order for Claude
+### Original suggested order (remediated; live follow-up below)
 
 1. Preserve and finish/deploy P16; verify one real product page, landing page,
    and product sitemap with the exact browser request headers.
@@ -358,3 +360,72 @@ proof that every older product is invalid.
 6. Keep the x86 DB host until a replacement is restored, checksummed, compared,
    and cut over with a rollback path. Do not destroy either fallback during the
    first migration pass.
+
+### Final state for Claude handover — 21 July 2026
+
+This supersedes the original audit and the intermediate Claude update above.
+The remediation is in commits `bccb32c` through `9056b64`.
+
+- **Website:** deployed to `dealwatch.com.au`. The homepage uses one
+  `homepage_bootstrap()` RPC plus its paged deal feed, renders 24 initial
+  cards, supports Load More, serves product images through same-origin `/img`,
+  uses system fonts, and includes intrinsic image dimensions. Final mobile
+  Lighthouse is **96 Performance / 100 Accessibility / 100 Best Practices /
+  100 SEO** (FCP 1.1 s, LCP 2.7 s, TBT 70 ms, CLS 0). The SSR `/healthz`,
+  homepage RPC, image proxy, and a real Officeworks product page returned 200.
+- **Crawler correctness:** PostgreSQL bulk upserts explicitly cast every
+  input column and Kmart normalises Constructor brand values to text, removing
+  the mixed numeric/string `smallint` inference failure. Five focused unit
+  tests pass, including the regression case.
+- **Workflow ownership:** hourly `crawl.yml` now contains only bulk refresh,
+  embeddings, and detection. Slow product enrichment is in `enrich.yml` every
+  three hours with `max-parallel: 3`; detection no longer waits for those
+  jobs. Failures are visible, and heartbeat checks prevent healthy local/OCI
+  owners from being duplicated by CI.
+- **Private database path:** PostgreSQL port 5432 is VCN-only. GitHub Actions
+  uses a retrying SSH local forward through a dedicated `ci-tunnel` identity
+  restricted to the DB private address and denied shell/TTY access. Public
+  SSH remains necessary for dynamic hosted-runner addresses and is protected
+  by keys-only authentication and fail2ban.
+- **OCI/Terraform:** web and DB roles now have separate valid cloud-init
+  templates. DB bootstrap installs PostgreSQL 17, pgvector, pinned PostgREST
+  14.15, roles, nginx, schema/views, and finalisation tooling. ARM creation is
+  opt-in (`enable_arm_db = false`); the x86 DB remains production. Source-image
+  and first-boot cloud-init drift cannot replace live instances. The final
+  live Terraform plan reported **No changes**.
+- **Configuration drift:** runtime endpoints moved to environment/deployment
+  configuration where possible, `/img` is same-origin, the obsolete
+  hardcoded nginx file was removed, `infra/oci/README.md` describes the
+  current two-role stack, and `CLAUDE.md` no longer instructs agents to deploy
+  the retired Supabase architecture.
+- **Kmart production proof:** The last failure at 09:44 UTC belonged to the
+  sweep process that began at 08:23, before the corrected code was deployed,
+  so it still raised the old `Formula 10.0.6` type error. A new sweep began
+  immediately at 09:44 on deployed commit `5abd497` (which contains the
+  `bccb32c` cast fix) and was still active, without a new error, at the
+  10:23 UTC handover. It has not yet written `kmart_vm_heartbeat`; Claude
+  must verify its eventual exit and heartbeat before calling Kmart recovered.
+
+#### Pending live verification for Claude
+
+1. Watch `pricewatch-kmart.service` and `/var/log/pricewatch-kmart.log` on
+   the OCI web host. Confirm the 09:44 UTC run exits 0, reports listings
+   seen/kept, and writes `kmart_vm_heartbeat`. If it fails, diagnose that new
+   failure; do not confuse it with the 08:23 pre-deploy process reported at
+   09:44.
+2. Watch enrichment run
+   `https://github.com/JohanLiebert-2004/pricewatch/actions/runs/29820953050`.
+   It uses the final tunnel retry, `max-parallel: 3`, and action-v7 workflow.
+   At handover Big W, Target, and Officeworks had succeeded; Good Guys, Myer,
+   and Supercheap were active with successful private tunnels.
+3. After the first Kmart heartbeat is present, run or observe one complete
+   hourly `crawl.yml`. Kmart must skip via its cadence gate, all other refresh
+   jobs should finish, and detection should succeed. A run started before the
+   first heartbeat can still duplicate the long VM sweep; if that bootstrap
+   race recurs, add a short-lived VM-start lease marker rather than masking
+   failures or reopening PostgreSQL.
+
+Do not retry ARM capacity, replace either OCI host, reopen PostgreSQL, or
+restore the retired combined crawler timer. For future work, start with
+`AGENT_STATE.md`, inspect the latest scheduled workflow and freshness rows,
+and remember that pushing `master` does not automatically update OCI.
