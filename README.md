@@ -398,32 +398,39 @@ The remediation is in commits `bccb32c` through `9056b64`.
   hardcoded nginx file was removed, `infra/oci/README.md` describes the
   current two-role stack, and `CLAUDE.md` no longer instructs agents to deploy
   the retired Supabase architecture.
-- **Kmart production proof:** The last failure at 09:44 UTC belonged to the
-  sweep process that began at 08:23, before the corrected code was deployed,
-  so it still raised the old `Formula 10.0.6` type error. A new sweep began
-  immediately at 09:44 on deployed commit `5abd497` (which contains the
-  `bccb32c` cast fix) and was still active, without a new error, at the
-  10:23 UTC handover. It has not yet written `kmart_vm_heartbeat`; Claude
-  must verify its eventual exit and heartbeat before calling Kmart recovered.
+- **P20 production proof is complete:** Kmart's corrected run exited 0 at
+  10:53 UTC after seeing 73,440 listings, keeping 64,825, and writing 2,800
+  snapshots plus `kmart_vm_heartbeat`. Enrichment run `29820953050` finished
+  10/10 green. Hourly run `29824457827` then skipped the duplicate Kmart step
+  and completed every other refresh plus detection successfully.
 
-#### Pending live verification for Claude
+#### Cross-check update — 21 July 2026, approximately 13:20 UTC
 
-1. Watch `pricewatch-kmart.service` and `/var/log/pricewatch-kmart.log` on
-   the OCI web host. Confirm the 09:44 UTC run exits 0, reports listings
-   seen/kept, and writes `kmart_vm_heartbeat`. If it fails, diagnose that new
-   failure; do not confuse it with the 08:23 pre-deploy process reported at
-   09:44.
-2. Watch enrichment run
-   `https://github.com/JohanLiebert-2004/pricewatch/actions/runs/29820953050`.
-   It uses the final tunnel retry, `max-parallel: 3`, and action-v7 workflow.
-   At handover Big W, Target, and Officeworks had succeeded; Good Guys, Myer,
-   and Supercheap were active with successful private tunnels.
-3. After the first Kmart heartbeat is present, run or observe one complete
-   hourly `crawl.yml`. Kmart must skip via its cadence gate, all other refresh
-   jobs should finish, and detection should succeed. A run started before the
-   first heartbeat can still duplicate the long VM sweep; if that bootstrap
-   race recurs, add a short-lived VM-start lease marker rather than masking
-   failures or reopening PostgreSQL.
+- **P21 remains in progress.** The private per-process tunnel implementation,
+  pinned host key, dedicated consumer keys, VCN-only PostgreSQL, and Big W
+  production proof are complete. Chemist Warehouse is not: the latest
+  Windows retest ended at 13:14 UTC with the server closing the database
+  connection, while the Ubuntu retest that began at 12:26 UTC was still
+  active. Its production heartbeat remained about three days stale.
+- **Sweep ownership is not final.** No `Dealwatch BigW sweep` or `Dealwatch
+  ChemistWarehouse sweep` task was registered on the Windows machine at the
+  cross-check. On Ubuntu, the Chemist service and timer were active for the
+  current test but its timer unit was not enabled across reboot; the Big W
+  timer was disabled and inactive. Backup and watchdog timers were enabled.
+  Do not declare the Ubuntu migration complete until exactly one durable
+  owner per retailer is enabled and a real Chemist heartbeat exists.
+- **P22 works live:** the independent 430 MB backup and checksum verify, the
+  watchdog is active and correctly alerts on the stale Chemist heartbeat,
+  the private embedding endpoint is serving from the DB VM, Terraform
+  validates and live-plans `No changes`, and the five focused tests pass.
+- **P22 provisioning drift remains:** the live DB service is installed as
+  `pricewatch-embed.service`, while the repository template is named
+  `pricewatch-embed-db.service`. Web cloud-init still references the deleted
+  old repository file, and DB cloud-init does not install the new one. A
+  fresh rebuild would therefore not reproduce the live embedding service.
+- **Kmart still needs cadence monitoring:** the proven successful sweep was
+  followed by a 5,400-second timeout and an immediate new run. The recovery
+  proof is valid, but consecutive completion is not yet stable.
 
 Do not retry ARM capacity, replace either OCI host, reopen PostgreSQL, or
 restore the retired combined crawler timer. For future work, start with
