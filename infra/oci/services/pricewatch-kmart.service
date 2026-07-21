@@ -1,0 +1,14 @@
+[Unit]
+Description=Kmart-only bulk price refresh (off the GH Actions concurrent-write burst)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/pricewatch
+EnvironmentFile=/opt/pricewatch.env
+EnvironmentFile=/etc/pricewatch-kmart.env
+ExecStart=/usr/bin/python3 /opt/pricewatch/scripts/kmart_vm_sweep.py
+TimeoutStartSec=1900
+Nice=5

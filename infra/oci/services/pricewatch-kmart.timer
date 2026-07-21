@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Kmart-only VM sweep hourly, offset from the GH Actions cron
+
+[Timer]
+OnCalendar=*-*-* *:20:00 UTC
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

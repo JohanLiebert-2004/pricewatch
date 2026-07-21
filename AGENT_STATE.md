@@ -298,6 +298,49 @@ Before changing anything:
 | 18 July Chemist Warehouse: transparent bot identity (`036c312`) | Owner reported it "stopped" - Codex had already left an uncommitted rewrite in the working tree (Chrome impersonation was getting blocked; new approach drops the disguise and self-identifies honestly as `DealwatchBot/1.0` with a contact link, no proxy/impersonation, 10s+jitter delay, no retry after a block, plus a generic `request_headers` override hook added to `base.py` for any retailer wanting the same pattern). Claude tested it live from a residential IP before committing: 5/5 real product URLs (incl. the one reported blocked) returned clean HTTP 200. **This alone did NOT fix CI** - see the next entry, it was solving the wrong root cause. |
 | 18 July Chemist Warehouse actually fixed: home-IP local sweep (`392f31b`) | Triggering the real workflow twice post-`036c312` showed the honest-bot fix still 403'd instantly on request #1 from **two separate GitHub Actions runner IPs** - not intermittent, a hard block. Response headers showed `Server: cloudflare` + a `__cf_bm` bot-management cookie: Cloudflare blocks GitHub Actions' known IP ranges outright, regardless of user-agent - the same shape of problem as Big W's Akamai block, confirmed by the same local-IP-passes-cleanly test. Applied the same fix as Big W: new `local_chemistwarehouse_sweep.py` runs the crawl lane from the owner's PC via a Windows Task Scheduler job (every 2h, batch 400, hidden `pythonw.exe`, **created and confirmed `Ready`/enabled** - see the cautionary note below), writing a `chemistwarehouse_local_heartbeat` kv row on real success; `crawl.yml` got a matching `cw_cadence` gate so CI skips its own always-blocked attempt while the heartbeat is fresh. Verified live before committing: a direct 3-item local crawl stored 3/3, and running the sweep script itself stored another 3/3 and wrote a real heartbeat row (confirmed via direct production query). Local sweep's queue: ~26,360 URLs remaining at fix time. |
 | 18 July found in passing: the Big W local sweep task was never actually running | While building the Chemist Warehouse task, checked the existing "Dealwatch BigW sweep" scheduled task for reference and found its `State` is **`Disabled`** with `LastRunTime` at the Windows epoch default (11/30/1999) - **it has never executed once** since being created (17 July entry above). Big W's real coverage this whole time has come entirely from the byte-capped CI Webshare proxy fallback, not the "primary" local sweep the AGENT_STATE entry describes. Not fixed in this session (out of scope of what was asked) - flagged for whoever picks it up: check `Get-ScheduledTask -TaskName "Dealwatch BigW sweep"` and `Enable-ScheduledTask` if the owner wants it actually running, and re-verify the heartbeat-freshness assumption in `bigw_cadence` isn't currently masking a permanently-stale state. |
+- **21 July — Chemist Warehouse and Kmart found dead in production, both
+  fixed (Claude).** Diagnosed by querying `pricewatch-db-x86` directly
+  (the real production DB since the 19 July cutover above) rather than
+  trusting CI's green checkmarks or the now-orphaned Supabase project.
+  **Chemist Warehouse:** the repo-root `.env` used by
+  `local_chemistwarehouse_sweep.py` (Windows Task Scheduler, owner's PC)
+  was never updated during the 19 July migration - it still pointed at
+  Supabase. The sweep had been faithfully running every 2h and writing real
+  data the whole time, just into a database nothing reads from anymore, so
+  production hadn't seen a Chemist Warehouse row since 2026-07-19 05:48
+  UTC. Fixed by repointing `.env`'s `DATABASE_URL` at `pricewatch-db-x86`
+  (public IP) and verifying a live read/write connection.
+  **Kmart:** `crawl.yml`'s `python run.py refresh kmart --budget 1400 ||
+  true` had been silently crashing on every single run since ~19 July -
+  `psycopg.OperationalError: consuming input failed: SSL error: unexpected
+  eof while reading` / "the connection is lost" inside `db.bulk_upsert`,
+  swallowed by `|| true` so CI always showed green while writing nothing
+  (stuck at 2026-07-19 02:19 UTC, 2+ days dead). Root cause: all 13
+  retailers' refresh/crawl jobs hit the tiny fallback DB VM
+  (`pricewatch-db-x86`, 1 OCPU/1GB) concurrently every hour; its Postgres
+  log shows checkpoints taking 100+ seconds under that combined write load,
+  and Kmart's refresh - the largest single write volume of any retailer,
+  since Constructor returns multiple merchandising-group rows per product -
+  is the one that reliably outlives its connection during a stall. Fixed by
+  moving Kmart's refresh off the concurrent CI burst entirely: new
+  `scripts/kmart_vm_sweep.py` runs hourly (`:20`, offset from the `:00`
+  cron) via systemd on the *other* OCI VM (`pricewatch`, 159.13.59.184 -
+  `infra/oci/services/pricewatch-kmart.{service,timer}`), alone, over the
+  shared VCN's private IP (`10.42.1.9`, avoids the public internet hop).
+  Writes a `kmart_vm_heartbeat` kv row on real success; `crawl.yml` got a
+  matching `kmart_cadence` gate (mirrors the Big W/Chemist Warehouse
+  pattern) so CI skips its own attempt while that heartbeat is <90m fresh.
+  Deployed: `git pull` on 159.13.59.184 (root-owned repo, `sudo git pull`),
+  `/etc/pricewatch-kmart.env` created by hand with `DATABASE_URL` pointed
+  at the DB VM's private IP (deliberately separate from the shared
+  `/opt/pricewatch.env`, whose `DATABASE_URL` still backs the
+  not-yet-migrated pricewatch-bot/embed services - see Phase 6 note above,
+  still not done), timer enabled. **This does not fix the underlying
+  checkpoint-stall/tiny-VM-I/O problem in general** - it only routes Kmart
+  around the specific contention window that was killing it. If another
+  retailer starts showing the same silent-crash pattern, look at the same
+  DB host limits before assuming it's retailer-specific.
+
 ### Production data correction
 
 Big W SKU `41041` (Harry Potter Hufflepuff skirt) was corrected directly in

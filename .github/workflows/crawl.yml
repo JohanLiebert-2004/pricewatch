@@ -182,10 +182,36 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             echo "Chemist Warehouse local sweep heartbeat is stale or absent - trying CI anyway (cheap: it 403s on request #1 and stops immediately)."
           fi
+      - name: Kmart cadence gate
+        id: kmart_cadence
+        run: |
+          if [[ "${{ matrix.retailer }}" != "kmart" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif python - <<'PY'
+          import os, sys
+          from datetime import datetime, timedelta, timezone
+          try:
+              import psycopg
+              conn = psycopg.connect(os.environ["DATABASE_URL"], connect_timeout=10)
+              row = conn.execute(
+                  "SELECT v FROM kv WHERE k='kmart_vm_heartbeat'").fetchone()
+              hb = datetime.fromisoformat(row[0]) if row else None
+          except Exception:
+              hb = None
+          sys.exit(0 if hb and datetime.now(timezone.utc) - hb < timedelta(minutes=90)
+                   else 1)
+          PY
+          then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping Kmart in CI: its refresh has been silently crashing here since ~19 July (concurrent GH Actions writes stall the fallback DB VM's checkpoints, dropping the connection mid bulk_upsert - see scripts/kmart_vm_sweep.py). The OCI-VM sweep is alive (heartbeat < 90m) - see pricewatch-kmart.timer on 159.13.59.184."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Kmart VM sweep heartbeat is stale or absent - trying CI anyway as a fallback."
+          fi
       # First run only: uncomment to load full catalogues into the queue.
       # - run: python run.py index all
       - name: Bulk price refresh (${{ matrix.retailer }})
-        if: matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true'
+        if: (matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true') && (matrix.retailer != 'kmart' || steps.kmart_cadence.outputs.run == 'true')
         run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }} || true
       - name: Product-page enrichment (${{ matrix.retailer }})
         if: matrix.retailer != 'kmart' && (matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true') && (matrix.retailer != 'chemistwarehouse' || steps.cw_cadence.outputs.run == 'true')
