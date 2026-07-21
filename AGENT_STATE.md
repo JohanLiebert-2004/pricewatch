@@ -340,6 +340,54 @@ Before changing anything:
   around the specific contention window that was killing it. If another
   retailer starts showing the same silent-crash pattern, look at the same
   DB host limits before assuming it's retailer-specific.
+  **Still pending as of this writing: an actual end-to-end verified
+  successful Kmart sweep run.** The systemd units deployed cleanly and a
+  manual trigger was started, but had not finished/confirmed a real write
+  by the time this note was drafted - do not treat the mitigation above as
+  proven until a `kmart_vm_heartbeat` row and a fresh `is_clearance`-tagged
+  row both show up in production (see the Clearance entry below, which
+  depends on the same run).
+
+- **21 July — separate Clearance page added (Claude), sourced only from
+  retailer-labeled data (user explicitly ruled out a generic
+  deep-discount heuristic).** Audited every scraper for a real
+  retailer-native clearance/outlet signal; only Kmart has one -
+  `scrapers/kmart_group.py`'s Constructor "Clearance" merchandising group,
+  which was already being fetched but discarded (`SECTION_LABEL.get()`
+  maps it to `None` so it can't clobber the real subcategory). No other
+  retailer's currently-parsed data (JSON-LD, `__NEXT_DATA__`, GA4
+  dataLayer, JSON:API, Shopify variant JSON) carries an equivalent flag;
+  JB Hi-Fi's Shopify storefront *might* expose one via a `/collections/
+  clearance` or `/collections/sale` handle, but that's an unverified
+  platform-pattern guess, not something seen in the code - flagged for
+  whoever picks it up next, not implemented.
+  New `products.is_clearance` boolean (schema.sql + db.py SCHEMA/`_migrate`
+  + all three upsert paths - single `upsert()`, SQLite `_upsert_chunk`,
+  and the Postgres `_upsert_chunk_pg` that actually runs in production).
+  `kmart_group.py`'s sweep OR's the flag across every group a SKU appears
+  in that run, so it survives regardless of which occurrence (by price)
+  wins the existing min-price dedupe. New `clearance_feed` view (plain,
+  not materialized - `idx_products_is_clearance` partial index keeps a
+  filtered scan cheap without needing a refresh-cron dependency) and
+  `web/clearance.html`, linked from all 11 other pages' nav +
+  `sitemap-pages.xml`. Deployed: `schema.sql` and `views.sql` re-applied by
+  hand against `pricewatch-db-x86` (as the `postgres` superuser via
+  `sudo -u postgres psql` - the `pricewatch` app role owns no DDL rights,
+  only table-level grants, so it cannot run `ALTER TABLE`/`CREATE VIEW`
+  itself), `git pull` on 159.13.59.184 so the next Kmart VM sweep (see
+  above) picks up the new scraper code, `vercel --prod --yes` for the
+  frontend. **Found and fixed in passing:** `.more{display:block}` in
+  `style.css` was overriding the `<button hidden>` attribute (author
+  stylesheet beats the UA default), so "Show 50 more" never actually
+  hid itself on a short result set - most visible on this new page's
+  empty state, but the same bug was live on `catalogue.html` too, just
+  masked by usually having 50+ results. Fixed with a `.more[hidden]`
+  rule, redeployed.
+  **`clearance_feed` had 0 rows as of this writing** - no Kmart product has
+  been re-scraped with the new `is_clearance` logic yet; it self-heals on
+  the next successful Kmart sweep (same one the VM-sweep fix above is
+  waiting to confirm), no backfill needed, same pattern as the Myer
+  `image_url` self-heal from 17 July.
 
 ### Production data correction
 
