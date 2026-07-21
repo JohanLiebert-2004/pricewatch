@@ -412,6 +412,12 @@ The remediation is in commits `bccb32c` through `9056b64`.
   Windows retest ended at 13:14 UTC with the server closing the database
   connection, while the Ubuntu retest that began at 12:26 UTC was still
   active. Its production heartbeat remained about three days stale.
+  Commit `7c7f4fa` subsequently reduced each Chemist batch from 400 to 100
+  and changed the Ubuntu timer from two-hourly to every 30 minutes, preserving
+  approximate throughput while shortening each SSH tunnel exposure from about
+  70 to 18 minutes. The live timer file has the new cadence, but the in-flight
+  process still belongs to the old 400-item run; no 100-item success or fresh
+  heartbeat has been proven yet.
 - **Sweep ownership is not final.** No `Dealwatch BigW sweep` or `Dealwatch
   ChemistWarehouse sweep` task was registered on the Windows machine at the
   cross-check. On Ubuntu, the Chemist service and timer were active for the

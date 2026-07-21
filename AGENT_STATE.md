@@ -515,6 +515,13 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
 
 | P23 | Cross-check P20-P22 against live production | Codex | **Done 21 July; follow-ups recorded** | Verified P20 end-to-end: Kmart success/heartbeat, enrichment `29820953050` 10/10 green, and hourly run `29824457827` green with Kmart skipped and detect successful. P21 is still open: Big W tunnel proof is valid, but Windows Chemist Warehouse failed again at 13:14 UTC with a server-closed connection; the Ubuntu retest begun 12:26 UTC was still active and the Chemist heartbeat remained about three days stale. Scheduler ownership did not match the prior prose: neither named Windows task was registered; Ubuntu Chemist was transiently active but its timer unit was disabled, and Ubuntu Big W was disabled/inactive. P22 live checks passed (430MB local dump checksum OK, backup/watchdog timers active, watchdog correctly alerting, private embed service active, five tests pass, Terraform validate + live plan `No changes`), but rebuild drift exists: live DB unit is `pricewatch-embed.service`, the repo only has `pricewatch-embed-db.service`, web cloud-init references the deleted old file, and DB cloud-init never installs the new unit. Kmart's next sweep timed out after 5,400s and restarted, so cadence needs monitoring despite the valid recovery proof. README contains the same timestamped findings. |
 
+**Post-P23 concurrent update:** commit `7c7f4fa` reduced the Chemist Warehouse
+batch from 400 (~70 minutes) to 100 (~17-18 minutes) and the live Ubuntu timer
+was changed from two-hourly to every 30 minutes. This is a reasonable tunnel
+exposure mitigation, not yet production proof: at ~13:33 UTC the old 400-item
+12:26 run was still active, no new heartbeat existed, and the timer was active
+but its unit-file state remained disabled (so it was not durable across reboot).
+
 ## Handoff notes
 
 - `PROJECT_NOTES.md` contains the long technical history. Treat this document
