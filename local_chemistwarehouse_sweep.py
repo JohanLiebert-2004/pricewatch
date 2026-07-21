@@ -44,7 +44,16 @@ import db_tunnel  # noqa: E402
 
 LOG = os.path.join(ROOT, "local_chemistwarehouse.log")
 LOG_KEEP_LINES = 2000
-CRAWL_BATCH = "400"   # ~10s+jitter delay floor -> ~70min/run, every 2h leaves margin
+# Was 400 (~70min/run) on a 2h timer. 21 July: every retest of a ~70min run
+# died before finishing - three different error strings across three
+# attempts (ConnectionTimeout, "connection is lost", "connection reset by
+# peer" logged server-side from the tunnel's relay point) - all consistent
+# with a single SSH tunnel over home internet not reliably surviving that
+# long, never seen on Big W's ~2min runs. Dropped to 100 (~17-18min/run) on
+# a 30min timer instead - same ~200 items/hour throughput, but each tunnel
+# session is open for a quarter of the time, cutting the exposure window
+# rather than trying to make one long-lived connection more resilient.
+CRAWL_BATCH = "100"
 TUNNEL_KEY = os.environ.get(
     "TUNNEL_SSH_KEY",
     os.path.expanduser("~/.ssh/pricewatch_tunnel_local_ed25519"))
