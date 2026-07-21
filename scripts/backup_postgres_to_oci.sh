@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Daily Supabase PostgreSQL backup. Runs as root from systemd on the OCI VM.
+# Daily PostgreSQL backup to OCI Object Storage. Runs as root from systemd.
 set -Eeuo pipefail
 umask 077
 

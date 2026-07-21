@@ -10,7 +10,7 @@ database role over the OCI private network; no address is embedded here.
 Coordination with CI (mirrors local_bigw_sweep.py / local_chemistwarehouse_
 sweep.py): on a real success this writes an ISO timestamp to the
 `kmart_vm_heartbeat` kv row. The CI cadence gate in crawl.yml skips its own
-(currently-crashing) refresh attempt while that heartbeat is younger than
+fallback refresh attempt while that heartbeat is younger than
 90 minutes (this sweep runs hourly), and resumes trying if the VM sweep
 ever stops writing it.
 

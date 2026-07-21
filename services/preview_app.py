@@ -444,7 +444,7 @@ async def img(u: str = Query(..., max_length=1000)):
                     headers={"Cache-Control": "public, max-age=2592000, immutable"})
 
 
-SITEMAP_PAGE_SIZE = 1_000  # Supabase/PostgREST enforces a hard 1000-row
+SITEMAP_PAGE_SIZE = 1_000  # PostgREST is configured with a 1000-row limit
                             # db-max-rows cap regardless of a larger `limit`
                             # param - requesting more here would silently
                             # leave gaps between pages instead of increasing
