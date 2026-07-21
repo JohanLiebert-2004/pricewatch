@@ -40,11 +40,20 @@
   ],
   "headers": [
     {
+      "source": "/product.html",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, follow"
+        }
+      ]
+    },
+    {
       "source": "/p/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "private, no-store, max-age=0"
+          "value": "public, max-age=300, s-maxage=300, stale-while-revalidate=60"
         }
       ]
     },

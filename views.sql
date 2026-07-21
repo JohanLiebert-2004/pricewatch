@@ -102,7 +102,8 @@ drop view if exists product_search;
 create view product_search as
 select p.retailer, p.sku, p.gtin, p.title, p.brand, p.category, p.subcategory, p.url,
        p.image_url, p.is_marketplace, p.current_price, p.current_rrp,
-       coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at
+       coalesce(p.price_updated_at, p.last_seen::text) as price_updated_at,
+       p.last_seen
 from products p
 where p.current_price is not null;
 revoke all on product_search from anon, authenticated;

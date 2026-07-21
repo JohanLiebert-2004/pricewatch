@@ -26,6 +26,7 @@ import json
 import os
 import re
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -36,7 +37,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 # blew - see AGENT_STATE.md). anon-only, no JWT, so no key is needed here
 # any more either - matches web/*.html's SUPABASE_URL cutover.
 SUPABASE_URL = os.environ.get("PRICEWATCH_API_URL", "https://192-9-163-208.sslip.io")
-SITE_URL = os.environ.get("SITE_URL", "https://web-pi-blush-48.vercel.app").rstrip("/")
+SITE_URL = os.environ.get("SITE_URL", "https://dealwatch.com.au").rstrip("/")
 SELF_URL = os.environ.get("SELF_URL", "https://159-13-59-184.sslip.io").rstrip("/")
 TEMPLATE_PATH = Path(os.environ.get(
     "PRODUCT_TEMPLATE", "/opt/pricewatch/web/product.html"))
@@ -71,7 +72,15 @@ async def fetch_product(retailer: str, sku: str) -> dict | None:
     r = await client.get(
         f"{SUPABASE_URL}/rest/v1/product_search",
         params={"retailer": f"eq.{retailer}", "sku": f"eq.{sku}", "limit": 1})
-    rows = r.json() if r.status_code == 200 else []
+    if r.status_code != 200:
+        # A temporary API failure is not the same thing as a missing product.
+        # Returning 404 here teaches crawlers to discard a valid URL during a
+        # database outage; 503 explicitly asks them to retry it later.
+        raise HTTPException(503, "product data temporarily unavailable")
+    try:
+        rows = r.json()
+    except ValueError as exc:
+        raise HTTPException(503, "product data temporarily unavailable") from exc
     return rows[0] if rows else None
 
 
@@ -84,6 +93,66 @@ CATEGORY_LABEL = {
 
 def _product_path(retailer: str, sku: str) -> str:
     return f"/p/{quote(retailer, safe='')}/{quote(str(sku), safe='')}"
+
+
+def _parsed_time(value) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=parsed.tzinfo or timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_recent(value, hours: int = 36) -> bool:
+    parsed = _parsed_time(value)
+    return bool(parsed and parsed >= datetime.now(timezone.utc) - timedelta(hours=hours))
+
+
+def _display_date(value) -> str:
+    parsed = _parsed_time(value)
+    return f"{parsed.day} {parsed.strftime('%B %Y')}" if parsed else ""
+
+
+def _safe_http_url(value, fallback: str) -> str:
+    value = str(value or "")
+    return value if re.match(r"^https?://", value, re.I) else fallback
+
+
+def _product_ssr_body(p: dict, retailer: str, sku: str, canonical: str,
+                      image: str) -> str:
+    """Meaningful initial HTML for crawlers and visitors before JS hydrates."""
+    e = html.escape
+    label = RETAILER_LABEL[retailer]
+    title = str(p.get("title") or "Price history")
+    category = str(p.get("category") or "other")
+    category_label = CATEGORY_LABEL.get(category, category.title())
+    price = float(p["current_price"]) if p.get("current_price") else None
+    rrp = float(p["current_rrp"]) if p.get("current_rrp") else None
+    retailer_url = _safe_http_url(p.get("url"), canonical)
+    checked = _display_date(p.get("last_seen"))
+    freshness = (f"Last checked {checked}." if checked else
+                 "The latest recorded price is shown below.")
+    media = (f'<img src="{e(image, quote=True)}" alt="{e(title, quote=True)}" '
+             'loading="eager" fetchpriority="high">' if image else
+             f'<span class="mono">{e((label or "?")[0])}</span>')
+    price_html = f'<div class="now">${price:.2f}</div>' if price is not None else ""
+    was_html = (f'<div class="was">${rrp:.2f}</div>'
+                if price is not None and rrp is not None and rrp > price else "")
+    category_link = (f'<a href="/deals/{quote(category, safe="")}">{e(category_label)}</a>'
+                     if category in CATEGORY_LABEL else e(category_label))
+    return f'''<nav class="landing-links" aria-label="Breadcrumb">
+  <a href="/">Deals</a><a href="/retailers/{quote(retailer, safe='')}">{e(label)}</a>{category_link}
+</nav>
+<article class="pblock">
+  <div class="pthumb">{media}</div>
+  <div class="pinfo"><div class="ptitle">{e(title)}</div>
+    <div class="pmeta"><span class="pill">{e(label)}</span><span class="pill">{e(category_label)}</span><span class="pill">SKU {e(str(sku))}</span></div>
+    <p class="hint">{e(freshness)} Dealwatch records changes so you can compare this price with its history.</p>
+  </div>
+  <div class="pprice">{price_html}{was_html}<a href="{e(retailer_url, quote=True)}" target="_blank" rel="noopener">View at {e(label)}</a></div>
+</article>'''
 
 
 def _base_origin(request: Request) -> str:
@@ -147,6 +216,27 @@ async def _fetch_landing_deals(field: str, value: str) -> list[dict]:
     return r.json()
 
 
+def _landing_insight(kind: str, rows: list[dict]) -> str:
+    """A compact, data-backed summary instead of generic SEO filler."""
+    if not rows:
+        return ("No recently verified discounts are available here right now. "
+                "Dealwatch will update this page when fresh prices arrive.")
+    prices = [float(row["price"]) for row in rows if row.get("price") is not None]
+    discounts = [float(row["pct_off"]) for row in rows if row.get("pct_off") is not None]
+    if kind == "category":
+        dimensions = {row.get("retailer") for row in rows if row.get("retailer")}
+        scope = f"across {len(dimensions)} retailer{'s' if len(dimensions) != 1 else ''}"
+    else:
+        dimensions = {row.get("category") for row in rows if row.get("category")}
+        scope = f"across {len(dimensions)} categor{'ies' if len(dimensions) != 1 else 'y'}"
+    facts = [f"This page highlights {len(rows)} recently checked deal{'s' if len(rows) != 1 else ''} {scope}"]
+    if prices:
+        facts.append(f"current prices start at ${min(prices):.2f}")
+    if discounts:
+        facts.append(f"the largest displayed discount is {round(max(discounts))}%")
+    return "; ".join(facts) + ". Open a product to verify its recorded price history."
+
+
 async def _landing_page(request: Request, kind: str, value: str):
     if kind == "category":
         label = CATEGORY_LABEL.get(value)
@@ -181,6 +271,7 @@ async def _landing_page(request: Request, kind: str, value: str):
                 .replace("{{canonical}}", html.escape(canonical, quote=True))
                 .replace("{{heading}}", html.escape(heading))
                 .replace("{{jsonld}}", json.dumps(jsonld).replace("</", "<\\/"))
+                .replace("{{insight}}", html.escape(_landing_insight(kind, rows)))
                 .replace("{{cards}}", "\n".join(_landing_card(row) for row in rows)
                  or '<p class="empty">No current deals are available for this page yet.</p>'))
     return Response(rendered, media_type="text/html",
@@ -205,13 +296,21 @@ async def preview(request: Request, retailer: str, sku: str):
         raise HTTPException(404)
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
 
-    title = f"{p['title']} — {RETAILER_LABEL[retailer]} price | Dealwatch"
-    price = f"${float(p['current_price']):.2f}" if p.get("current_price") else ""
-    desc = (f"{price} at {RETAILER_LABEL[retailer]}. Price history and "
-            f"drop alerts for {p['title']} on Dealwatch, the Australian "
-            f"price tracker.")
+    product_name = str(p.get("title") or "Product")
+    retailer_label = RETAILER_LABEL[retailer]
+    title = f"{product_name} — {retailer_label} price | Dealwatch"
+    active_price = (float(p["current_price"])
+                    if p.get("current_price") and float(p["current_price"]) > 0
+                    else None)
+    if active_price is not None:
+        desc = (f"${active_price:.2f} at {retailer_label}. Price history and "
+                f"drop alerts for {product_name} on Dealwatch, the Australian "
+                f"price tracker.")
+    else:
+        desc = (f"Recorded {retailer_label} price history and drop alerts for "
+                f"{product_name} on Dealwatch, the Australian price tracker.")
     canonical = f"{SITE_URL}/p/{retailer}/{sku}"
-    image = p.get("image_url") or ""
+    image = _safe_http_url(p.get("image_url"), "")
     if image:
         image = f"{SELF_URL}/img?u={quote(image, safe='')}"
 
@@ -219,7 +318,6 @@ async def preview(request: Request, retailer: str, sku: str):
     meta = "\n".join(filter(None, [
         f'<base href="{_base_origin(request)}/">',
         f'<link rel="canonical" href="{e(canonical)}">',
-        f'<meta name="description" content="{e(desc)}">',
         f'<meta property="og:type" content="product">',
         f'<meta property="og:title" content="{e(title)}">',
         f'<meta property="og:description" content="{e(desc)}">',
@@ -227,58 +325,90 @@ async def preview(request: Request, retailer: str, sku: str):
         f'<meta property="og:image" content="{e(image)}">' if image else "",
         f'<meta name="twitter:card" content="summary_large_image">' if image
         else '<meta name="twitter:card" content="summary">',
-        f'<meta property="product:price:amount" content="{float(p["current_price"]):.2f}">'
-        if p.get("current_price") else "",
+        f'<meta property="product:price:amount" content="{active_price:.2f}">'
+        if active_price is not None else "",
         '<meta property="product:price:currency" content="AUD">',
     ]))
+
+    category = str(p.get("category") or "other")
+    category_label = CATEGORY_LABEL.get(category, category.title())
+    breadcrumbs = {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Deals", "item": f"{SITE_URL}/"},
+            {"@type": "ListItem", "position": 2, "name": retailer_label,
+             "item": f"{SITE_URL}/retailers/{quote(retailer, safe='')}"},
+            {"@type": "ListItem", "position": 3, "name": category_label,
+             "item": f"{SITE_URL}/deals/{quote(category, safe='')}"},
+            {"@type": "ListItem", "position": 4, "name": product_name,
+             "item": canonical},
+        ],
+    }
+    graph = [breadcrumbs]
 
     # Google flags 'image' as a critical missing field for Product rich
     # results. Rather than fake one, only claim Product/Offer eligibility for
     # listings we can actually back with a real product photo - image-less
     # products (a chunk of Big W's bulk-listing lane, see P9) just don't get
     # the JSON-LD block, same as if they had no price.
-    if p.get("current_price") and image:
-        jsonld = {
-            "@context": "https://schema.org",
+    if active_price is not None and image:
+        product = {
             "@type": "Product",
-            "name": p["title"],
+            "name": product_name,
             "description": desc,
             "sku": str(sku),
             "url": canonical,
             "image": image,
             "offers": {
                 "@type": "Offer",
-                "price": f"{float(p['current_price']):.2f}",
+                "price": f"{active_price:.2f}",
                 "priceCurrency": "AUD",
-                "url": p.get("url") or canonical,
-                "seller": {"@type": "Organization", "name": RETAILER_LABEL[retailer]},
-                # product_search only returns rows with a non-null, non-zero
-                # current_price (see views.sql; $0 is a sold-out placeholder
-                # filtered out upstream), so reaching here already means the
-                # item is actively priced/listed - a genuine InStock signal,
-                # not a guess. We don't track real-time stock beyond that, so
-                # this is the only availability value ever emitted.
-                "availability": "https://schema.org/InStock",
+                "url": _safe_http_url(p.get("url"), canonical),
+                "seller": {"@type": "Organization", "name": retailer_label},
             },
         }
+        # A non-zero price alone is not proof of current stock. Only publish
+        # InStock when the crawler has confirmed the listing recently; omit
+        # availability for older rows instead of making an unsupported claim.
+        if _is_recent(p.get("last_seen")):
+            product["offers"]["availability"] = "https://schema.org/InStock"
         if p.get("brand"):
-            jsonld["brand"] = {"@type": "Brand", "name": p["brand"]}
+            product["brand"] = {"@type": "Brand", "name": p["brand"]}
+        graph.insert(0, product)
         # Deliberately NOT adding hasMerchantReturnPolicy, shippingDetails or
         # review/aggregateRating: we don't hold verified per-retailer return/
         # shipping terms, and we have no real review data to report -
         # fabricating any of these would be inaccurate structured data (and
         # fake reviews specifically risk a Google manual action). Google
         # lists all three as non-critical suggestions, not blockers.
-        meta += (f'\n<script type="application/ld+json">'
-                 f'{json.dumps(jsonld).replace("</", "<\\/")}</script>')
+    jsonld = {"@context": "https://schema.org", "@graph": graph}
+    meta += (f'\n<script type="application/ld+json">'
+             f'{json.dumps(jsonld).replace("</", "<\\/")}</script>')
 
     out = template.replace("<title>", f"{meta}\n<title>", 1)
     out = re.sub(r"<title>.*?</title>", f"<title>{e(title)}</title>", out,
                  count=1, flags=re.S)
-    # Product pages contain a live price and can include a one-use watch token
-    # in the query string. Never let a shared CDN cache replay that response.
+    out = re.sub(r'<meta name="description" content="[^"]*">',
+                 f'<meta name="description" content="{e(desc, quote=True)}">',
+                 out, count=1)
+    out = out.replace('<h1 class="display">Price <em>history</em></h1>',
+                      f'<h1 class="display">{e(product_name)}</h1>', 1)
+    product_sub = (f"Current {retailer_label} price, recorded history and an "
+                   "optional alert when the price drops.")
+    out = re.sub(r'<p class="sub">.*?</p>',
+                 f'<p class="sub">{e(product_sub)}</p>', out,
+                 count=1, flags=re.S)
+    ssr_body = _product_ssr_body(p, retailer, sku, canonical, image)
+    out = re.sub(r'(<main class="wrap" id="main">).*?(</main>)',
+                 lambda match: f"{match.group(1)}\n{ssr_body}\n{match.group(2)}",
+                 out, count=1, flags=re.S)
+    # The response itself contains no token-specific or user-specific data;
+    # watch tokens remain in the URL and are handled client-side. A short CDN
+    # cache reduces crawler load on the 1GB SSR host without serving stale
+    # prices for long.
     return Response(out, media_type="text/html",
-                    headers={"Cache-Control": "private, no-store, max-age=0"})
+                    headers={"Cache-Control":
+                             "public, max-age=300, s-maxage=300, stale-while-revalidate=60"})
 
 
 @app.get("/img")
@@ -316,20 +446,25 @@ SITEMAP_PAGE_SIZE = 1_000  # Supabase/PostgREST enforces a hard 1000-row
                             # rows returned. Confirmed live 17 July: a
                             # limit=5000 request still came back as 1000 rows.
 SITEMAP_PAGE_COUNT = 25
+SITEMAP_FRESH_DAYS = 30  # Exclude abandoned catalogue rows from discovery.
 SITEMAP_TTL = 24 * 3600  # cache once daily: enough freshness without egress churn
+SITEMAP_CACHE_VERSION = 2  # Do not serve pre-freshness-filter cache files.
 
 
 async def _sitemap_products(page: int):
     if page < 1 or page > SITEMAP_PAGE_COUNT:
         raise HTTPException(404)
-    cache_file = CACHE_DIR / f"sitemap-products-{page}.xml"
+    cache_file = CACHE_DIR / f"sitemap-products-v{SITEMAP_CACHE_VERSION}-{page}.xml"
     if cache_file.exists() and time.time() - cache_file.stat().st_mtime < SITEMAP_TTL:
         return Response(cache_file.read_bytes(), media_type="application/xml")
 
+    fresh_after = (datetime.now(timezone.utc) - timedelta(days=SITEMAP_FRESH_DAYS)).isoformat()
     r = await client.get(
         f"{SUPABASE_URL}/rest/v1/product_search",
-        params={"select": "retailer,sku,price_updated_at",
-                "order": "price_updated_at.desc",
+        params={"select": "retailer,sku,price_updated_at,last_seen",
+                "current_price": "gt.0",
+                "last_seen": f"gte.{fresh_after}",
+                "order": "last_seen.desc,retailer.asc,sku.asc",
                 "limit": SITEMAP_PAGE_SIZE,
                 "offset": (page - 1) * SITEMAP_PAGE_SIZE})
     if r.status_code != 200:
@@ -337,8 +472,9 @@ async def _sitemap_products(page: int):
     rows = r.json()
     urls = "\n".join(
         f"  <url><loc>{html.escape(SITE_URL)}/p/{html.escape(quote(str(row['retailer']), safe=''))}/{html.escape(quote(str(row['sku']), safe=''))}</loc>"
-        f"<lastmod>{html.escape(str(row['price_updated_at'])[:10])}</lastmod></url>"
-        for row in rows if row.get("retailer") and row.get("sku") and row.get("price_updated_at"))
+        f"<lastmod>{html.escape(str(row.get('price_updated_at') or row['last_seen'])[:10])}</lastmod></url>"
+        for row in rows if row.get("retailer") and row.get("sku") and
+        (row.get("price_updated_at") or row.get("last_seen")))
     body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             f"{urls}\n</urlset>\n").encode()
