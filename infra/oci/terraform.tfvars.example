@@ -27,3 +27,4 @@ enable_arm_db = false
 # PostgreSQL accepts direct traffic only from the OCI VCN. CI uses SSH
 # forwarding through the web host.
 database_allowed_cidr = "10.42.0.0/16"
+production_db_private_ip = "10.42.1.9"

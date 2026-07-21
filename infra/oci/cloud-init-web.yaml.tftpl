@@ -29,7 +29,7 @@ write_files:
       Match User ci-tunnel
           PasswordAuthentication no
           AllowTcpForwarding local
-          PermitOpen 10.42.1.9:5432
+          PermitOpen ${db_private_ip}:5432
           X11Forwarding no
           PermitTTY no
           ForceCommand /bin/false
@@ -67,7 +67,7 @@ runcmd:
   - install -d -o www-data -g www-data /var/cache/pricewatch-img
   - id ci-tunnel >/dev/null 2>&1 || useradd --create-home --shell /bin/bash ci-tunnel
   - install -d -m 0700 -o ci-tunnel -g ci-tunnel /home/ci-tunnel/.ssh
-  - sh -c '{ printf "restrict,port-forwarding,permitopen=\"10.42.1.9:5432\" "; cat /root/dealwatch-ci-tunnel.pub; } > /home/ci-tunnel/.ssh/authorized_keys'
+  - sh -c '{ printf "restrict,port-forwarding,permitopen=\"${db_private_ip}:5432\" "; cat /root/dealwatch-ci-tunnel.pub; } > /home/ci-tunnel/.ssh/authorized_keys'
   - chown ci-tunnel:ci-tunnel /home/ci-tunnel/.ssh/authorized_keys
   - chmod 0600 /home/ci-tunnel/.ssh/authorized_keys
   - sshd -t

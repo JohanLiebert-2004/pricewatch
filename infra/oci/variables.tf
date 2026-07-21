@@ -108,6 +108,12 @@ variable "database_allowed_cidr" {
   default     = "10.42.0.0/16"
 }
 
+variable "production_db_private_ip" {
+  description = "Stable VCN address of the production x86 DB, used by its VNIC and the forwarding-only CI SSH restriction."
+  type        = string
+  default     = "10.42.1.9"
+}
+
 variable "postgrest_version" {
   description = "Pinned PostgREST release installed by database cloud-init."
   type        = string

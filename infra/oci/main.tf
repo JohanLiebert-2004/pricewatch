@@ -55,6 +55,7 @@ locals {
     site_url             = var.site_url
     backup_bucket_name   = var.backup_bucket_name
     ci_tunnel_public_key = trimspace(file(pathexpand(var.ci_tunnel_public_key_path)))
+    db_private_ip        = var.production_db_private_ip
   })
   db_cloud_init = templatefile("${path.module}/cloud-init-db.yaml.tftpl", {
     repo_url           = var.repo_url
@@ -257,6 +258,7 @@ resource "oci_core_instance" "pricewatch_db_x86" {
     assign_public_ip = true
     display_name     = "pricewatch-db-x86-vnic"
     hostname_label   = "pricewatch-db-x86"
+    private_ip       = var.production_db_private_ip
   }
 
   source_details {
