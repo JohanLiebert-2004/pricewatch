@@ -139,6 +139,19 @@ resource "oci_core_security_list" "public" {
     }
   }
 
+  # Query-embedding service (natural-language search) on the DB VM, called
+  # by preview_app.py on the web VM over the private network - same
+  # private-only pattern as PostgreSQL above, not exposed publicly.
+  ingress_security_rules {
+    protocol = "6"
+    source   = var.database_allowed_cidr
+
+    tcp_options {
+      min = 8301
+      max = 8301
+    }
+  }
+
   egress_security_rules {
     protocol    = "all"
     destination = "0.0.0.0/0"
