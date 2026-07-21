@@ -37,7 +37,7 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       PROXY_URL: ${{ secrets.PROXY_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/database-tunnel
         with:
           database-url: ${{ secrets.DATABASE_URL }}
@@ -46,7 +46,7 @@ jobs:
           ssh-host: ${{ vars.OCI_SSH_HOST }}
           ssh-user: ${{ vars.OCI_SSH_USER }}
           database-host: ${{ vars.OCI_DB_PRIVATE_HOST }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
@@ -92,7 +92,7 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/database-tunnel
         with:
           database-url: ${{ secrets.DATABASE_URL }}
@@ -101,7 +101,7 @@ jobs:
           ssh-host: ${{ vars.OCI_SSH_HOST }}
           ssh-user: ${{ vars.OCI_SSH_USER }}
           database-host: ${{ vars.OCI_DB_PRIVATE_HOST }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt -r requirements-embed.txt
@@ -123,7 +123,7 @@ jobs:
       RESEND_FROM: ${{ secrets.RESEND_FROM }}
       SITE_URL: ${{ secrets.SITE_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/database-tunnel
         with:
           database-url: ${{ secrets.DATABASE_URL }}
@@ -132,7 +132,7 @@ jobs:
           ssh-host: ${{ vars.OCI_SSH_HOST }}
           ssh-user: ${{ vars.OCI_SSH_USER }}
           database-host: ${{ vars.OCI_DB_PRIVATE_HOST }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install dependencies
