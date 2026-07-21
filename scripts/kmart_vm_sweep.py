@@ -1,24 +1,11 @@
-"""VM-side Kmart-only sweep - runs on the OCI web VM (159.13.59.184) via
-systemd timer, separately from the GitHub Actions crawl matrix.
+"""VM-side Kmart-only sweep, run by systemd on the OCI web role.
 
-Kmart's CI refresh (`python run.py refresh kmart --budget 1400`) has been
-silently crashing every run since ~19 July: `crawl.yml` runs all 13
-retailers' refresh/crawl lanes as concurrent GH Actions jobs, each opening
-its own connection to the tiny fallback DB VM (pricewatch-db-x86,
-1 OCPU/1GB). Its Postgres log shows checkpoints taking 100s of seconds under
-that concurrent write load; Kmart's refresh (the largest single write
-volume of any retailer - Constructor returns multiple merchandising-group
-rows per product) is the one that reliably outlives its connection during a
-stall (`psycopg.OperationalError: consuming input failed: SSL error:
-unexpected eof while reading` / "the connection is lost", inside
-db.bulk_upsert). The `|| true` on that workflow step swallows the crash, so
-CI has shown green while writing nothing for 2+ days.
+This is the primary Kmart refresh lane. GitHub Actions checks the
+`kmart_vm_heartbeat` row and runs its own refresh only when this lane is
+stale. The workflow no longer masks refresh failures.
 
-This script runs the same refresh, alone, from a separate VM, off the GH
-Actions matrix's concurrent-write burst - removing Kmart's transaction from
-the contention that's been killing it, without needing to touch the other
-12 retailers' behaviour. Talks to the DB over the shared OCI subnet's
-private IP (10.42.1.9), not the public one.
+DATABASE_URL is supplied by `/etc/pricewatch-kmart.env` and points to the
+database role over the OCI private network; no address is embedded here.
 
 Coordination with CI (mirrors local_bigw_sweep.py / local_chemistwarehouse_
 sweep.py): on a real success this writes an ISO timestamp to the

@@ -1,0 +1,75 @@
+name: product-page-enrichment
+
+# Queue-backed product pages are intentionally separated from the hourly
+# refresh/detect path. The three-hour interval leaves ample headroom for the
+# slow Myer and Supercheap jobs without stacking scheduled runs.
+on:
+  schedule:
+    - cron: "20 */3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - retailer: officeworks
+            batch: 120
+          - retailer: bigw
+            batch: 2
+          - retailer: target
+            batch: 120
+          - retailer: goodguys
+            batch: 1000
+          - retailer: myer
+            batch: 1000
+          - retailer: supercheap
+            batch: 1000
+          - retailer: chemistwarehouse
+            batch: 75
+          - retailer: booktopia
+            batch: 180
+          - retailer: qbd
+            batch: 250
+          - retailer: ikea
+            batch: 400
+    concurrency:
+      group: enrich-${{ matrix.retailer }}
+      cancel-in-progress: false
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      PROXY_URL: ${{ secrets.PROXY_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/database-tunnel
+        with:
+          database-url: ${{ secrets.DATABASE_URL }}
+          ssh-private-key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          ssh-known-hosts: ${{ secrets.OCI_SSH_KNOWN_HOSTS }}
+          ssh-host: ${{ vars.OCI_SSH_HOST }}
+          database-host: ${{ vars.OCI_DB_PRIVATE_HOST }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Check local/OCI ownership
+        id: owner
+        shell: bash
+        run: |
+          if [[ "${{ matrix.retailer }}" == "bigw" ]] && python scripts/heartbeat_fresh.py bigw_local_heartbeat 86400; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "The home-IP Big W sweep owns enrichment."
+          elif [[ "${{ matrix.retailer }}" == "chemistwarehouse" ]] && python scripts/heartbeat_fresh.py chemistwarehouse_local_heartbeat 21600; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "The home-IP Chemist Warehouse sweep owns enrichment."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Enrich ${{ matrix.retailer }}
+        if: steps.owner.outputs.run == 'true'
+        run: python run.py crawl ${{ matrix.retailer }} --batch ${{ matrix.batch }}

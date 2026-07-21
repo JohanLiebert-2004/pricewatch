@@ -1,29 +1,17 @@
-name: crawl-and-detect
-# Free on PUBLIC repos (unlimited Actions minutes). The regular DB write also
-# doubles as the Supabase keep-alive that prevents the 7-day free-tier pause.
-#
-# Two lanes per retailer, in one parallel job each:
-#  1. refresh - bulk listing/API pass (48-200 products per request) that
-#     covers whole catalogues in minutes-to-an-hour and only writes a price
-#     snapshot when a price actually changed.
-#  2. crawl   - small product-page batch for fields listings don't carry
-#     (GTIN on Target, was-price on BigW/Officeworks).
-# Politeness is per-retailer and unchanged: one request at a time, 2.5s
-# delays on Akamai-fronted sites; Blocked exceptions end a lane early and
-# the next cycle resumes where it left off.
+name: refresh-and-detect
 
+# The hourly path contains only catalogue/listing refreshes. Product-page
+# enrichment lives in enrich.yml on a three-hour cadence, so Myer and
+# Supercheap can no longer hold detection behind 60-90 minute queue crawls.
 on:
   schedule:
-    - cron: "0 * * * *"    # hourly (UTC, best-effort). Was every 30 min -
-                            # halved 2026-07-12 as part of staying inside
-                            # Supabase's free-tier egress quota; deal
-                            # detection latency is now <= ~1h, still fine.
-  workflow_dispatch: {}         # manual "Run workflow" button
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
 
 jobs:
-  crawl:
+  refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 110
+    timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
@@ -32,206 +20,85 @@ jobs:
             budget: 900
           - retailer: bigw
             budget: 1600
-            crawl_batch: 2    # each product page is ~1.5MB decompressed of
-                               # metered proxy bytes; the default 40/run was
-                               # ~77MB/day billed - kept barely alive (it's
-                               # the only Big W image_url source, see P9)
-                               # while the byte budget is tight
           - retailer: kmart
-            budget: 1400       # Constructor's public feed contains price, RRP, APN and images;
-                               # omit protected product-page enrichment entirely.
+            budget: 1400
           - retailer: target
             budget: 700
           - retailer: jbhifi
-            budget: 100      # 100 pages x 250 = the full reachable catalogue
-          - retailer: goodguys
-            budget: 50        # no bulk listing API - refresh lane is a no-op,
-                               # all coverage comes from the crawl (queue) lane
-            crawl_batch: 500  # no bot protection seen - safe to crawl the
-                               # 8.6k-URL queue faster than the 40/run default
-          - retailer: myer
-            budget: 50        # refresh lane is a no-op (no bulk listing API -
-                               # Salesforce Commerce Cloud storefront, JSON-LD
-                               # product pages only); all coverage via the
-                               # crawl (queue) lane
-            crawl_batch: 1000 # 154k-URL queue seeded from sitemap_20251*.xml.gz;
-                               # no bot protection seen on plain requests (same
-                               # profile as supercheap). Was raised 1000->2400
-                               # on 17 July to speed up the image_url backfill,
-                               # but reverted same day (18 July ~00:00 UTC):
-                               # actual per-item time ran ~2-3x the assumed
-                               # 1.5s delay floor, so 2400 took 1.5-2h instead
-                               # of the estimated 60min - every hourly cron
-                               # tick then queued a new run that cancelled the
-                               # still-running previous one (concurrency group
-                               # crawl-myer, cancel-in-progress: false only
-                               # protects against 1 overlap, not a job that
-                               # consistently overruns the schedule interval).
-                               # Net effect was *zero* completed myer crawls
-                               # for 4+ consecutive hourly runs and knock-on
-                               # `detect` step failures (statement_timeout on
-                               # the deals insert, likely contention from the
-                               # pile-up). 1000 is the last value confirmed to
-                               # reliably complete inside an hour.
-          - retailer: supercheap
-            budget: 50        # refresh lane is a no-op (no compliant bulk
-                               # listing; robots.txt disallows pagination params)
-            crawl_batch: 1000 # full ~518k-URL catalogue (queued via a one-off
-                               # manual `index supercheap`, like Good Guys's
-                               # initial seed); no bot protection seen on
-                               # plain requests, full sweep takes ~11 days
+            budget: 100
           - retailer: sephora
-            budget: 25        # 16 pages x 500 = full AU catalogue via the
-                               # v2.6 JSON API, plus headroom
-          - retailer: chemistwarehouse
-            budget: 50        # refresh lane is a no-op (robots.txt disallows
-                               # /api/, category pages aren't SSR'd) - all
-                               # coverage via the crawl (queue) lane
-            crawl_batch: 75   # transparent 10-second crawl: ~12.5 minutes/run;
-                               # stops on the first 403/429/503, no retries
-          - retailer: booktopia
             budget: 25
-            crawl_batch: 180  # robots.txt requires a 10-second crawl delay
-          - retailer: qbd
-            budget: 25
-            crawl_batch: 250
-          - retailer: ikea
-            budget: 25
-            crawl_batch: 400  # product pages are ~1MB each; real per-item time
-                               # measured at ~4.9s (2x the 2.5s delay floor, page
-                               # download + parse overhead) - 400 * 4.9s ~= 33min,
-                               # leaving ~27min margin before the next hourly
-                               # trigger (see the myer comment above for what
-                               # happens when a batch doesn't leave that margin).
-                               # Was 80 (22k-URL queue would've taken ~11.5 days);
-                               # 400 clears it in ~2.3 days. Raise further only
-                               # after confirming a few runs stay well under an hour.
     concurrency:
-      group: crawl-${{ matrix.retailer }}
+      group: refresh-${{ matrix.retailer }}
       cancel-in-progress: false
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}   # Supabase connection string
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}  # item-watch pings fire from the
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}      # refresh/crawl lanes (send_item_watch
-                                                   # + the jbhifi RAM watch, which silently
-                                                   # never fired from CI before these were here)
-      PROXY_URL: ${{ secrets.PROXY_URL }}         # residential proxy (Webshare, 1GB/mo) - bigw only;
-                                                   # direct requests to bigw.com.au are blocked outright.
-                                                   # kmart/target/sephora don't use it: proxy doesn't
-                                                   # defeat Kmart/Target's Akamai JS-challenge tier, and
-                                                   # Sephora already works direct. bigw.py self-caps
-                                                   # bytes-through-proxy per month so it can't exceed the plan.
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      PROXY_URL: ${{ secrets.PROXY_URL }}
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/database-tunnel
+        with:
+          database-url: ${{ secrets.DATABASE_URL }}
+          ssh-private-key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          ssh-known-hosts: ${{ secrets.OCI_SSH_KNOWN_HOSTS }}
+          ssh-host: ${{ vars.OCI_SSH_HOST }}
+          database-host: ${{ vars.OCI_DB_PRIVATE_HOST }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - name: Big W cadence gate
         id: bigw_cadence
+        shell: bash
         run: |
           if [[ "${{ matrix.retailer }}" != "bigw" || "${{ github.event_name }}" != "schedule" ]]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           elif (( 10#$(date -u +%H) % 6 != 0 )); then
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping Big W this hour; its residential-proxy refresh runs every six hours (was three - halved 18 July to stretch the remaining Webshare byte budget to the 9 Aug renewal)."
-          elif python - <<'PY'
-          import os, sys
-          from datetime import datetime, timedelta, timezone
-          try:
-              import psycopg
-              conn = psycopg.connect(os.environ["DATABASE_URL"], connect_timeout=10)
-              row = conn.execute(
-                  "SELECT v FROM kv WHERE k='bigw_local_heartbeat'").fetchone()
-              hb = datetime.fromisoformat(row[0]) if row else None
-          except Exception:
-              hb = None
-          sys.exit(0 if hb and datetime.now(timezone.utc) - hb < timedelta(hours=24)
-                   else 1)
-          PY
-          then
+          elif python scripts/heartbeat_fresh.py bigw_local_heartbeat 86400; then
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping Big W: the home-IP local sweep is alive (heartbeat < 24h). This byte-capped proxy lane is only the fallback - see local_bigw_sweep.py."
+            echo "The home-IP Big W sweep is healthy; skipping proxy fallback."
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "Big W local sweep heartbeat is stale or absent - running the proxy fallback lane."
-          fi
-      - name: Chemist Warehouse cadence gate
-        id: cw_cadence
-        run: |
-          if [[ "${{ matrix.retailer }}" != "chemistwarehouse" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          elif python - <<'PY'
-          import os, sys
-          from datetime import datetime, timedelta, timezone
-          try:
-              import psycopg
-              conn = psycopg.connect(os.environ["DATABASE_URL"], connect_timeout=10)
-              row = conn.execute(
-                  "SELECT v FROM kv WHERE k='chemistwarehouse_local_heartbeat'").fetchone()
-              hb = datetime.fromisoformat(row[0]) if row else None
-          except Exception:
-              hb = None
-          sys.exit(0 if hb and datetime.now(timezone.utc) - hb < timedelta(hours=6)
-                   else 1)
-          PY
-          then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping Chemist Warehouse in CI: Cloudflare blocks GitHub's IP ranges outright (confirmed twice, 18 July - instant 403 on request #1 from two separate runner IPs). The home-IP local sweep is alive (heartbeat < 6h) - see local_chemistwarehouse_sweep.py."
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "Chemist Warehouse local sweep heartbeat is stale or absent - trying CI anyway (cheap: it 403s on request #1 and stops immediately)."
+            echo "Big W heartbeat is stale; running the proxy fallback."
           fi
       - name: Kmart cadence gate
         id: kmart_cadence
+        shell: bash
         run: |
           if [[ "${{ matrix.retailer }}" != "kmart" ]]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif python - <<'PY'
-          import os, sys
-          from datetime import datetime, timedelta, timezone
-          try:
-              import psycopg
-              conn = psycopg.connect(os.environ["DATABASE_URL"], connect_timeout=10)
-              row = conn.execute(
-                  "SELECT v FROM kv WHERE k='kmart_vm_heartbeat'").fetchone()
-              hb = datetime.fromisoformat(row[0]) if row else None
-          except Exception:
-              hb = None
-          sys.exit(0 if hb and datetime.now(timezone.utc) - hb < timedelta(minutes=90)
-                   else 1)
-          PY
-          then
+          elif python scripts/heartbeat_fresh.py kmart_vm_heartbeat 5400; then
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping Kmart in CI: its refresh has been silently crashing here since ~19 July (concurrent GH Actions writes stall the fallback DB VM's checkpoints, dropping the connection mid bulk_upsert - see scripts/kmart_vm_sweep.py). The OCI-VM sweep is alive (heartbeat < 90m) - see pricewatch-kmart.timer on 159.13.59.184."
+            echo "The OCI Kmart sweep is healthy; skipping CI fallback."
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "Kmart VM sweep heartbeat is stale or absent - trying CI anyway as a fallback."
+            echo "Kmart heartbeat is stale; running the CI fallback."
           fi
-      # First run only: uncomment to load full catalogues into the queue.
-      # - run: python run.py index all
-      - name: Bulk price refresh (${{ matrix.retailer }})
+      - name: Refresh ${{ matrix.retailer }}
         if: (matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true') && (matrix.retailer != 'kmart' || steps.kmart_cadence.outputs.run == 'true')
-        run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }} || true
-      - name: Product-page enrichment (${{ matrix.retailer }})
-        if: matrix.retailer != 'kmart' && (matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true') && (matrix.retailer != 'chemistwarehouse' || steps.cw_cadence.outputs.run == 'true')
-        run: python run.py crawl ${{ matrix.retailer }} --batch ${{ matrix.crawl_batch || 40 }} || true
+        run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }}
 
-  # AI "similar items" embedding backfill. Not gated on `crawl` finishing -
-  # the ~245k-row backlog dwarfs one cycle's worth of new products, so
-  # running it in parallel keeps the pipeline's wall-clock time down.
-  # fastembed/onnxruntime are heavier than the crawl matrix's deps, hence
-  # their own requirements file so the 14 retailer jobs stay light.
+  # Embeddings are independent of both refresh and detection.
   embed:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
-      group: embed              # don't stack runs if one is still embedding
-      cancel-in-progress: false # when the next hourly trigger fires
+      group: embed
+      cancel-in-progress: false
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/database-tunnel
+        with:
+          database-url: ${{ secrets.DATABASE_URL }}
+          ssh-private-key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          ssh-known-hosts: ${{ secrets.OCI_SSH_KNOWN_HOSTS }}
+          ssh-host: ${{ vars.OCI_SSH_HOST }}
+          database-host: ${{ vars.OCI_DB_PRIVATE_HOST }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -239,24 +106,29 @@ jobs:
       - run: python embed_products.py --budget 20000
 
   detect:
-    needs: crawl
+    needs: refresh
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
-      group: detect            # two overlapping runs' detects insert the same
-      cancel-in-progress: false # deals and deadlock/starve each other on the
-                                # unique index - serialize them; a queued
-                                # detect superseded by a newer run is fine.
+      group: detect
+      cancel-in-progress: false
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}   # optional: deal pings
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}           # optional: price-watch emails
-      RESEND_FROM: ${{ secrets.RESEND_FROM }}                 # e.g. alerts@yourdomain.com
-      SITE_URL: ${{ secrets.SITE_URL }}                       # for unsubscribe links; defaults to the current Vercel URL
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      RESEND_FROM: ${{ secrets.RESEND_FROM }}
+      SITE_URL: ${{ secrets.SITE_URL }}
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/database-tunnel
+        with:
+          database-url: ${{ secrets.DATABASE_URL }}
+          ssh-private-key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          ssh-known-hosts: ${{ secrets.OCI_SSH_KNOWN_HOSTS }}
+          ssh-host: ${{ vars.OCI_SSH_HOST }}
+          database-host: ${{ vars.OCI_DB_PRIVATE_HOST }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

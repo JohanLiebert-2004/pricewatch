@@ -377,7 +377,18 @@ def _upsert_chunk_pg(conn, chunk, now) -> list:
     and only the keys of rows whose price actually changed come back.
     """
     by_key = {(r.retailer, r.sku, r.region or ""): r for r in chunk}
-    row_sql = "(" + ",".join(["%s"] * 15) + ")"
+    # Cast every VALUES cell explicitly. PostgreSQL otherwise chooses one
+    # common type for each VALUES column from the Python parameter types. A
+    # retailer feed can legitimately mix numeric-looking and textual values
+    # in fields such as brand; one small integer in a 400-row Kmart chunk then
+    # made PostgreSQL infer smallint and reject a later brand like
+    # "Formula 10.0.6". Per-cell casts keep the CTE contract deterministic.
+    value_types = (
+        "text", "text", "text", "text", "text", "text", "text", "text",
+        "text", "boolean", "boolean", "text", "numeric(10,2)",
+        "numeric(10,2)", "boolean",
+    )
+    row_sql = "(" + ",".join(f"%s::{typ}" for typ in value_types) + ")"
     values_sql = ",".join([row_sql] * len(chunk))
     params = []
     for r in chunk:

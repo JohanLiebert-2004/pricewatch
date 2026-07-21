@@ -1,0 +1,47 @@
+name: Open private database tunnel
+description: Forward PostgreSQL through the OCI web host and rewrite DATABASE_URL.
+inputs:
+  database-url:
+    required: true
+  ssh-private-key:
+    required: true
+  ssh-known-hosts:
+    required: true
+  ssh-host:
+    required: true
+  database-host:
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Start SSH forwarding
+      shell: bash
+      env:
+        SOURCE_DATABASE_URL: ${{ inputs.database-url }}
+        SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
+        SSH_KNOWN_HOSTS: ${{ inputs.ssh-known-hosts }}
+        SSH_HOST: ${{ inputs.ssh-host }}
+        PRIVATE_DATABASE_HOST: ${{ inputs.database-host }}
+      run: |
+        set -euo pipefail
+        install -d -m 0700 "$HOME/.ssh"
+        printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/dealwatch_oci"
+        chmod 0600 "$HOME/.ssh/dealwatch_oci"
+        printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+        chmod 0600 "$HOME/.ssh/known_hosts"
+        ssh -i "$HOME/.ssh/dealwatch_oci" -o BatchMode=yes \
+          -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
+          -fNT -L "127.0.0.1:6543:${PRIVATE_DATABASE_HOST}:5432" \
+          "ubuntu@${SSH_HOST}"
+        python - <<'PY'
+        import os
+        from urllib.parse import urlsplit, urlunsplit
+
+        source = urlsplit(os.environ["SOURCE_DATABASE_URL"])
+        userinfo = source.netloc.rsplit("@", 1)[0] if "@" in source.netloc else ""
+        netloc = f"{userinfo}@127.0.0.1:6543" if userinfo else "127.0.0.1:6543"
+        tunneled = urlunsplit((source.scheme, netloc, source.path, source.query, source.fragment))
+        with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+            env_file.write(f"DATABASE_URL={tunneled}\n")
+        PY
+        unset SSH_PRIVATE_KEY SOURCE_DATABASE_URL

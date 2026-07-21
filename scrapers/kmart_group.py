@@ -201,7 +201,10 @@ class KmartScraper(BaseScraper):
             sku=sku,
             gtin=str(d["apn"]) if d.get("apn") else None,
             title=title,
-            brand=d.get("Brand"),
+            # Constructor data is not type-stable here: some sellers publish
+            # numeric brand identifiers while most publish names. Keep the DB
+            # text contract explicit before records are chunked together.
+            brand=str(d["Brand"]) if d.get("Brand") is not None else None,
             subcategory=subcat,
             url="https://www.kmart.com.au" + d.get("url", ""),
             image_url=d.get("image_url"),
