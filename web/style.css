@@ -322,6 +322,7 @@ a{color:inherit}
   font-family:inherit;
 }
 .more:hover{border-color:var(--faint)}
+.more[hidden]{display:none}
 .empty{
   padding:70px 0;text-align:center;color:var(--muted);font-size:14px;line-height:2;
 }
