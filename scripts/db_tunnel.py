@@ -36,11 +36,22 @@ def _ssh_binary():
     return "ssh"
 
 
+def _free_local_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 @contextmanager
-def open_db_tunnel(ssh_key_path, known_hosts_path=None, local_port=6543, timeout=15):
+def open_db_tunnel(ssh_key_path, known_hosts_path=None, local_port=None, timeout=15):
     """Open a local TCP forward to the DB's private address and yield
     'host:port' to connect through. Fails closed: never silently falls
-    back to a direct/public connection."""
+    back to a direct/public connection.
+
+    A fresh OS-assigned port is picked per call by default, so two sweeps
+    that happen to overlap on the same machine can never race each other
+    for the same local port."""
+    local_port = local_port or _free_local_port()
     known_hosts_path = known_hosts_path or DEFAULT_KNOWN_HOSTS
     if not os.path.exists(ssh_key_path):
         raise FileNotFoundError(f"tunnel key not found: {ssh_key_path}")
@@ -72,6 +83,17 @@ def open_db_tunnel(ssh_key_path, known_hosts_path=None, local_port=6543, timeout
                 time.sleep(0.3)
         if not ready:
             raise RuntimeError(f"tunnel did not become ready within {timeout}s")
+        # The local forwarder can start accepting TCP before the SSH session
+        # to the remote host has actually settled - a bare "port is open"
+        # probe raced a session that closed a moment later (observed live:
+        # sshd logged "session opened"/"session closed" one second apart,
+        # and the crawl subprocess then hit a downstream ConnectionTimeout
+        # against a tunnel that no longer existed). Give it a moment, then
+        # re-confirm the process is still alive before trusting it.
+        time.sleep(1.5)
+        if proc.poll() is not None:
+            out = proc.stdout.read() if proc.stdout else ""
+            raise RuntimeError(f"tunnel died right after connecting ({proc.returncode}): {out.strip()}")
         yield f"127.0.0.1:{local_port}"
     finally:
         proc.terminate()
