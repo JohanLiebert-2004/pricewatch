@@ -50,10 +50,11 @@ locals {
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[var.availability_domain_index].name
   image_id            = var.image_ocid != "" ? var.image_ocid : data.oci_core_images.ubuntu.images[0].id
   web_cloud_init = templatefile("${path.module}/cloud-init-web.yaml.tftpl", {
-    repo_url           = var.repo_url
-    repo_branch        = var.repo_branch
-    site_url           = var.site_url
-    backup_bucket_name = var.backup_bucket_name
+    repo_url             = var.repo_url
+    repo_branch          = var.repo_branch
+    site_url             = var.site_url
+    backup_bucket_name   = var.backup_bucket_name
+    ci_tunnel_public_key = trimspace(file(pathexpand(var.ci_tunnel_public_key_path)))
   })
   db_cloud_init = templatefile("${path.module}/cloud-init-db.yaml.tftpl", {
     repo_url           = var.repo_url

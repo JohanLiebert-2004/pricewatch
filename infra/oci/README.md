@@ -37,12 +37,15 @@ terraform -chdir=infra\oci validate
 terraform -chdir=infra\oci plan
 ```
 
-Set `ssh_allowed_cidr` to the operator's current public `/32` whenever
-possible. Leave these safety defaults unchanged for routine operation:
+GitHub-hosted runners have dynamic source addresses, so the web-role SSH rule
+is public. Password login is disabled, fail2ban is active, and CI uses a
+dedicated key whose server-side account can only forward to private Postgres.
+Leave these safety defaults unchanged for routine operation:
 
 ```hcl
 enable_arm_db        = false
 database_allowed_cidr = "10.42.0.0/16"
+ssh_allowed_cidr      = "0.0.0.0/0"
 ```
 
 Enabling ARM is a deliberate migration action, not a capacity retry loop:
@@ -86,7 +89,8 @@ instance IP is embedded in cloud-init or a committed systemd unit.
 The local composite action `.github/actions/database-tunnel` requires:
 
 - secrets `OCI_SSH_PRIVATE_KEY` and `OCI_SSH_KNOWN_HOSTS`;
-- variables `OCI_SSH_HOST` and `OCI_DB_PRIVATE_HOST`.
+- variables `OCI_SSH_HOST`, `OCI_SSH_USER` (`ci-tunnel`), and
+  `OCI_DB_PRIVATE_HOST`.
 
 It opens a pinned-host-key local forward and rewrites `DATABASE_URL` only for
 subsequent job steps. The original database credential stays in GitHub

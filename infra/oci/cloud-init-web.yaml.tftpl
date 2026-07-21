@@ -16,6 +16,24 @@ packages:
   - postgresql-client
 
 write_files:
+  - path: /root/dealwatch-ci-tunnel.pub
+    owner: root:root
+    permissions: '0600'
+    content: |
+      ${ci_tunnel_public_key}
+
+  - path: /etc/ssh/sshd_config.d/60-dealwatch-ci-tunnel.conf
+    owner: root:root
+    permissions: '0644'
+    content: |
+      Match User ci-tunnel
+          PasswordAuthentication no
+          AllowTcpForwarding local
+          PermitOpen 10.42.1.9:5432
+          X11Forwarding no
+          PermitTTY no
+          ForceCommand /bin/false
+
   - path: /opt/pricewatch.env
     owner: root:root
     permissions: '0600'
@@ -47,6 +65,13 @@ runcmd:
   - cd /opt/pricewatch && python3 -m venv .venv
   - cd /opt/pricewatch && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -r requirements.txt
   - install -d -o www-data -g www-data /var/cache/pricewatch-img
+  - id ci-tunnel >/dev/null 2>&1 || useradd --create-home --shell /bin/bash ci-tunnel
+  - install -d -m 0700 -o ci-tunnel -g ci-tunnel /home/ci-tunnel/.ssh
+  - sh -c '{ printf "restrict,port-forwarding,permitopen=\"10.42.1.9:5432\" "; cat /root/dealwatch-ci-tunnel.pub; } > /home/ci-tunnel/.ssh/authorized_keys'
+  - chown ci-tunnel:ci-tunnel /home/ci-tunnel/.ssh/authorized_keys
+  - chmod 0600 /home/ci-tunnel/.ssh/authorized_keys
+  - sshd -t
+  - systemctl reload ssh
   - install -m 0644 /opt/pricewatch/infra/oci/services/pricewatch-web.service /etc/systemd/system/pricewatch-web.service
   - install -m 0644 /opt/pricewatch/infra/oci/services/pricewatch-bot.service /etc/systemd/system/pricewatch-bot.service
   - install -m 0644 /opt/pricewatch/infra/oci/services/pricewatch-embed.service /etc/systemd/system/pricewatch-embed.service

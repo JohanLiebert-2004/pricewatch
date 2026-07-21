@@ -62,9 +62,15 @@ variable "ssh_public_key_path" {
 }
 
 variable "ssh_allowed_cidr" {
-  description = "CIDR allowed to SSH into the VM. Replace with your public IP/32 after first setup."
+  description = "CIDR allowed to SSH into the web role. GitHub-hosted runners require 0.0.0.0/0; password login is disabled and CI uses a forwarding-only key."
   type        = string
   default     = "0.0.0.0/0"
+}
+
+variable "ci_tunnel_public_key_path" {
+  description = "Public key for the forwarding-only GitHub Actions SSH identity."
+  type        = string
+  default     = "~/.ssh/pricewatch_ci_tunnel_ed25519.pub"
 }
 
 variable "repo_url" {

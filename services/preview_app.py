@@ -67,6 +67,12 @@ app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
 client = httpx.AsyncClient(timeout=20, follow_redirects=True)
 
 
+@app.get("/healthz", include_in_schema=False)
+async def healthz():
+    """Cheap process health check; does not turn a DB outage into a restart loop."""
+    return Response("ok\n", media_type="text/plain")
+
+
 async def fetch_product(retailer: str, sku: str) -> dict | None:
     r = await client.get(
         f"{SUPABASE_URL}/rest/v1/product_search",

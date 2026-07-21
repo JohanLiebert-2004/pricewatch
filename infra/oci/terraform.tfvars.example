@@ -4,9 +4,11 @@ tenancy_ocid     = "ocid1.tenancy.oc1..replace_me"
 compartment_ocid = "ocid1.tenancy.oc1..replace_me"
 oci_profile      = "DEFAULT"
 
-# Optional but recommended after first boot: your public IP /32.
+# GitHub-hosted runners have dynamic addresses. SSH is public, but password
+# login is disabled and the CI identity can only forward to private Postgres.
 ssh_allowed_cidr = "0.0.0.0/0"
 ssh_public_key_path = "~/.ssh/id_rsa.pub"
+ci_tunnel_public_key_path = "~/.ssh/pricewatch_ci_tunnel_ed25519.pub"
 
 # Current public repo. If you make the repo private later, use a deploy key or token-based URL.
 repo_url    = "https://github.com/JohanLiebert-2004/pricewatch.git"

@@ -44,6 +44,7 @@ jobs:
           ssh-private-key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
           ssh-known-hosts: ${{ secrets.OCI_SSH_KNOWN_HOSTS }}
           ssh-host: ${{ vars.OCI_SSH_HOST }}
+          ssh-user: ${{ vars.OCI_SSH_USER }}
           database-host: ${{ vars.OCI_DB_PRIVATE_HOST }}
       - uses: actions/setup-python@v5
         with:
@@ -98,6 +99,7 @@ jobs:
           ssh-private-key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
           ssh-known-hosts: ${{ secrets.OCI_SSH_KNOWN_HOSTS }}
           ssh-host: ${{ vars.OCI_SSH_HOST }}
+          ssh-user: ${{ vars.OCI_SSH_USER }}
           database-host: ${{ vars.OCI_DB_PRIVATE_HOST }}
       - uses: actions/setup-python@v5
         with:
@@ -128,15 +130,18 @@ jobs:
           ssh-private-key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
           ssh-known-hosts: ${{ secrets.OCI_SSH_KNOWN_HOSTS }}
           ssh-host: ${{ vars.OCI_SSH_HOST }}
+          ssh-user: ${{ vars.OCI_SSH_USER }}
           database-host: ${{ vars.OCI_DB_PRIVATE_HOST }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements.txt
+      - name: Install dependencies
+        id: dependencies
+        run: pip install -r requirements.txt
       - name: Detect price drops
         run: python run.py detect
       - name: Email crawler health alerts
-        if: always()
+        if: always() && steps.dependencies.outcome == 'success'
         env:
           ADMIN_ALERT_EMAIL: admin@dealwatch.com.au
         run: python health_alerts.py
