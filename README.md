@@ -278,6 +278,46 @@ proof that every older product is invalid.
    `pricewatch-cycle.service` remains failed although its timer is correctly
    disabled. Remove or reset obsolete units after recording why they are off.
 
+### Update — later 21 July (Claude), against the items above
+
+- **#3 (ARM retry):** owner approved another attempt after this audit; a
+  fresh bounded retry window was relaunched (see `AGENT_STATE.md` for the
+  outcome - do not assume success without checking there).
+- **#4 (Big W/Kmart):** Big W's local sweep really was never firing on its
+  own schedule (Task Scheduler had it `Disabled`, `LastRunTime` at the
+  Windows epoch default) - re-enabled and verified with a real run (168
+  kept, 110 snapshots, fresh heartbeat written). Kmart's VM sweep was
+  hitting its own 1,800s internal timeout before it could ever write a
+  heartbeat (real progress, just never reaching the success line) - raised
+  to 5,400s; first full-length run's outcome is in `AGENT_STATE.md`, not
+  re-asserted as fixed here without that confirmation. The CI/VM one-lane
+  overlap this audit flagged should resolve on its own once a clean
+  heartbeat lands, since the CI cadence gate already keys off it.
+- **#6 (network isolation) - partially mitigated, not closed.** Auth was
+  already strict (SSL+SCRAM only); added `%h` to Postgres's
+  `log_line_prefix` and installed `fail2ban` on both hosts (custom
+  `pricewatch-postgres` jail: 5 failed attempts/10min → 24h ban, plus the
+  default `sshd` jail) - this stops the free brute-force attempts already
+  visible in the logs, but **5432 is still publicly reachable**. Actually
+  closing it needs a self-hosted GH Actions runner in the VCN or a tunnel
+  CI joins before connecting - real new infrastructure, intentionally left
+  for the owner to choose rather than picked here.
+- **#8 (unit drift) - partially fixed.** `pricewatch-cycle.service`'s stale
+  failed status was cleared (`systemctl reset-failed`; the timer was
+  already correctly disabled, this was purely cosmetic). `infra/oci/README.md`
+  still describes the old design - not touched.
+- **New: a full local config backup** now exists at
+  `C:\Users\tarun\Downloads\pricewatch_4\oci-backup\` (sibling to this repo,
+  not inside it - real secrets), covering every systemd unit actually
+  deployed on both boxes, `postgresql.conf`/`pg_hba.conf`, the nginx vhost,
+  hand-added `iptables` rules, and a Terraform state snapshot. This does
+  **not** close gap #1/#2 (Terraform/cloud-init still can't rebuild either
+  box from scratch) - it's a faster manual-recovery reference until that
+  automation exists, not a substitute for fixing it.
+- **Not yet touched:** #1/#2 (cloud-init/Terraform rebuild), #5 (hourly
+  workflow overrun - Myer/Supercheap enrichment still the long pole), #7
+  (hardcoded endpoints), the website performance/accessibility list below.
+
 ### Website improvements, in order
 
 1. Fix accessible contrast for `--flag` usage. Lighthouse measured only 3.67:1
