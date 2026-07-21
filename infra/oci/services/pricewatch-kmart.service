@@ -10,5 +10,5 @@ WorkingDirectory=/opt/pricewatch
 EnvironmentFile=/opt/pricewatch.env
 EnvironmentFile=/etc/pricewatch-kmart.env
 ExecStart=/usr/bin/python3 /opt/pricewatch/scripts/kmart_vm_sweep.py
-TimeoutStartSec=1900
+TimeoutStartSec=5500
 Nice=5

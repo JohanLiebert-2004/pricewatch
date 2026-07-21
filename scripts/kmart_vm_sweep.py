@@ -46,8 +46,13 @@ ROOT = "/opt/pricewatch"
 LOG = "/var/log/pricewatch-kmart.log"
 LOG_KEEP_LINES = 2000
 BUDGET = "1400"
-TIMEOUT_S = 1800   # bulk API feed, not a per-item delay lane - should
-                    # finish in minutes when the connection survives
+TIMEOUT_S = 5400   # matches the ~90min headroom CI's old 110min job timeout
+                    # gave this same budget - the original 1800s guess
+                    # (bulk API, assumed ~1s/request) was wrong in practice:
+                    # real per-request latency from this VM made every run
+                    # hit that timeout before reaching the success line,
+                    # so it kept writing real partial progress but never a
+                    # heartbeat, silently defeating the CI cadence gate.
 
 
 def log(f, msg):
@@ -75,6 +80,12 @@ def main():
             if not refresh_ok:
                 log(f, "refresh did not complete cleanly - NOT writing "
                        "heartbeat; CI will keep trying its own attempt")
+        except subprocess.TimeoutExpired as e:
+            # e.stdout/e.stderr hold whatever the process had printed before
+            # being killed - real progress (bulk_upsert commits as it goes)
+            # even though this run itself won't count as a clean success.
+            partial = ((e.stdout or "") + (e.stderr or "")).strip().splitlines()[-5:]
+            log(f, f"refresh: TimeoutExpired after {TIMEOUT_S}s | " + " / ".join(partial))
         except Exception as e:
             log(f, f"refresh: {type(e).__name__}: {e}")
         if refresh_ok:
