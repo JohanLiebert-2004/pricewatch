@@ -1,0 +1,23 @@
+[Unit]
+Description=Pricewatch internal query-embedding service (natural-language search) - DB VM
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/pricewatch-app/services
+# Bound to the private VCN IP, not loopback: this runs on the DB VM, called
+# by preview_app.py on the web VM over the private network (same pattern
+# preview_app.py already uses to reach PostgREST - not a new architecture).
+# Moved here 21 July: the web VM was memory-tight (159MB available) running
+# web+bot+embed together; the DB VM had far more headroom (420MB available)
+# for the same 1GB-class box.
+ExecStart=/opt/pricewatch-app/.venv/bin/uvicorn embed_server:app --host 10.42.1.9 --port 8301 --workers 1
+Restart=always
+RestartSec=5
+MemoryMax=350M
+
+[Install]
+WantedBy=multi-user.target
