@@ -1,0 +1,10 @@
+[Definition]
+# Matches the postgresql-17-main.log format (log_line_prefix '%m [%p] %q%u@%d %h ')
+# after adding %h for client host. Covers bad password, unknown DB/role, no
+# pg_hba.conf entry, and the unencrypted/protocol-mismatch probes seen from
+# internet scanners hitting the publicly exposed 5432 port.
+failregex = ^.*\s+\S+@\S+\s+<HOST>\s+FATAL:\s+password authentication failed
+            ^.*\s+\S+@\S+\s+<HOST>\s+FATAL:\s+no pg_hba\.conf entry for host
+            ^.*\s+\S+@\S+\s+<HOST>\s+FATAL:\s+database ".*" does not exist
+            ^.*\s+\S+@\S+\s+<HOST>\s+FATAL:\s+role ".*" does not exist
+ignoreregex =

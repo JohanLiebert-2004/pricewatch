@@ -1,0 +1,9 @@
+[pricewatch-postgres]
+enabled = true
+port = 5432
+filter = pricewatch-postgres
+logpath = /var/log/postgresql/postgresql-17-main.log
+backend = auto
+maxretry = 5
+findtime = 600
+bantime = 86400

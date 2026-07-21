@@ -361,6 +361,45 @@ Before changing anything:
   row both show up in production (see the Clearance entry below, which
   depends on the same run).
 
+- **21 July - Postgres brute-force hardening + Big W local sweep actually
+  enabled + full local config backup (Claude), following Codex's live audit
+  (P18 below).** Three things:
+  (1) **Postgres brute-force protection.** 5432 stays intentionally public
+  (GH Actions has no stable IPs to allowlist - see the network-roles note in
+  P18 below), but it was being scanned with zero pushback. Auth itself was
+  already strict (`hostssl ... scram-sha-256`); added `%h` to
+  `postgresql.conf`'s `log_line_prefix` so failed-auth lines carry a source
+  IP, then installed `fail2ban` on both OCI boxes - a custom
+  `pricewatch-postgres` jail on the DB host bans an IP after 5 failed
+  Postgres auth attempts in 10 minutes for 24h (filter/jail templates now in
+  `infra/oci/services/fail2ban-pricewatch-postgres.{filter,jail}`, not yet
+  wired into cloud-init/Terraform - manual install for now), plus the
+  default `sshd` jail on both. **Not done: actually closing public 5432.**
+  That needs a self-hosted GH Actions runner in the VCN or a tunnel (e.g.
+  Tailscale) CI joins before connecting - real new infrastructure, flagged
+  for the owner to choose, not picked unilaterally.
+  (2) **Big W's local sweep was actually never running** (matches the 18
+  July note above and Codex's audit) - Task Scheduler showed it `Disabled`
+  with a `LastRunTime` that had never fired automatically; the one 18 July
+  log entry was a manual trigger, not the schedule. Enabled it, verified
+  with a manual run: made real progress (168 kept, 110 snapshots) before
+  hitting Big W's block, wrote a fresh heartbeat. CI's proxy fallback will
+  now correctly defer to it again.
+  (3) **Full local config backup**, per the owner's explicit request, at
+  `C:\Users\tarun\Downloads\pricewatch_4\oci-backup\` (sibling to this repo,
+  deliberately NOT inside it - contains real secrets). Every systemd unit
+  actually deployed on both boxes (not just the repo's templates, which
+  drift from hand-fixes), the real `pricewatch.env`/`pricewatch-backup.env`/
+  `pricewatch-kmart.env`, `postgresql.conf`/`pg_hba.conf`, the nginx vhost,
+  `iptables-save` output (cloud-init's port-opening failed on both boxes -
+  see below - so these rules were hand-added and exist nowhere else), and a
+  `terraform show` + state snapshot. Its own README spells out the real gap
+  this doesn't close: Terraform/cloud-init still can't rebuild either box
+  from scratch (see P18), so recovery today means provisioning bare Ubuntu
+  and manually replaying this folder's configs plus the latest Object
+  Storage dump - not a substitute for fixing the automation, just a fast
+  path until that's done.
+
 - **21 July — separate Clearance page added (Claude), sourced only from
   retailer-labeled data (user explicitly ruled out a generic
   deep-discount heuristic).** Audited every scraper for a real
