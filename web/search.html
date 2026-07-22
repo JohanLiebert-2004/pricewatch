@@ -45,10 +45,16 @@
     <button class="go" type="submit">Search</button>
   </form>
   <div class="hint">matches product titles, retailer SKUs and barcodes across the current catalogue</div>
-  <div class="scan-tools"><button class="scan-btn" id="scan" type="button">Scan barcode</button><span>Use your phone camera in-store, or enter the number below.</span></div>
-  <div class="scanner" id="scanner" hidden>
-    <video id="scanVideo" playsinline muted></video>
-    <div><strong id="scanStatus">Starting camera…</strong><p>Point the camera at a product barcode. Nothing is uploaded or recorded from the camera.</p><button class="clear" id="stopScan" type="button">Close scanner</button></div>
+  <div class="scan-tools"><button class="scan-btn" id="scan" type="button" aria-controls="scanner" aria-expanded="false">Scan barcode</button><span>Use your phone camera in-store, or enter the number below.</span></div>
+  <div class="scanner" id="scanner" data-state="starting" hidden>
+    <div class="scan-preview">
+      <video id="scanVideo" playsinline muted aria-label="Live camera preview"></video>
+      <div class="scan-placeholder" aria-hidden="true">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4 16 7h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3l1.5-3h5Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        <span>Camera preview</span>
+      </div>
+    </div>
+    <div><strong id="scanStatus" role="status" aria-live="polite">Starting camera…</strong><p>Point the camera at a product barcode. Nothing is uploaded or recorded from the camera.</p><button class="clear" id="stopScan" type="button">Close scanner</button></div>
   </div>
   <div class="bar" id="trending" style="margin-top:14px"></div>
   <div id="list"><div class="empty">Enter a product name or SKU above to see its latest tracked price.</div></div>
@@ -158,13 +164,24 @@ document.getElementById("f").addEventListener("submit", e=>{
 });
 
 let scanStream = null, scanFrame = null, zxingReader = null, zxingLoad = null;
+function setScannerState(state, message){
+  const box = document.getElementById("scanner");
+  box.dataset.state = state;
+  if(message) document.getElementById("scanStatus").textContent = message;
+}
 function stopScanner(){
   if(scanFrame) cancelAnimationFrame(scanFrame);
   scanFrame = null;
   if(scanStream) scanStream.getTracks().forEach(track=>track.stop());
   scanStream = null;
   if(zxingReader){ try{zxingReader.reset();}catch(e){} zxingReader = null; }
-  document.getElementById("scanner").hidden = true;
+  const video = document.getElementById("scanVideo");
+  try{ video.pause(); }catch(e){}
+  video.srcObject = null;
+  const box = document.getElementById("scanner");
+  box.hidden = true;
+  box.dataset.state = "starting";
+  document.getElementById("scan").setAttribute("aria-expanded", "false");
 }
 function loadZXing(){
   // Lazy-loaded only on browsers without BarcodeDetector (all of iOS/Safari,
@@ -181,12 +198,11 @@ function loadZXing(){
   });
   return zxingLoad;
 }
-async function startScannerNative(video, status){
+async function startScannerNative(video, detector){
   scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
   video.srcObject = scanStream;
   await video.play();
-  const detector = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39"]});
-  status.textContent = "Scanning…";
+  setScannerState("scanning", "Camera ready — looking for a barcode…");
   const tick = async ()=>{
     if(!scanStream) return;
     try{
@@ -203,8 +219,8 @@ async function startScannerNative(video, status){
   };
   tick();
 }
-async function startScannerZXing(video, status){
-  status.textContent = "Loading scanner…";
+async function startScannerZXing(video){
+  setScannerState("loading", "Loading the barcode scanner…");
   await loadZXing();
   const hints = new Map();
   hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
@@ -212,8 +228,11 @@ async function startScannerZXing(video, status){
     ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
     ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39]);
   zxingReader = new ZXing.BrowserMultiFormatReader(hints);
-  status.textContent = "Scanning…";
+  setScannerState("starting", "Starting camera…");
   await zxingReader.decodeFromVideoDevice(undefined, video, (result)=>{
+    if(document.getElementById("scanner").dataset.state !== "scanning"){
+      setScannerState("scanning", "Camera ready — looking for a barcode…");
+    }
     if(!result) return; // per-frame miss (NotFoundException) - keep scanning
     const code = String(result.getText() || "").trim();
     if(!code) return;
@@ -223,14 +242,23 @@ async function startScannerZXing(video, status){
   });
 }
 async function startScanner(){
-  const box = document.getElementById("scanner"), video = document.getElementById("scanVideo"), status = document.getElementById("scanStatus");
+  const box = document.getElementById("scanner"), video = document.getElementById("scanVideo");
+  if(!box.hidden) return;
   box.hidden = false;
-  status.textContent = "Starting camera…";
+  document.getElementById("scan").setAttribute("aria-expanded", "true");
+  setScannerState("starting", "Starting camera…");
   try{
-    if("BarcodeDetector" in window) await startScannerNative(video, status);
-    else await startScannerZXing(video, status);
+    let detector = null;
+    if("BarcodeDetector" in window){
+      try{ detector = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39"]}); }catch(e){}
+    }
+    if(detector) await startScannerNative(video, detector);
+    else await startScannerZXing(video);
   }catch(e){
-    status.textContent = "Camera access was unavailable. You can still enter the barcode in the search box.";
+    if(scanStream) scanStream.getTracks().forEach(track=>track.stop());
+    scanStream = null;
+    video.srcObject = null;
+    setScannerState("error", "Camera access was unavailable. You can still enter the barcode above.");
   }
 }
 document.getElementById("scan").addEventListener("click", startScanner);
