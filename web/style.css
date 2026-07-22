@@ -398,8 +398,11 @@ footer{
   .navrow{height:54px}
   .navlinks a{padding:6px 10px;font-size:12.5px}
   .hero{padding:32px 0 22px}
-  .stats{gap:8px}
-  .stat{padding:10px 14px;flex:1}
+  /* A flex row of 4 only fits 3 across on a phone, so the 4th orphans onto
+     its own full-width row - looks like a layout bug. An explicit 2x2 grid
+     reads as intentional instead of an overflow accident. */
+  .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .stat{padding:12px 14px;box-shadow:0 1px 3px rgba(33,37,41,.08),0 1px 2px rgba(33,37,41,.06)}
   .grid{grid-template-columns:repeat(2,1fr);gap:10px}
   .ph{height:150px}
   .footgrid{grid-template-columns:1fr;gap:16px}
@@ -445,6 +448,6 @@ footer{
 .toast{position:fixed;left:50%;bottom:24px;z-index:300;transform:translate(-50%,18px);opacity:0;pointer-events:none;background:var(--ink);color:var(--paper);padding:12px 16px;border-radius:12px;box-shadow:var(--shadow-lift);font-size:13px;font-weight:700;transition:opacity .2s,transform .2s;max-width:min(92vw,440px);text-align:center}.toast.show{opacity:1;transform:translate(-50%,0)}
 .sticky-watch{display:none}
 @media(max-width:640px){
-  body{padding-bottom:70px}.topnav{position:relative}.navlinks{display:none}.mobile-nav{position:fixed;z-index:200;bottom:0;left:0;right:0;height:64px;display:grid;grid-template-columns:repeat(5,1fr);background:color-mix(in srgb,var(--card) 94%,transparent);border-top:1px solid var(--hair);backdrop-filter:blur(14px)}.mobile-nav a{display:grid;place-content:center;text-align:center;gap:1px;text-decoration:none;color:var(--muted);font-size:10px;font-weight:800;transition:color .15s,transform .1s}.mobile-nav a span{font-size:19px;line-height:18px}.mobile-nav a:active,.mobile-nav a:hover{color:var(--flag)}.mobile-nav a:active{transform:scale(.92)}.mobile-nav a.active{color:var(--flag)}
+  body{padding-bottom:70px}.topnav{position:relative}.navlinks{display:none}.mobile-nav{position:fixed;z-index:200;bottom:0;left:0;right:0;height:64px;display:grid;grid-template-columns:repeat(5,1fr);background:color-mix(in srgb,var(--card) 94%,transparent);border-top:1px solid var(--hair);backdrop-filter:blur(14px)}.mobile-nav a{display:grid;place-content:center;text-align:center;gap:3px;text-decoration:none;color:var(--muted);font-size:10px;font-weight:800;transition:color .15s,transform .1s}.mobile-nav a svg{display:block;margin:0 auto}.mobile-nav a:active,.mobile-nav a:hover{color:var(--flag)}.mobile-nav a:active{transform:scale(.92)}.mobile-nav a.active{color:var(--flag)}
   .sticky-watch{display:block;position:fixed;z-index:190;left:16px;right:16px;bottom:78px;border:0;border-radius:12px;padding:13px;background:var(--flag);color:#fff;font:700 14px inherit;box-shadow:var(--shadow-lift);transition:transform .1s,opacity .1s}.sticky-watch:active{transform:scale(.97);opacity:.9}.toast{bottom:82px}
 }
