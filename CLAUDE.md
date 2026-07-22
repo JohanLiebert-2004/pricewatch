@@ -40,9 +40,9 @@ Never print, copy into documentation, or commit runtime secrets, private keys,
   tunnel used by Actions. Keep the CI key restricted to forwarding only.
 - Kmart has an OCI systemd sweep and a heartbeat gate that prevents CI from
   duplicating a healthy VM-owned run.
-- Big W and Chemist Warehouse can use owner-PC sweeps because their storefronts
-  reject data-centre runner IPs. Their database heartbeats decide whether CI
-  should skip its fallback attempt.
+- Big W, Chemist Warehouse and JB Hi-Fi can use owner-PC sweeps because their
+  storefronts reject data-centre runner IPs. Their database heartbeats decide
+  whether CI should skip its fallback attempt.
 - Do not parallelise requests within one retailer or lower the configured
   politeness delays.
 

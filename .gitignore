@@ -18,3 +18,4 @@ infra/oci/crash.*.log
 infra/oci/*tfplan*
 local_bigw.log
 local_chemistwarehouse.log
+local_jbhifi.log

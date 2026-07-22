@@ -78,8 +78,21 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             echo "Kmart heartbeat is stale; running the CI fallback."
           fi
+      - name: JB Hi-Fi cadence gate
+        id: jbhifi_cadence
+        shell: bash
+        run: |
+          if [[ "${{ matrix.retailer }}" != "jbhifi" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif python scripts/heartbeat_fresh.py jbhifi_local_heartbeat 5400; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "The home-IP JB Hi-Fi sweep is healthy; skipping CI fallback."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "JB Hi-Fi heartbeat is stale; running the CI fallback."
+          fi
       - name: Refresh ${{ matrix.retailer }}
-        if: (matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true') && (matrix.retailer != 'kmart' || steps.kmart_cadence.outputs.run == 'true')
+        if: (matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true') && (matrix.retailer != 'kmart' || steps.kmart_cadence.outputs.run == 'true') && (matrix.retailer != 'jbhifi' || steps.jbhifi_cadence.outputs.run == 'true')
         run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }}
 
   # Embeddings are independent of both refresh and detection.

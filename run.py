@@ -294,6 +294,8 @@ def cmd_refresh(args):
         except Blocked as e:
             print(f"  BLOCKED mid-refresh (keeping what we got): {e}")
             sweep_blocked = True
+            record_scraper_health(conn, name, "blocked", stored=kept,
+                                  attempted=seen, detail=str(e))
         except Exception as e:
             print(f"  refresh error after {seen} listings: "
                   f"{type(e).__name__}: {e}")
@@ -311,6 +313,8 @@ def cmd_refresh(args):
             conn.commit()
         print(f"  -> {seen} listings seen, {kept} kept (>= ${MIN_KEEP_PRICE:.0f} "
               f"or already tracked), {snaps} snapshots written")
+        if not sweep_blocked:
+            record_scraper_health(conn, name, "ok", stored=kept, attempted=seen)
 
         # After a Blocked sweep the delist probes would run on a connection
         # Akamai just flagged - its 404s are less trustworthy, and with few/no
