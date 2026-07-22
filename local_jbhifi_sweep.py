@@ -18,9 +18,15 @@ Coordination with CI (one crawler per retailer at a time, always):
   younger than 90 minutes, and automatically resumes trying if this
   machine stays off.
 
-A full JB Hi-Fi sweep is ~100 requests at ~1.25s each (~2 minutes) - cheap
-enough to run every 30 minutes, well inside the 90-minute gate threshold
-even if one cycle is missed.
+A full JB Hi-Fi sweep is ~18 minutes in practice (verified 22 July 2026):
+100 requests at ~1.25s delay each, but the window is fully saturated at
+25,000 listings every run (Shopify's page*limit cap), and ~16,750 of
+those are worth keeping - that's ~42 bulk_upsert commits over the double-
+hop SSH tunnel, plus up to MISSING_CHECK_BUDGET individual product-page
+fetches for delisting checks. Still comfortably inside the 30-minute
+timer cadence and the 90-minute CI gate threshold, matching the same
+runtime/cadence ratio already proven safe by
+local_chemistwarehouse_sweep.py.
 
 Logs append to local_jbhifi.log next to this file (gitignored,
 self-trimmed). Uses scripts/db_tunnel.py exactly like the other two local
