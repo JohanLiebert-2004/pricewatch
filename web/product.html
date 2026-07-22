@@ -89,9 +89,11 @@
   .watchbar button{
     font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;
     background:var(--ink);color:var(--paper);border:1px solid var(--ink);
-    border-radius:10px;padding:10px 20px;transition:opacity .15s,background .2s,border-color .2s;
+    border-radius:10px;padding:10px 20px;transition:opacity .15s,background .2s,border-color .2s,transform .1s;
+    box-shadow:var(--shadow);
   }
   .watchbar button:hover{opacity:.85}
+  .watchbar button:active{transform:scale(.96);opacity:.85}
   .watchbar button.tracked{
     background:var(--deal);border-color:var(--deal);opacity:1;cursor:default;
     animation:trackBounce .4s cubic-bezier(.34,1.56,.64,1);
@@ -100,6 +102,10 @@
   .watchnote{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.7}
   .watchok{font-size:13px;color:var(--deal);font-weight:600;margin-top:12px;line-height:1.7}
   .watcherr{font-size:13px;color:var(--flag);font-weight:600;margin-top:12px}
+  @media(max-width:640px){
+    .watchbar input{padding:12px 14px}
+    .watchbar button{padding:13px 20px;flex:1}
+  }
 </style>
   <!-- Vercel Web Analytics: cookie-free, aggregated visitor and page-view stats. -->
   <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
