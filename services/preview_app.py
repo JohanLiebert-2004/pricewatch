@@ -450,25 +450,65 @@ SITEMAP_PAGE_SIZE = 1_000  # PostgREST is configured with a 1000-row limit
                             # leave gaps between pages instead of increasing
                             # rows returned. Confirmed live 17 July: a
                             # limit=5000 request still came back as 1000 rows.
-SITEMAP_PAGE_COUNT = 25
+# A hardcoded page count (previously 25, i.e. 25,000 URLs) went stale the
+# moment the catalogue grew past it: with ~330k+ fresh rows and the sitemap
+# ordered by last_seen desc, the 25k cap was silently 100% Kmart (the most
+# continuously-swept retailer) - every other retailer, including Myer's
+# ~118k-item catalogue, had near-zero sitemap presence and effectively no
+# organic discovery path. Compute the real page count from the live row
+# count instead, so coverage tracks the catalogue automatically. Clamped to
+# a sane ceiling as a runaway-growth safety valve, not an expected limit.
+SITEMAP_PAGE_COUNT_CEILING = 3_000
 SITEMAP_FRESH_DAYS = 30  # Exclude abandoned catalogue rows from discovery.
 SITEMAP_TTL = 24 * 3600  # cache once daily: enough freshness without egress churn
 SITEMAP_CACHE_VERSION = 2  # Do not serve pre-freshness-filter cache files.
 
+_sitemap_page_count_cache = {"value": None, "at": 0.0}
+
+
+def _sitemap_fresh_after() -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=SITEMAP_FRESH_DAYS)).isoformat()
+
+
+async def _sitemap_page_count() -> int:
+    now = time.time()
+    if (_sitemap_page_count_cache["value"] is not None
+            and now - _sitemap_page_count_cache["at"] < SITEMAP_TTL):
+        return _sitemap_page_count_cache["value"]
+    r = await client.get(
+        f"{SUPABASE_URL}/rest/v1/product_search",
+        params={"select": "retailer", "current_price": "gt.0",
+                "last_seen": f"gte.{_sitemap_fresh_after()}", "limit": 1},
+        headers={"Prefer": "count=exact", "Range": "0-0"})
+    total = None
+    content_range = r.headers.get("content-range", "")
+    if "/" in content_range:
+        tail = content_range.split("/", 1)[1]
+        if tail != "*":
+            total = int(tail)
+    if total is None:
+        # Count unavailable (transient error) - fall back to the last known
+        # good value, or a conservative single page if there isn't one yet.
+        return _sitemap_page_count_cache["value"] or 1
+    pages = max(1, min(SITEMAP_PAGE_COUNT_CEILING,
+                        -(-total // SITEMAP_PAGE_SIZE)))  # ceil div
+    _sitemap_page_count_cache.update(value=pages, at=now)
+    return pages
+
 
 async def _sitemap_products(page: int):
-    if page < 1 or page > SITEMAP_PAGE_COUNT:
+    page_count = await _sitemap_page_count()
+    if page < 1 or page > page_count:
         raise HTTPException(404)
     cache_file = CACHE_DIR / f"sitemap-products-v{SITEMAP_CACHE_VERSION}-{page}.xml"
     if cache_file.exists() and time.time() - cache_file.stat().st_mtime < SITEMAP_TTL:
         return Response(cache_file.read_bytes(), media_type="application/xml")
 
-    fresh_after = (datetime.now(timezone.utc) - timedelta(days=SITEMAP_FRESH_DAYS)).isoformat()
     r = await client.get(
         f"{SUPABASE_URL}/rest/v1/product_search",
         params={"select": "retailer,sku,price_updated_at,last_seen",
                 "current_price": "gt.0",
-                "last_seen": f"gte.{fresh_after}",
+                "last_seen": f"gte.{_sitemap_fresh_after()}",
                 "order": "last_seen.desc,retailer.asc,sku.asc",
                 "limit": SITEMAP_PAGE_SIZE,
                 "offset": (page - 1) * SITEMAP_PAGE_SIZE})
@@ -499,6 +539,24 @@ async def sitemap_products():
 @app.get("/sitemap-products-{page}.xml")
 async def sitemap_products_page(page: int):
     return await _sitemap_products(page)
+
+
+@app.get("/sitemap.xml")
+async def sitemap_index():
+    """Sitemap index. Product page count is computed live (see
+    _sitemap_page_count) instead of hand-maintained, so this stays complete
+    as the catalogue grows - a static list previously went stale at 25
+    pages, silently freezing sitemap coverage at ~7% of the catalogue."""
+    page_count = await _sitemap_page_count()
+    entries = [f"{SITE_URL}/sitemap-pages.xml"] + [
+        f"{SITE_URL}/sitemap-products-{i}.xml" for i in range(1, page_count + 1)]
+    body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            + "\n".join(f"  <sitemap><loc>{html.escape(u)}</loc></sitemap>" for u in entries)
+            + "\n</sitemapindex>\n").encode()
+    return Response(body, media_type="application/xml",
+                     headers={"Cache-Control": f"public, max-age={SITEMAP_TTL}"})
+
 
 @app.get("/healthz")
 async def healthz():

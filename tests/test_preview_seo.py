@@ -97,6 +97,7 @@ class SitemapSeoTests(unittest.IsolatedAsyncioTestCase):
         upstream = type("UpstreamResponse", (), {
             "status_code": 200,
             "json": lambda self: rows,
+            "headers": {"content-range": "0-0/1"},
         })()
         fake_client = type("Client", (), {"get": AsyncMock(return_value=upstream)})()
 

@@ -30,6 +30,10 @@
       "destination": "https://159-13-59-184.sslip.io/retailers/:retailer"
     },
     {
+      "source": "/sitemap.xml",
+      "destination": "https://159-13-59-184.sslip.io/sitemap.xml"
+    },
+    {
       "source": "/sitemap-products.xml",
       "destination": "https://159-13-59-184.sslip.io/sitemap-products.xml"
     },
