@@ -5,6 +5,7 @@ keyword rules on the title. Mirrors the rules in web/index.html so the deal
 feed and the catalogue agree.
 """
 import re
+import time
 
 RULES = [
     ("clothing", re.compile(
@@ -135,18 +136,47 @@ def subcategorize(retailer: str, title: str | None) -> str | None:
 
 
 def backfill(conn) -> int:
-    """Categorise every product that doesn't have a category yet."""
+    """Categorise every product that doesn't have a category yet.
+
+    The `embed` CI job runs concurrently with this one (both write to
+    `products`; see embed_products.py's _update_batch_with_retry docstring)
+    and updates rows in whatever order its own budget/cursor picks. Without
+    a consistent lock order here, two concurrent per-row UPDATE sequences
+    hitting overlapping rows in different orders is a textbook Postgres
+    deadlock - seen live 22 July 2026, which crashed the whole hourly
+    detect job (and with it, that cycle's price-drop alerts) over a single
+    unlucky race. `ORDER BY id` makes this job's own lock order
+    deterministic, and the retry loop (same shape as embed_products.py's)
+    means the rare remaining collision just costs one retry instead of the
+    entire job.
+    """
     rows = conn.execute(
         "SELECT id, title FROM products "
-        "WHERE category IS NULL OR category = ''").fetchall()
+        "WHERE category IS NULL OR category = '' ORDER BY id").fetchall()
     if not rows:
         return 0
     updates = [(categorize(r["title"]), r["id"]) for r in rows]
     for i in range(0, len(updates), 1000):
-        conn.executemany("UPDATE products SET category=? WHERE id=?",
-                         updates[i:i + 1000])
-        conn.commit()
+        _update_batch_with_retry(conn, updates[i:i + 1000])
     return len(updates)
+
+
+def _update_batch_with_retry(conn, batch, attempts=3):
+    for attempt in range(attempts):
+        try:
+            conn.executemany("UPDATE products SET category=? WHERE id=?", batch)
+            conn.commit()
+            return
+        except Exception as e:
+            if type(e).__name__ != "DeadlockDetected":
+                raise
+            conn.rollback()
+            if attempt == attempts - 1:
+                print(f"categorize.backfill: giving up on a batch of "
+                      f"{len(batch)} products after {attempts} deadlock "
+                      "retries, will retry next run")
+                return
+            time.sleep(0.5 * (attempt + 1))
 
 
 
