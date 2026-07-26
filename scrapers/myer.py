@@ -1,23 +1,31 @@
 """Myer scraper.
 
-Salesforce Commerce Cloud-style storefront. No bot challenge seen on plain
-requests - a single request already returns a full schema.org Product
-JSON-LD block (price, sku, brand, images) plus a "listPrice" field embedded
-in page state whenever the item is discounted, which the base class's
-_find_rrp fallback already knows how to pick up. No override of
-parse_product needed.
+No bot challenge seen on plain requests. Myer relaunched product pages on
+Next.js some time around 2026-07-22, which dropped the schema.org Product
+JSON-LD block the base class's default parse_product relied on - every crawl
+since then silently stored 0 products (no exception, so CI stayed green;
+caught by comparing `retailer_freshness.last_seen` against the workflow
+runs, not by any error). Price/variant/media data now lives in the
+`__NEXT_DATA__` react-query cache instead
+(props.pageProps.dehydratedState.queries, entry keyed `["product", <seoToken>]`),
+so parse_product is overridden below to read that shape. Marketplace items
+are identified by a non-empty variant `miraklSkuId` (Myer's marketplace
+platform is Mirakl); images are served from myer-media.com.au with a
+`{{size}}` placeholder in the path.
 
-The only wrinkle: Myer's sitemap files are served as literal gzip bytes
-(sitemap_YYYYN_M.xml.gz), not as an HTTP Content-Encoding httpx/curl_cffi
+The only other wrinkle: Myer's sitemap files are served as literal gzip
+bytes (sitemap_YYYYN_M.xml.gz), not as an HTTP Content-Encoding httpx/curl_cffi
 would transparently decode, so the base class's plain-text sitemap walker
 can't read them. discover()/discover_all() are overridden here to fetch raw
 bytes (BaseScraper.get_bytes) and gzip.decompress() before regexing <loc>
 tags; the rest of the logic mirrors the base implementation.
 """
 import gzip
+import json
 import random
 import re
 
+from db import ProductRecord
 from .base import BaseScraper, Blocked
 
 
@@ -26,6 +34,53 @@ class MyerScraper(BaseScraper):
     sitemap_index = "https://www.myer.com.au/sitemap/sitemap_20251.xml.gz"
     product_url_pattern = r"^https://www\.myer\.com\.au/p/[a-z0-9][a-z0-9-]*$"
     delay = 1.5
+
+    def parse_product(self, url, html):
+        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+                      html, re.S)
+        if not m:
+            return None
+        try:
+            queries = (json.loads(m.group(1))["props"]["pageProps"]
+                       ["dehydratedState"]["queries"])
+            data = next(q["state"]["data"] for q in queries
+                        if (q.get("queryKey") or [None])[0] == "product")
+        except (json.JSONDecodeError, KeyError, TypeError, StopIteration):
+            return None
+        sku = str(data.get("id") or "")
+        price = data.get("priceFrom")
+        if not sku or price is None or price <= 0:
+            return None
+        rrp = data.get("listPriceFrom")
+        variants = data.get("variants") or []
+        is_marketplace = any(v.get("miraklSkuId") for v in variants)
+        gtin = next((str(v["ean"]) for v in variants
+                     if v.get("price") == price and v.get("ean")), None)
+        if gtin is None:
+            gtin = next((str(v["ean"]) for v in variants if v.get("ean")), None)
+        image_url = None
+        media = data.get("media") or []
+        base_path = media[0].get("baseUrl") if media else None
+        if base_path:
+            # 720x928 is the only pre-generated derivative confirmed live
+            # (a plausible-looking arbitrary size like 1000x1000 404s - the
+            # bucket only serves specific baked sizes).
+            image_url = ("https://myer-media.com.au/wcsstore/"
+                         f"MyerCatalogAssetStore/{base_path}"
+                         ).replace("{{size}}", "720x928")
+        return ProductRecord(
+            retailer=self.name,
+            sku=sku,
+            gtin=gtin,
+            title=data.get("title") or data.get("name") or "",
+            brand=data.get("brand"),
+            url=url,
+            price=float(price),
+            rrp=float(rrp) if rrp and float(rrp) > float(price) else None,
+            image_url=image_url,
+            in_stock=data.get("isAvailable"),
+            is_marketplace=is_marketplace,
+        )
 
     def _sitemap_locs(self, url: str) -> list[str]:
         raw = self.get_bytes(url)
