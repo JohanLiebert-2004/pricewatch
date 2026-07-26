@@ -489,6 +489,27 @@ Before changing anything:
   connecting to the real production IP from a network that blocks outbound
   5432 now raises `psycopg.errors.ConnectionTimeout` after 30s instead of
   hanging forever. Deployed (`1760846`).
+  **Third fix, same investigation: why the 3.5-day Myer outage wasn't
+  caught sooner.** `health_alerts.py` (runs hourly via `crawl.yml`'s
+  `detect` job) actually did its job correctly - workflow logs confirm it
+  fired exactly once, 2026-07-24T20:45 (`health alerts: 1 email(s) sent`,
+  then `0` every run after - dedup working as designed). Nobody saw it
+  because it only emails `admin@dealwatch.com.au`, an inbox that isn't
+  watched; this project's real monitored channel is Telegram (every deal
+  alert lands there), which health_alerts.py had no path to at all. Also,
+  the email-only staleness check needs `last_seen` to age past 36h before
+  firing - Myer broke at 15:06 on the 22nd and the alert didn't fire until
+  ~46h later. Fixed both: `_send()` now posts to Telegram (owner chat,
+  same `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` as deal alerts) as the
+  primary channel, email kept as a secondary record; and `_problem()` got
+  a new fast path reading the `attempted`/`stored` counts
+  `record_scraper_health()` already persists to `kv` on every crawl/refresh
+  (previously written but never read by the alerting side) - a batch that
+  attempts >=20 pages and stores exactly 0 now alerts on the very next run
+  instead of waiting out the age window. Verified `_problem()` against
+  synthetic empty-batch/blocked/healthy `kv` records and confirmed `_send()`
+  degrades cleanly (no crash) with no Telegram/Resend credentials present.
+  Deployed (`834bbad`).
 
 ### Production data correction
 
