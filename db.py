@@ -205,8 +205,23 @@ def _connect_postgres():
     # prepare_threshold=None: Supabase's pooler (port 6543) is PgBouncer in
     # transaction mode, which can't guarantee a server-side prepared statement
     # survives to the next call on the same client connection.
+    # connect_timeout: CI reaches Postgres over an SSH local-forward - if that
+    # tunnel dies without a clean FIN (or the small DB VM stalls under
+    # concurrent write load, a documented recurring failure mode here), a
+    # plain socket has no OS-level timeout of its own and the connect/query
+    # can hang until the *workflow's* wall-clock timeout kills the job 30-55
+    # minutes later, taking any concurrently-scheduled job with it (observed
+    # live 25 July: a stalled Kmart refresh silently ate its full 55m budget
+    # and the resulting runner shutdown cancelled Officeworks too). Bounding
+    # both the handshake and each statement converts that into a fast,
+    # visible failure instead.
     conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=False,
-                            prepare_threshold=None)
+                            prepare_threshold=None, connect_timeout=30)
+    with conn.cursor() as cur:
+        # 2 minutes is generous for any single statement here - bulk writes
+        # are chunked at 400 rows (see bulk_upsert), not one giant insert.
+        cur.execute("SET statement_timeout = '120s'")
+    conn.commit()
     shim = _PgShim(conn)
     if APPLY_SCHEMA_ON_CONNECT:
         # Schema setup takes table locks. Keep it out of routine parallel
