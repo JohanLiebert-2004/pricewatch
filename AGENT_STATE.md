@@ -441,6 +441,55 @@ Before changing anything:
   waiting to confirm), no backfill needed, same pattern as the Myer
   `image_url` self-heal from 17 July.
 
+- **26 July — Myer found dead in production since 22 July, fixed; CI-vs-DB
+  hang fixed too (Claude), following an owner report of "some failures".**
+  **Myer:** `retailer_freshness` showed 0/119,001 fresh products,
+  `last_seen` stuck at 2026-07-22T15:06 - every 3-hourly enrich run had been
+  going green in CI the whole time while silently storing 0/1000 products
+  per run. Root cause: Myer relaunched product pages on Next.js around 22
+  July and dropped the schema.org Product JSON-LD block the base scraper's
+  default `parse_product` reads exclusively - no exception, `rec` is just
+  always `None`, so nothing looked wrong to CI. Confirmed live: a fetched
+  product page has zero `application/ld+json` blocks but a populated
+  `__NEXT_DATA__` react-query cache instead
+  (`props.pageProps.dehydratedState.queries`, entry keyed
+  `["product", seoToken]`). Added a `parse_product` override to
+  `scrapers/myer.py` reading that shape (same pattern as
+  `chemistwarehouse.py`/the `TargetScraper` in `kmart_group.py`); Myer's
+  Mirakl marketplace items are flagged via a non-empty variant
+  `miraklSkuId`. Verified against 7 live product pages (full-price,
+  discounted, one marketplace listing) before committing - price/rrp/gtin/
+  brand/stock all correct. **Found in passing:** an "obviously right" image
+  URL built from `media[0].baseUrl` with an arbitrary size like `1000x1000`
+  substituted for its `{{size}}` placeholder 403s - `myer-media.com.au`
+  only serves specific pre-generated derivatives; `720x928` is the one
+  confirmed live to actually return 200. Deployed (`6510819`), then a
+  `workflow_dispatch` of `enrich.yml` was triggered manually rather than
+  waiting up to 3h for the next schedule, to verify real rows land before
+  calling this done (per this file's own freshness-over-green-CI rule).
+  **Separately, same investigation: CI's Kmart-fallback hang (25 July,
+  see the Kmart VM-sweep entry above) got a general fix, not just a Kmart
+  one-off.** That job ran 55 minutes with zero output before hitting the
+  job timeout, and the resulting runner shutdown cancelled the
+  concurrently-running Officeworks job too. `db.py`'s `_connect_postgres()`
+  had no `connect_timeout` and no `statement_timeout` - CI reaches Postgres
+  over an SSH local-forward, and if that tunnel dies without a clean FIN
+  (or the small DB VM stalls under concurrent write load, the same shape as
+  the 19-21 July Kmart/checkpoint-stall history above), a bare psycopg
+  socket has no timeout of its own and hangs indefinitely; the tunnel's own
+  `ServerAliveInterval=30` doesn't help once a forwarded connection is
+  already established. Added `connect_timeout=30` and
+  `SET statement_timeout='120s'` (mirrors the existing
+  `idle_in_transaction_session_timeout` pattern already in `cmd_detect` for
+  the same class of problem) - every call site that touches the DB already
+  retries/rolls back on exceptions (`bulk_upsert`, `cmd_refresh`,
+  `cmd_crawl`, the per-view refresh loop in `cmd_detect`), so this converts
+  a silent multi-minute-to-job-timeout hang into an already-handled error
+  path rather than new failure surface. Verified the mechanism fires:
+  connecting to the real production IP from a network that blocks outbound
+  5432 now raises `psycopg.errors.ConnectionTimeout` after 30s instead of
+  hanging forever. Deployed (`1760846`).
+
 ### Production data correction
 
 Big W SKU `41041` (Harry Potter Hufflepuff skirt) was corrected directly in
