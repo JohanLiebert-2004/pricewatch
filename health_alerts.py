@@ -1,7 +1,16 @@
-"""Email operational alerts when a retailer feed is empty, stale or blocked.
+"""Operational alerts when a retailer feed is empty, stale or blocked.
 
 Run after every crawler matrix pass. Alert state is stored in ``kv`` so the
-same fault sends one alert, then a single recovery email once it clears.
+same fault sends one alert, then a single recovery notification once it
+clears.
+
+Telegram (TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID, same owner chat as deal
+alerts) is the primary channel - it's the one actually watched day to day.
+The Resend email to ADMIN_ALERT_EMAIL is kept as a secondary/durable record
+but should not be relied on alone: a 3.5-day-dead Myer scraper (22-26 July
+2026) sent exactly one correctly-detected email here and nobody saw it
+because that inbox isn't checked. Found and fixed the same session as the
+underlying Myer bug - see AGENT_STATE.md.
 """
 import html
 import json
@@ -13,9 +22,16 @@ import httpx
 import db
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
+TELEGRAM_ENDPOINT = "https://api.telegram.org/bot{token}/sendMessage"
 ADMIN_EMAIL = os.environ.get("ADMIN_ALERT_EMAIL", "admin@dealwatch.com.au")
 DEFAULT_MAX_AGE_HOURS = 36
 MAX_AGE_HOURS = {"chemistwarehouse": 24}
+# A batch this size or larger storing exactly 0 products is a much stronger,
+# faster signal than waiting out the last_seen age window above - it means
+# the scraper ran to completion without a single successful parse (a site
+# markup change, not a block - Blocked already short-circuits separately).
+# 20 is comfortably above any retailer's legitimate near-empty-queue tail.
+MIN_ATTEMPTED_FOR_EMPTY_BATCH_ALERT = 20
 RETAILERS = ("bigw", "booktopia", "chemistwarehouse", "goodguys", "ikea", "jbhifi", "kmart",
              "myer", "qbd", "officeworks", "sephora", "supercheap", "target")
 LABELS = {"bigw": "Big W", "booktopia": "Booktopia", "chemistwarehouse": "Chemist Warehouse",
@@ -56,10 +72,25 @@ def _kv_delete(conn, key):
     conn.commit()
 
 
-def _send(subject, body):
+def _send_telegram(text):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print("health alerts: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID unset, skipping")
+        return False
+    response = httpx.post(
+        TELEGRAM_ENDPOINT.format(token=token),
+        json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=15)
+    if response.status_code != 200 or not response.json().get("ok"):
+        print(f"health telegram send failed ({response.status_code}): {response.text[:200]}")
+        return False
+    return True
+
+
+def _send_email(subject, body):
     api_key, from_addr = os.environ.get("RESEND_API_KEY"), os.environ.get("RESEND_FROM")
     if not api_key or not from_addr:
-        print("health alerts disabled: RESEND_API_KEY or RESEND_FROM is unset")
+        print("health email disabled: RESEND_API_KEY or RESEND_FROM is unset")
         return False
     response = httpx.post(
         RESEND_ENDPOINT, headers={"Authorization": f"Bearer {api_key}"},
@@ -69,6 +100,15 @@ def _send(subject, body):
         print(f"health email failed ({response.status_code}): {response.text[:200]}")
         return False
     return True
+
+
+def _send(subject, body, plain):
+    # Telegram is the channel actually watched; email is a secondary record.
+    # Either succeeding counts as "sent" - don't let a Resend hiccup mask a
+    # Telegram alert that got through, or vice versa.
+    tg = _send_telegram(f"<b>{html.escape(subject)}</b>\n{plain}")
+    em = _send_email(subject, body)
+    return tg or em
 
 
 def _retailer_rows(conn):
@@ -83,6 +123,16 @@ def _problem(conn, retailer, row):
     health = _kv_get(conn, f"scraper_health:{retailer}") or {}
     if health.get("status") == "blocked":
         return "blocked", html.escape(health.get("detail") or "retailer bot protection blocked the crawler")
+    attempted, stored = health.get("attempted") or 0, health.get("stored") or 0
+    if attempted >= MIN_ATTEMPTED_FOR_EMPTY_BATCH_ALERT and stored == 0:
+        # Not Blocked (that's handled above) and not a small tail batch -
+        # the scraper ran to completion without a single successful parse.
+        # Waiting for the last_seen age check below to also catch this can
+        # take up to DEFAULT_MAX_AGE_HOURS; this fires on the very next run.
+        return ("empty_batch",
+                f"the last crawl attempted {attempted} pages and stored 0 products - "
+                "the scraper likely needs a code fix (e.g. the site's page markup "
+                "changed), this isn't a routine bot block")
     if not row or not int(row["listings"] or 0):
         return "empty", "no products with a current price are available"
     try:
@@ -107,20 +157,24 @@ def run():
         if code:
             fingerprint = code
             if not prior or prior.get("fingerprint") != fingerprint:
+                subject = f"Dealwatch crawler alert: {label}"
                 body = (f"<p><b>{html.escape(label)} needs attention.</b></p>"
                         f"<p>{detail}</p><p>Dealwatch is withholding neither data nor alerts "
                         "automatically; inspect the crawler log and retailer feed.</p>")
-                if _send(f"Dealwatch crawler alert: {label}", body):
+                plain = f"\U0001F6A8 {label} needs attention.\n{detail}"
+                if _send(subject, body, plain):
                     _kv_set(conn, key, {"fingerprint": fingerprint, "at": _now().isoformat()})
                     sent += 1
             continue
         if prior:
+            subject = f"Dealwatch crawler recovered: {label}"
             body = (f"<p><b>{html.escape(label)} has recovered.</b></p>"
                     "<p>Dealwatch has fresh listings again.</p>")
-            if _send(f"Dealwatch crawler recovered: {label}", body):
+            plain = f"✅ {label} has recovered - fresh listings again."
+            if _send(subject, body, plain):
                 _kv_delete(conn, key)
                 sent += 1
-    print(f"health alerts: {sent} email(s) sent")
+    print(f"health alerts: {sent} notification(s) sent")
 
 
 if __name__ == "__main__":
