@@ -290,7 +290,7 @@ class TargetScraper(BaseScraper):
             page += 1
 
     def _feed_records(self, feed_url: str):
-        """Download and normalize a Commission Factory-style product feed."""
+        """Download and normalize an Ultimate Web Scraper CSV/JSON export."""
         parsed = urlparse(feed_url)
         if parsed.scheme != "https" or not parsed.hostname:
             raise Blocked("target: configured product feed URL must use HTTPS")
