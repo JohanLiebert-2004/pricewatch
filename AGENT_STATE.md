@@ -511,6 +511,90 @@ Before changing anything:
   degrades cleanly (no crash) with no Telegram/Resend credentials present.
   Deployed (`834bbad`).
 
+- **1 August — Myer showing fake 90%+ discounts on multi-variant products,
+  fixed (Claude), following an owner report of a specific wrong-discount
+  URL (the Bambury BedT sheet set).** `discount_feed` had it at $10 vs a
+  $131.21 90-day-high reference, 92% off, error-tier. Root cause: a Myer
+  product URL bundles every size/colour under one page, and the
+  `parse_product` override added 26 July (`6510819`) took the page's own
+  top-level `priceFrom`/`listPriceFrom` at face value - just `min()` across
+  variants. This specific listing has 4 sane sized variants ($87-$134, all
+  a real ~30% off with `savedAmount`/promo fields set) plus a fifth "King
+  Sheet Set" variant priced exactly $10/$10 with none of the sibling
+  discount fields - a broken catalogue row on Myer's own site, not a real
+  option. `priceFrom` picked that row, and since the product's price
+  history (from earlier, sane crawls) still had the ~$131 high,
+  `discount_feed`'s `history_drop` signal did the rest. This is a *data
+  quality* bug, not a parsing bug - the JSON decoded fine, the number was
+  just wrong. Fixed in `scrapers/myer.py`: added `_pick_variant()`, which
+  drops any variant priced under 30% of the group's median (loose enough
+  that real multi-size spreads - a single sheet vs a super king is rarely
+  more than ~2x apart - survive) before taking the cheapest of what's left,
+  and uses that variant's own `price`/`listPrice`/`ean` together instead of
+  mixing top-level `priceFrom` with a separately re-matched `ean`. Verified
+  against the live bed sheet page (now resolves to the real $87.47/$124.95
+  Single Sheet Set variant) and two unrelated live pages (one single-
+  variant, one multi-variant with a real active promo) to confirm normal
+  products are unaffected. Deployed (`2f315e1`); manually triggered
+  `enrich.yml` (run `30680466870`) rather than waiting up to 3h, to get the
+  corrected price into production and clear the live bad `discount_feed`
+  row without a manual DB write (port 5432 unreachable from this dev
+  network, as usual - see [[reference-pricewatch-infra]]). **Same class of
+  bug could exist on other multi-variant retailers using a "from" price
+  pattern - not audited this session, only Myer was reported.** Note: the
+  manually-triggered `enrich.yml` run took over 30 minutes to reach Myer's
+  job (matrix `max-parallel: 3`, several slower retailers queued ahead of
+  it) - whoever next has DB/PostgREST access should confirm
+  `discount_feed` for `myer`/`332108980` shows ~30% off, not 92%, and close
+  this note once seen.
+
+- **1 August — health_alerts.py couldn't see a laptop outage; fixed
+  (Claude), following an owner question about degraded Big W coverage.**
+  The owner's Ubuntu laptop (runs Big W/Chemist Warehouse/JB Hi-Fi's real
+  crawl lanes - see `local_*_sweep.py`) went offline; CI's cadence gates
+  correctly fell back to the Webshare-proxy/rate-limited paths (confirmed
+  live: `crawl.yml`'s bigw refresh job logged "Big W heartbeat is stale;
+  running the proxy fallback" and self-throttled mid-run at
+  `845MB`/`1300MB` of the cycle budget, `288 listings seen, 128 kept, 8
+  snapshots written` - a real but much weaker substitute for the laptop's
+  full sweep). Nobody was told any of this was happening.
+  `scripts/watchdog.py` already monitors these same heartbeat kv rows, but
+  it runs *on that same laptop* - a full laptop outage silently takes its
+  own monitor down with it, so the one thing that should have said "the
+  laptop is down" never fired. Fixed by adding the same heartbeat-
+  staleness check to `health_alerts.py` instead (runs in CI, stays up
+  regardless of laptop state) - reuses watchdog.py's thresholds, alerts/
+  recovers via the existing Telegram-primary `_send()` path. Also added a
+  proxy-budget check (warns at 85% of the Webshare cycle cap) and closed a
+  separate small gap: `watchdog.py`'s own `HEARTBEATS` dict never included
+  `jbhifi_local_heartbeat` despite `crawl.yml` depending on it identically
+  to Big W/Chemist Warehouse. Verified `_heartbeat_problem`/
+  `_proxy_budget_problem` against synthetic stale/fresh/missing/wrong-cycle
+  kv states. Deployed (`aafe7fd`).
+
+- **1 August — three site suggestions (transparency, PWA install, AI-
+  recommendation explanation) actioned (Claude), following an owner-
+  forwarded external feedback list.** Two of the seven items in that list
+  were already stale (price history charts and price-drop email alerts
+  both already existed) - only acted on the three genuine gaps asked for:
+  (1) `how-it-works.html` previously only covered discount methodology,
+  now opens with who runs the site, the 13 tracked retailers by name, and
+  the actual refresh cadence; (2) the site already ships a full PWA
+  (manifest, service worker, offline shell) but had no `apple-touch-icon`,
+  so iOS "Add to Home Screen" fell back to a page screenshot - rendered
+  PNG icons (180/192/512) from `icon.svg`'s path data and wired
+  `apple-touch-icon` into all 12 pages (first hand-reconstruction of the
+  SVG path got the "hole" cutout wrong - caught by screenshotting the live
+  SVG in a real browser and comparing pixel-for-pixel before shipping, not
+  by inspection alone); (3) added an honest `#ai-similar` explainer
+  section (local title/brand/category text embedding + pgvector nearest-
+  neighbour, not personalised, not price-aware, no third-party API) and
+  linked both existing "AI-suggested similar products" hints
+  (`index.html`, `product.html`) to it. Verified locally via
+  `python -m http.server` + browser screenshots before deploying (manifest
+  JSON parses, icon renders match the SVG, anchor jump works, no new
+  console errors). Deployed (`0d31968`).
+
 ### Production data correction
 
 Big W SKU `41041` (Harry Potter Hufflepuff skirt) was corrected directly in
