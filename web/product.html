@@ -198,10 +198,10 @@ function priceChart(points, recordedCount, recordedPrices){
   const high = points.reduce((a,p) => p.y > a.y ? p : a, points[0]);
   const stat = (kind,label,p,extra="") => `<div class="chartstat ${kind}"><span class="label">${label}</span><strong>${money(p.y)}</strong><small>${extra || asOf(p.x.toISOString())}</small></div>`;
   const head = `<div class="charthead"><div class="charttitle">Price history</div><div class="chartmeta">${recordedCount} recorded price ${recordedCount === 1 ? "point" : "points"}</div></div><div class="chartsummary">${stat("current","Current",current,"checked " + asOf(current.x.toISOString()))}${stat("low","Lowest recorded",low)}${stat("high","Highest recorded",high)}</div>`;
-  if(points.length === 1) return `${head}<div class="chart-empty">We have one recorded price so far. The graph will appear after this retailer changes the price.</div>`;
+  if(points.length === 1) return `${head}<div class="chart-empty">We have one recorded price so far. The graph will appear after the next successful retailer check.</div>`;
   const W=720,H=270,L=66,R=20,T=18,B=48,plotW=W-L-R,plotH=H-T-B,bottom=H-B;
   const prices=points.map(p=>p.y), lo=Math.min(...prices), hi=Math.max(...prices);
-  const pad=Math.max((hi-lo)*.12,Math.max(hi,1)*.03), yMin=Math.max(0,lo-pad), yMax=hi+pad, ySpan=(yMax-yMin)||1;
+  const pad=Math.max((hi-lo)*.12,Math.max(hi,1)*.03), yMin=0, yMax=hi+pad, ySpan=(yMax-yMin)||1;
   const first=+points[0].x,last=+current.x,span=(last-first)||1;
   const xAt=p=>L+((+p.x-first)/span)*plotW, yAt=v=>T+((yMax-v)/ySpan)*plotH;
   const line=points.map((p,i)=>`${i?"H ":"M "}${xAt(p).toFixed(1)} ${i?"V ":""}${yAt(p.y).toFixed(1)}`).join(" ");
@@ -210,7 +210,7 @@ function priceChart(points, recordedCount, recordedPrices){
   // Skip a plain axis line/label wherever it would land within 10px of the
   // dashed "Lowest" line - with a tight price range (e.g. a $0.05 spread)
   // they'd otherwise render on top of each other and both become unreadable.
-  const grid=[hi,(hi+lo)/2].filter(v=>Math.abs(yAt(v)-lowY)>10).map(v=>{const y=yAt(v).toFixed(1);return `<line class="cgrid" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${L-8}" y="${(+y+3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`}).join("");
+  const grid=[hi,(hi+lo)/2,0].filter(v=>Math.abs(yAt(v)-lowY)>10).map(v=>{const y=yAt(v).toFixed(1);return `<line class="cgrid" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${L-8}" y="${(+y+3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`}).join("");
   const lowGuide=`<line class="clow" x1="${L}" x2="${W-R}" y1="${lowY.toFixed(1)}" y2="${lowY.toFixed(1)}"></line><text class="caxis clowlabel" x="${L-8}" y="${(lowY+3.5).toFixed(1)}" text-anchor="end">Lowest ${money(lo)}</text>`;
   const averageGuide=recordedPrices.length>=4?(()=>{const average=recordedPrices.reduce((sum,value)=>sum+value,0)/recordedPrices.length,y=yAt(average).toFixed(1);return `<line class="cavg" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${W-R}" y="${(+y-5).toFixed(1)}" text-anchor="end">avg ${money(average)}</text>`;})():"";
   const count=innerWidth<520?2:4;
@@ -242,19 +242,28 @@ function showChartTip(evt,price,ts,isLowest){
   tip.classList.add("show");
 }
 function hideChartTip(){document.getElementById("charttip")?.classList.remove("show");}
-function historyTable(rows){
+function historyTable(rows,p){
   // Keep the table readable without hiding the fact that we may have sampled
   // more than once a day. The most recent observation for each day wins.
   const days = new Map();
   for(const row of rows){
-    const day = new Date(row.scraped_at).toISOString().slice(0,10);
-    days.set(day, row);
+    const day = asOf(row.scraped_at);
+    if(day) days.set(day, row);
   }
-  const entries = [...days.values()].reverse().slice(0, 60);
+  const latest = rows.at(-1);
+  const checkedAt = p.price_updated_at || latest.scraped_at;
+  const checkedDate = new Date(checkedAt);
+  if(!isNaN(checkedDate) && checkedDate > new Date(latest.scraped_at)){
+    const day = asOf(checkedAt);
+    if(day) days.set(day, {...latest, scraped_at:checkedAt,
+      price:p.current_price ?? latest.price, snapshot_rrp:p.current_rrp});
+  }
+  const entries = [...days.values()].sort((a,b)=>new Date(b.scraped_at)-new Date(a.scraped_at)).slice(0, 60);
   const body = entries.map(row => `<tr><td>${asOf(row.scraped_at)}</td><td>${money(row.price)}</td><td>${row.snapshot_rrp && Number(row.snapshot_rrp) > Number(row.price) ? money(row.snapshot_rrp) : "—"}</td><td>${row.in_stock === true ? "Available" : row.in_stock === false ? "Unavailable" : "Not recorded"}</td></tr>`).join("");
   return `<details class="historytable"><summary>Price history table (${days.size} recorded ${days.size === 1 ? "day" : "days"})</summary>
     <table><thead><tr><th scope="col">Date checked</th><th scope="col">Price</th><th scope="col">Retailer RRP</th><th scope="col">Availability</th></tr></thead><tbody>${body}</tbody></table>
     ${days.size > entries.length ? `<p class="historynote">Showing the latest ${entries.length} recorded days.</p>` : ""}
+    <p class="historynote">One row per local date. If a price changed more than once that day, this shows the final recorded price; unchanged prices carry through the latest check.</p>
   </details>`;
 }
 
@@ -416,12 +425,11 @@ async function load(){
   const reportHref = `mailto:contact@dealwatch.com.au?subject=${encodeURIComponent("Dealwatch price correction: " + p.title)}&body=${encodeURIComponent("Product: " + location.href + "\nRetailer: " + store + "\nWhat looks incorrect: ")}`;
   let points = rows.map(r=>({x: new Date(r.scraped_at), y: Number(r.price)}));
   // Dense histories (many intraday flips) render as unreadable stripes -
-  // collapse to one point per day at that day's LOWEST price, the number a
-  // shopper could actually have paid.
+  // collapse to the final point for each user-visible local date.
   if(points.length > 60){
     const byDay = new Map();
     for(const p of points){
-      const day = p.x.toISOString().slice(0,10);
+      const day = asOf(p.x.toISOString());
       const cur = byDay.get(day);
       if(!cur || p.x > cur.x) byDay.set(day, p);
     }
@@ -480,7 +488,7 @@ async function load(){
     </section>
 
     <div class="chartwrap">${priceChart(points, rows.length, points.filter(point=>!point.carried).map(point=>point.y))}<div class="historynote">Tracking since ${trackingSince} · ${rows.length} recorded price ${rows.length === 1 ? "point" : "points"} · checked through ${lastChecked}. Flat lines carry the last recorded price through the latest retailer check.</div></div>
-    ${historyTable(rows)}
+    ${historyTable(rows,p)}
   `;
   const stickyBtn = document.getElementById("stickyWatch");
   if(stickyBtn && document.getElementById("watchpanel")){
