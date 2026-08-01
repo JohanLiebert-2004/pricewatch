@@ -38,6 +38,28 @@ LABELS = {"bigw": "Big W", "booktopia": "Booktopia", "chemistwarehouse": "Chemis
           "goodguys": "The Good Guys", "ikea": "IKEA", "jbhifi": "JB Hi-Fi", "kmart": "Kmart",
           "myer": "Myer", "officeworks": "Officeworks", "sephora": "Sephora",
           "supercheap": "Supercheap Auto", "target": "Target", "qbd": "QBD Books"}
+# Big W, Chemist Warehouse and JB Hi-Fi run their real crawl lane on the
+# owner's always-on Ubuntu laptop (see local_*_sweep.py), not in CI, because
+# their storefronts reject data-centre IPs; crawl.yml/enrich.yml read these
+# same kv rows to decide whether to skip their own weaker fallback.
+# scripts/watchdog.py already watches these rows too, but it *runs on that
+# same laptop* - a full laptop outage silently takes its own monitor down
+# with it. Confirmed live 2026-08-01: the laptop went offline, Big W quietly
+# ran on a byte-capped proxy trickle for over a day instead of its real
+# sweep, and nothing alerted - the owner only found out by asking. These
+# checks run in CI instead (this script), which stays up regardless of
+# laptop state, so a laptop outage is never silent again. Thresholds match
+# watchdog.py's (timer cadence + the CI-gate window + slack).
+HEARTBEATS = {
+    "bigw_local_heartbeat": (30, "Big W home-IP sweep"),
+    "chemistwarehouse_local_heartbeat": (8, "Chemist Warehouse home-IP sweep"),
+    "jbhifi_local_heartbeat": (2.5, "JB Hi-Fi home-IP sweep"),
+}
+# Webshare's 1GB/month plan is Big W's only path to Akamai-protected pages
+# (see scrapers/bigw.py PROXY_CYCLE_BYTE_CAP) - once it's spent, Big W's CI
+# fallback goes from "degraded trickle" to "nothing at all" until the cycle
+# renews on the 10th. Warn well before that self-throttle bites, not after.
+PROXY_BUDGET_WARN_FRACTION = 0.85
 
 
 def _now():
@@ -70,6 +92,13 @@ def _kv_set(conn, key, value):
 def _kv_delete(conn, key):
     conn.execute("DELETE FROM kv WHERE k=?", (key,))
     conn.commit()
+
+
+def _kv_get_raw(conn, key):
+    # Heartbeat rows store a plain ISO timestamp string, not JSON - _kv_get
+    # would return None for them (json.loads fails on a bare timestamp).
+    row = conn.execute("SELECT v FROM kv WHERE k=?", (key,)).fetchone()
+    return row["v"] if row else None
 
 
 def _send_telegram(text):
@@ -145,6 +174,33 @@ def _problem(conn, retailer, row):
     return None, ""
 
 
+def _heartbeat_problem(conn, key, max_age_hours):
+    raw = _kv_get_raw(conn, key)
+    if raw is None:
+        return "has never reported in"
+    try:
+        age_hours = (_now() - _as_utc(raw)).total_seconds() / 3600
+    except (TypeError, ValueError):
+        return "reported an invalid timestamp"
+    if age_hours > max_age_hours:
+        return f"last checked in {age_hours:.1f} hours ago (limit {max_age_hours}h)"
+    return None
+
+
+def _proxy_budget_problem(conn):
+    from scrapers.bigw import PROXY_CYCLE_BYTE_CAP, proxy_cycle
+    state = _kv_get(conn, "bigw_cat_state") or {}
+    if state.get("_proxy_cycle") != proxy_cycle():
+        return None   # stale/absent state for the current cycle == nothing spent yet
+    spent = state.get("_proxy_bytes", 0)
+    fraction = spent / PROXY_CYCLE_BYTE_CAP
+    if fraction >= PROXY_BUDGET_WARN_FRACTION:
+        return (f"{spent // 1024 // 1024}MB of the "
+                f"{PROXY_CYCLE_BYTE_CAP // 1024 // 1024}MB Webshare cycle budget spent "
+                f"({fraction:.0%}) - Big W's CI fallback will go dark once it's exhausted")
+    return None
+
+
 def run():
     conn = db.connect()
     rows = _retailer_rows(conn)
@@ -174,6 +230,47 @@ def run():
             if _send(subject, body, plain):
                 _kv_delete(conn, key)
                 sent += 1
+
+    for hb_key, (max_age_hours, label) in HEARTBEATS.items():
+        detail = _heartbeat_problem(conn, hb_key, max_age_hours)
+        alert_key = f"health_alert:{hb_key}"
+        prior = _kv_get(conn, alert_key)
+        if detail:
+            if not prior or prior.get("fingerprint") != "stale":
+                subject = f"Dealwatch crawler alert: {label}"
+                body = (f"<p><b>{html.escape(label)} {detail}.</b></p>"
+                        "<p>CI is likely running a degraded fallback (proxy-limited or "
+                        "rate-limited) instead of the real sweep - check the laptop.</p>")
+                plain = (f"\U0001F6A8 {label} {detail}.\n"
+                         "CI is likely running a degraded fallback instead - check the laptop.")
+                if _send(subject, body, plain):
+                    _kv_set(conn, alert_key, {"fingerprint": "stale", "at": _now().isoformat()})
+                    sent += 1
+            continue
+        if prior:
+            subject = f"Dealwatch crawler recovered: {label}"
+            body = f"<p><b>{html.escape(label)} is checking in again.</b></p>"
+            plain = f"✅ {label} is checking in again."
+            if _send(subject, body, plain):
+                _kv_delete(conn, alert_key)
+                sent += 1
+
+    proxy_detail = _proxy_budget_problem(conn)
+    proxy_key = "health_alert:bigw_proxy_budget"
+    prior = _kv_get(conn, proxy_key)
+    if proxy_detail:
+        if not prior or prior.get("fingerprint") != "budget_high":
+            subject = "Dealwatch crawler alert: Big W proxy budget"
+            body = f"<p><b>Big W proxy budget running low.</b></p><p>{proxy_detail}.</p>"
+            plain = f"\U0001F6A8 Big W proxy budget running low.\n{proxy_detail}."
+            if _send(subject, body, plain):
+                _kv_set(conn, proxy_key, {"fingerprint": "budget_high", "at": _now().isoformat()})
+                sent += 1
+    elif prior:
+        # No recovery notice here - the cap just resets silently on the 10th,
+        # nothing "recovered" that needs announcing the way a fixed scraper does.
+        _kv_delete(conn, proxy_key)
+
     print(f"health alerts: {sent} notification(s) sent")
 
 

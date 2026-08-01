@@ -44,6 +44,7 @@ HEARTBEATS = {
     "kmart_vm_heartbeat": timedelta(minutes=150),      # hourly-ish timer, generous
     "bigw_local_heartbeat": timedelta(hours=30),        # 3h timer, 24h CI-gate window + slack
     "chemistwarehouse_local_heartbeat": timedelta(hours=8),  # 2h timer, 6h CI-gate window + slack
+    "jbhifi_local_heartbeat": timedelta(minutes=150),   # 30min timer, 90min CI-gate window + slack
 }
 OCI_HOSTS = {"web VM (159.13.59.184)": "159.13.59.184",
              "DB VM (192.9.163.208)": "192.9.163.208"}
