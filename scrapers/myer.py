@@ -35,6 +35,39 @@ class MyerScraper(BaseScraper):
     product_url_pattern = r"^https://www\.myer\.com\.au/p/[a-z0-9][a-z0-9-]*$"
     delay = 1.5
 
+    @staticmethod
+    def _pick_variant(variants):
+        """Pick the variant to treat as *the* product's price.
+
+        A Myer product URL covers every size/colour under one page, and the
+        page's own top-level priceFrom/listPriceFrom is just min() across
+        variants - including data-entry glitches on Myer's own site. Seen
+        live 2026-08-01: a "BedT ... Sheet Set" listed 4 sane sized variants
+        ($87-$134, all ~30% off with savedAmount/promo fields set) plus a
+        fifth "King Sheet Set" variant priced $10/$10 with none of those
+        discount fields - a broken catalogue row, not a real $10 option.
+        Blindly taking priceFrom picked that $10 row, and since the
+        product's price history (from earlier, sane crawls) still had a
+        ~$130 high, discount_feed's history_drop signal turned that into a
+        fake "92% off" listing. Drop any variant priced under 30% of the
+        group's median before picking the cheapest of what's left - loose
+        enough to keep legitimate multi-size spreads (a single sheet vs a
+        super king is rarely more than ~2x apart) but catches a lone
+        near-zero outlier like this one.
+        """
+        priced = [v for v in variants
+                  if isinstance(v.get("price"), (int, float)) and v["price"] > 0]
+        if not priced:
+            return None
+        if len(priced) > 1:
+            prices = sorted(v["price"] for v in priced)
+            mid = len(prices) // 2
+            median = prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) / 2
+            sane = [v for v in priced if v["price"] >= median * 0.3]
+            if sane:
+                priced = sane
+        return min(priced, key=lambda v: v["price"])
+
     def parse_product(self, url, html):
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
                       html, re.S)
@@ -48,16 +81,19 @@ class MyerScraper(BaseScraper):
         except (json.JSONDecodeError, KeyError, TypeError, StopIteration):
             return None
         sku = str(data.get("id") or "")
-        price = data.get("priceFrom")
-        if not sku or price is None or price <= 0:
+        if not sku:
             return None
-        rrp = data.get("listPriceFrom")
         variants = data.get("variants") or []
         is_marketplace = any(v.get("miraklSkuId") for v in variants)
-        gtin = next((str(v["ean"]) for v in variants
-                     if v.get("price") == price and v.get("ean")), None)
-        if gtin is None:
+        variant = self._pick_variant(variants)
+        if variant is not None:
+            price, rrp, gtin = variant.get("price"), variant.get("listPrice"), variant.get("ean")
+        else:
+            price, rrp = data.get("priceFrom"), data.get("listPriceFrom")
             gtin = next((str(v["ean"]) for v in variants if v.get("ean")), None)
+        if price is None or price <= 0:
+            return None
+        gtin = str(gtin) if gtin else None
         image_url = None
         media = data.get("media") or []
         base_path = media[0].get("baseUrl") if media else None
