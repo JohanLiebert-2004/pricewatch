@@ -189,7 +189,7 @@ const sku = params.get("sku") || (pathMatch && decodeURIComponent(pathMatch[2]))
 const cancelToken = params.get("cancel");
 const TG_BOT = "underp22bot";
 
-function priceChart(points){
+function priceChart(points, recordedCount, recordedPrices){
   // Snapshots are first sightings and actual price changes. A step line shows
   // that recorded price holding until the next observation without inventing
   // a diagonal move that was never observed.
@@ -197,7 +197,7 @@ function priceChart(points){
   const low = points.reduce((a,p) => p.y < a.y ? p : a, points[0]);
   const high = points.reduce((a,p) => p.y > a.y ? p : a, points[0]);
   const stat = (kind,label,p,extra="") => `<div class="chartstat ${kind}"><span class="label">${label}</span><strong>${money(p.y)}</strong><small>${extra || asOf(p.x.toISOString())}</small></div>`;
-  const head = `<div class="charthead"><div class="charttitle">Price history</div><div class="chartmeta">${points.length} ${points.length === 1 ? "recorded price" : "price changes"}</div></div><div class="chartsummary">${stat("current","Current",current,"checked " + asOf(current.x.toISOString()))}${stat("low","Lowest recorded",low)}${stat("high","Highest recorded",high)}</div>`;
+  const head = `<div class="charthead"><div class="charttitle">Price history</div><div class="chartmeta">${recordedCount} recorded price ${recordedCount === 1 ? "point" : "points"}</div></div><div class="chartsummary">${stat("current","Current",current,"checked " + asOf(current.x.toISOString()))}${stat("low","Lowest recorded",low)}${stat("high","Highest recorded",high)}</div>`;
   if(points.length === 1) return `${head}<div class="chart-empty">We have one recorded price so far. The graph will appear after this retailer changes the price.</div>`;
   const W=720,H=270,L=66,R=20,T=18,B=48,plotW=W-L-R,plotH=H-T-B,bottom=H-B;
   const prices=points.map(p=>p.y), lo=Math.min(...prices), hi=Math.max(...prices);
@@ -212,7 +212,7 @@ function priceChart(points){
   // they'd otherwise render on top of each other and both become unreadable.
   const grid=[hi,(hi+lo)/2].filter(v=>Math.abs(yAt(v)-lowY)>10).map(v=>{const y=yAt(v).toFixed(1);return `<line class="cgrid" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${L-8}" y="${(+y+3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`}).join("");
   const lowGuide=`<line class="clow" x1="${L}" x2="${W-R}" y1="${lowY.toFixed(1)}" y2="${lowY.toFixed(1)}"></line><text class="caxis clowlabel" x="${L-8}" y="${(lowY+3.5).toFixed(1)}" text-anchor="end">Lowest ${money(lo)}</text>`;
-  const averageGuide=points.length>=4?(()=>{const average=prices.reduce((sum,value)=>sum+value,0)/prices.length,y=yAt(average).toFixed(1);return `<line class="cavg" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${W-R}" y="${(+y-5).toFixed(1)}" text-anchor="end">avg ${money(average)}</text>`;})():"";
+  const averageGuide=recordedPrices.length>=4?(()=>{const average=recordedPrices.reduce((sum,value)=>sum+value,0)/recordedPrices.length,y=yAt(average).toFixed(1);return `<line class="cavg" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"></line><text class="caxis" x="${W-R}" y="${(+y-5).toFixed(1)}" text-anchor="end">avg ${money(average)}</text>`;})():"";
   const count=innerWidth<520?2:4;
   const ticks=Array.from({length:count},(_,i)=>{const t=first+span*i/(count-1),x=L+(t-first)/span*plotW,d=new Date(t),label=d.toLocaleDateString("en-AU",{day:"numeric",month:"short",year:i===0||i===count-1?"2-digit":undefined});return `<text class="caxis" x="${x.toFixed(1)}" y="${H-16}" text-anchor="${i===0?"start":i===count-1?"end":"middle"}">${label}</text>`}).join("");
   // Two circles per point: a big transparent hit target (real dots are small
@@ -427,6 +427,18 @@ async function load(){
     }
     points = [...byDay.values()].sort((a,b)=>a.x-b.x);
   }
+  // Snapshots are intentionally change-only. Carry the current price through
+  // the latest successful retailer check so unchanged products still show the
+  // full period for which that price is known (without storing fake changes).
+  const checkedAt = new Date(p.price_updated_at || rows[rows.length - 1].scraped_at);
+  if(Number.isFinite(+checkedAt) && +checkedAt > +points.at(-1).x){
+    const currentPrice = Number(p.current_price);
+    points.push({
+      x: checkedAt,
+      y: Number.isFinite(currentPrice) ? currentPrice : points.at(-1).y,
+      carried: true
+    });
+  }
   rememberViewed(p);
 
   main.innerHTML = `
@@ -467,7 +479,7 @@ async function load(){
       <div class="hot-grid"><div class="empty" style="padding:12px 0">Finding similar items…</div></div>
     </section>
 
-    <div class="chartwrap">${priceChart(points)}<div class="historynote">Tracking since ${trackingSince} · ${rows.length} recorded ${rows.length === 1 ? "observation" : "observations"} · last checked ${lastChecked}</div></div>
+    <div class="chartwrap">${priceChart(points, rows.length, points.filter(point=>!point.carried).map(point=>point.y))}<div class="historynote">Tracking since ${trackingSince} · ${rows.length} recorded price ${rows.length === 1 ? "point" : "points"} · checked through ${lastChecked}. Flat lines carry the last recorded price through the latest retailer check.</div></div>
     ${historyTable(rows)}
   `;
   const stickyBtn = document.getElementById("stickyWatch");
