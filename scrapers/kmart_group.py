@@ -8,14 +8,19 @@ Fast path (July 2026):
   ac.cnstrc.com (Constructor's own CDN, NOT behind Kmart's Akamai) returns
   200 products per request with price, list/promo price history, APN (GTIN)
   and seller - the whole ~250k catalogue is coverable in ~1,300 requests.
-- Target renders 48 products per category listing page inside __NEXT_DATA__
-  (offerPrice, wasPrice, RRP included); /c/all-products/AP01 paginates the
-  full ~26k catalogue in ~550 listing fetches.
+- Target prefers an approved CSV/JSON product feed when
+  TARGET_PRODUCT_FEED_URL is configured. Its older __NEXT_DATA__ category
+  path remains a serial fallback, but Akamai currently challenges it on
+  hosted runners.
 """
+import csv
+import io
 import json
+import os
 import random
 import re
 import time
+from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
 
@@ -230,8 +235,27 @@ class TargetScraper(BaseScraper):
 
     per_page = 48  # fixed by the site
     all_products_path = "/c/all-products/AP01"
+    product_feed_env = "TARGET_PRODUCT_FEED_URL"
+    max_feed_bytes = 100 * 1024 * 1024
 
     def refresh_listings(self, budget: int = 700):
+        """Yield Target products from an approved feed or the storefront.
+
+        Target's Akamai challenge currently blocks the storefront path on
+        hosted runners. An approved affiliate/product feed avoids that WAF
+        entirely and is therefore preferred whenever TARGET_PRODUCT_FEED_URL
+        is configured. The URL is a secret and must never be logged.
+
+        With no feed configured, retain the old serial storefront path as a
+        visible fallback so a future block removal recovers automatically.
+        """
+        feed_url = os.environ.get(self.product_feed_env, "").strip()
+        if feed_url:
+            yield from self._feed_records(feed_url)
+            return
+        yield from self._storefront_records(budget)
+
+    def _storefront_records(self, budget: int):
         """Yield ProductRecords by paging the all-products listing.
 
         Server-rendered __NEXT_DATA__ carries 48 products per page with
@@ -265,6 +289,206 @@ class TargetScraper(BaseScraper):
                 break
             page += 1
 
+    def _feed_records(self, feed_url: str):
+        """Download and normalize a Commission Factory-style product feed."""
+        parsed = urlparse(feed_url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise Blocked("target: configured product feed URL must use HTTPS")
+
+        try:
+            with httpx.Client(
+                    timeout=90, follow_redirects=True,
+                    headers={"Accept": "application/json,text/csv;q=0.9,*/*;q=0.5",
+                             "User-Agent": "DealwatchFeedImporter/1.0"}) as client:
+                response = client.get(feed_url)
+                response.raise_for_status()
+        except Exception as exc:
+            # Never include the signed/private feed URL in logs or health data.
+            raise Blocked(
+                f"target: configured product feed fetch failed ({type(exc).__name__})"
+            ) from exc
+
+        if urlparse(str(response.url)).scheme != "https":
+            raise Blocked("target: product feed redirected to a non-HTTPS URL")
+        if len(response.content) > self.max_feed_bytes:
+            raise Blocked("target: product feed exceeds the 100 MB safety limit")
+
+        records = self._parse_feed(response.text,
+                                   response.headers.get("content-type", ""))
+        if not records:
+            raise Blocked("target: configured product feed contained no valid AUD products")
+        yield from records
+
+    def _parse_feed(self, text: str, content_type: str = "") -> list[ProductRecord]:
+        """Parse JSON or delimited feed text and deduplicate it by Target SKU."""
+        stripped = text.lstrip("\ufeff\r\n\t ")
+        rows = None
+        if "json" in content_type.lower() or stripped.startswith(("[", "{")):
+            try:
+                payload = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                raise Blocked("target: configured product feed returned invalid JSON") from exc
+            rows = self._json_rows(payload)
+        else:
+            try:
+                dialect = csv.Sniffer().sniff(stripped[:8192], delimiters=",\t;|")
+            except csv.Error:
+                dialect = csv.excel
+            rows = list(csv.DictReader(io.StringIO(stripped, newline=""), dialect=dialect))
+
+        if rows is None:
+            raise Blocked("target: configured product feed has an unsupported shape")
+
+        by_sku = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            rec = self._record_from_feed_row(row)
+            if not rec:
+                continue
+            current = by_sku.get(rec.sku)
+            if current is None or rec.price < current.price:
+                by_sku[rec.sku] = rec
+        return list(by_sku.values())
+
+    @staticmethod
+    def _json_rows(payload):
+        if isinstance(payload, list):
+            return payload
+        if not isinstance(payload, dict):
+            return None
+        for key in ("products", "items", "results", "data"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+            if isinstance(value, dict):
+                for nested in ("products", "items", "results"):
+                    if isinstance(value.get(nested), list):
+                        return value[nested]
+        return None
+
+    @staticmethod
+    def _feed_values(row):
+        return {
+            re.sub(r"[^a-z0-9]", "", str(key).lower()): value
+            for key, value in row.items()
+        }
+
+    @staticmethod
+    def _first(values, *names):
+        for name in names:
+            value = values.get(name)
+            if value is not None and str(value).strip() != "":
+                return value
+        return None
+
+    @staticmethod
+    def _money(value):
+        if value is None:
+            return None
+        match = re.search(r"-?\d+(?:\.\d+)?", str(value).replace(",", ""))
+        if not match:
+            return None
+        try:
+            return float(match.group(0))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _clean_identifier(value):
+        if value is None:
+            return None
+        result = str(value).strip()
+        if re.fullmatch(r"\d+\.0", result):
+            result = result[:-2]
+        return result or None
+
+    @classmethod
+    def _direct_target_url(cls, values, sku, title):
+        candidates = (
+            "targeturl", "advertiserurl", "producturl", "deeplinkurl",
+            "deeplink", "url", "link",
+        )
+        for name in candidates:
+            raw = cls._first(values, name)
+            if not raw:
+                continue
+            candidate = str(raw).strip()
+            parsed = urlparse(candidate)
+            if (parsed.scheme == "https" and parsed.hostname
+                    and (parsed.hostname == "target.com.au"
+                         or parsed.hostname.endswith(".target.com.au"))):
+                return candidate
+            # Some affiliate links carry the original destination as a query
+            # value. Unwrap only a real Target HTTPS URL.
+            for query_values in parse_qs(parsed.query).values():
+                for query_value in query_values:
+                    destination = unquote(query_value)
+                    dest = urlparse(destination)
+                    if (dest.scheme == "https" and dest.hostname
+                            and (dest.hostname == "target.com.au"
+                                 or dest.hostname.endswith(".target.com.au"))):
+                        return destination
+
+        # Feed tracking links do not always expose their destination. Target's
+        # product route is SKU-addressed, so construct a stable direct URL.
+        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+        return f"https://www.target.com.au/p/{slug or 'product'}/{sku}"
+
+    def _record_from_feed_row(self, row) -> ProductRecord | None:
+        values = self._feed_values(row)
+        sku = self._clean_identifier(self._first(
+            values, "sku", "productid", "productcode", "itemid", "id"))
+        title = str(self._first(
+            values, "title", "productname", "name") or "").strip()
+        price = self._money(self._first(
+            values, "saleprice", "currentprice", "offerprice", "price"))
+        currency = str(self._first(
+            values, "currency", "currencycode") or "AUD").strip().upper()
+        if not sku or not title or price is None or price <= 0:
+            return None
+        if currency not in ("AUD", "A$", "AUSTRALIAN DOLLAR", "AUSTRALIAN DOLLARS"):
+            return None
+
+        rrp = self._money(self._first(
+            values, "wasprice", "rrp", "retailprice", "originalprice", "listprice"))
+        if rrp is not None and rrp <= price:
+            rrp = None
+
+        stock = self._first(values, "instock", "availability", "stockstatus", "stocklevel")
+        in_stock = None
+        if stock is not None:
+            normalized = str(stock).strip().lower().replace("_", " ")
+            if normalized in ("true", "yes", "y", "1", "in stock", "instock", "available"):
+                in_stock = True
+            elif normalized in ("false", "no", "n", "0", "out of stock", "outofstock",
+                                "unavailable", "sold out"):
+                in_stock = False
+            else:
+                amount = self._money(stock)
+                if amount is not None:
+                    in_stock = amount > 0
+
+        return ProductRecord(
+            retailer=self.name,
+            sku=sku,
+            gtin=self._clean_identifier(self._first(
+                values, "gtin", "ean", "ean13", "barcode", "upc")),
+            title=title,
+            brand=str(self._first(values, "brand", "manufacturer") or "").strip() or None,
+            subcategory=str(self._first(
+                values, "category", "productcategory", "categoryname") or "").strip() or None,
+            url=self._direct_target_url(values, sku, title),
+            image_url=str(self._first(
+                values, "imageurl", "image", "largeimage", "productimage") or "").strip() or None,
+            price=price,
+            rrp=rrp,
+            in_stock=in_stock,
+            is_marketplace=False,
+            is_clearance=str(self._first(values, "clearance") or "").strip().lower()
+                         in ("true", "yes", "1"),
+        )
+
     def _record_from_listing(self, p) -> ProductRecord | None:
         price = (p.get("price") or {})
         offer = price.get("offerPrice")
@@ -273,13 +497,20 @@ class TargetScraper(BaseScraper):
         was = price.get("wasPrice") or 0
         rrp = price.get("recommendedRetailPrice") or 0
         ref = max(float(was), float(rrp))
+        product_url = p.get("baseProductUrl") or ""
+        if product_url.startswith("/"):
+            product_url = "https://www.target.com.au" + product_url
+        image = p.get("imageUrl") or p.get("productImageUrl") or p.get("image")
+        if isinstance(image, dict):
+            image = image.get("url") or image.get("src")
         return ProductRecord(
             retailer=self.name,
             sku=str(p.get("id") or ""),
             gtin=None,  # not exposed in listings; page crawl enriches it
             title=p.get("title") or "",
             brand=None,
-            url=p.get("baseProductUrl") or "",
+            url=product_url,
+            image_url=image if isinstance(image, str) else None,
             price=float(offer),
             rrp=ref if ref > float(offer) else None,
             in_stock=None,

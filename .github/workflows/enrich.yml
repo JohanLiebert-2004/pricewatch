@@ -47,6 +47,7 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       PROXY_URL: ${{ secrets.PROXY_URL }}
+      TARGET_PRODUCT_FEED_URL: ${{ secrets.TARGET_PRODUCT_FEED_URL }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/database-tunnel
@@ -71,6 +72,9 @@ jobs:
           elif [[ "${{ matrix.retailer }}" == "chemistwarehouse" ]] && python scripts/heartbeat_fresh.py chemistwarehouse_local_heartbeat 21600; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "The home-IP Chemist Warehouse sweep owns enrichment."
+          elif [[ "${{ matrix.retailer }}" == "target" && -n "$TARGET_PRODUCT_FEED_URL" ]]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "The approved Target product feed owns enrichment."
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi

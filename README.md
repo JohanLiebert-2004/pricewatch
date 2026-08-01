@@ -146,6 +146,7 @@ ones include:
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection; omit for local SQLite. |
 | `PROXY_URL` | Approved retailer-specific proxy path; currently scoped by scraper policy. |
+| `TARGET_PRODUCT_FEED_URL` | Private HTTPS URL for an approved Target CSV/JSON product feed; preferred over the blocked storefront path. |
 | `PRICEWATCH_API_URL` | PostgREST origin used by the SSR service. |
 | `SITE_URL` | Canonical public site URL. |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Telegram alert delivery. |
