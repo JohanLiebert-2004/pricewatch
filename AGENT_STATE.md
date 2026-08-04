@@ -609,6 +609,53 @@ Before changing anything:
   JSON parses, icon renders match the SVG, anchor jump works, no new
   console errors). Deployed (`0d31968`).
 
+- **4 August — `refresh-and-detect` failing on a large fraction of scheduled
+  runs; root-caused, partial fix committed, DB-side part still needs manual
+  application (Claude).** Prompted by a routine status check, not a user
+  report - `gh run list` showed 4 of the last 8 hourly runs `failure` and 3
+  `cancelled` over roughly 24h. Not a correctness incident (`retailer_freshness`
+  still shows every retailer current within a few hours - jobs fail late
+  enough that sibling matrix jobs mostly still complete), but a real
+  reliability/CI-cost problem. Traced two failure shapes, both landing on the
+  same underlying cause: (1) `refresh (kmart, ...)` and `refresh (sephora,
+  ...)` intermittently die with `psycopg.errors.QueryCanceled: canceling
+  statement due to statement timeout` on `run.py`'s `known_skus` query
+  (`SELECT sku FROM products WHERE retailer=? AND current_price IS NOT NULL
+  ORDER BY COALESCE(price_updated_at, '1970-01-01')`) - `schema.sql` has no
+  index supporting that filter+sort (only `is_clearance`, `embedding`,
+  `gtin` are indexed), so it's a full seq scan + sort over the whole
+  `products` table (700k+ rows across 13 retailers) every single run, on a
+  small OCI VM, with up to ~6 matrix jobs querying concurrently; (2) `embed`
+  is now routinely hitting its 45-minute job timeout (`45m27s`, `45m15s`,
+  `45m16s` across three separate runs) though it completed in 13-29min in
+  others - consistent with the same VM being resource-starved under load
+  rather than a code regression (embed's own batched-commit design was
+  already fixed for a related lock-contention incident on 19 July, see
+  `d2409ad`/`206c65b`). Both symptoms are the *documented, already-mitigated*
+  DB-contention failure mode in `db.py`'s `_connect_postgres()` comment (a
+  stalled query eating a job's full budget and taking a sibling job down
+  with it, first observed 25 July) - the `connect_timeout`/`statement_timeout`
+  added then are doing their job (failing fast and visibly instead of
+  hanging), but the underlying VM-under-load cause was never fixed, only
+  bounded. Added the missing index to `schema.sql`
+  (`idx_products_retailer_staleness`, a partial expression index matching
+  the query's exact filter and `ORDER BY COALESCE(...)` expression) - this
+  should meaningfully cut the seq-scan/sort cost on every refresh job, but
+  **is not yet applied to production**: schema/DDL changes are applied by
+  hand by whoever has `pricewatch-db-x86` admin access per `CLAUDE.md`, and
+  this dev machine has no DB/SSH access (same constraint as the Myer
+  DB-row fix above). Whoever has access should run just the new
+  `CREATE INDEX` statement (not the whole `schema.sql`, to avoid taking
+  unrelated table locks) directly on `pricewatch-db-x86`, then watch the
+  next 2-3 scheduled `refresh-and-detect` runs for `kmart`/`sephora`/`embed`
+  staying green. If failures persist after the index is applied, the VM
+  itself (CPU/disk I/O headroom, not just missing indexes) likely needs
+  attention - `idx_products_embedding` is an HNSW index, and HNSW inserts
+  are markedly more expensive than a plain btree, so `embed`'s per-batch
+  `UPDATE ... SET embedding` calls are a plausible secondary contributor
+  worth checking via `pg_stat_activity`/`pg_locks` if the index alone
+  doesn't resolve it.
+
 ### Production data correction
 
 Big W SKU `41041` (Harry Potter Hufflepuff skirt) was corrected directly in

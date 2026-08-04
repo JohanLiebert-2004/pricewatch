@@ -38,6 +38,16 @@ CREATE TABLE IF NOT EXISTS price_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_snap_product ON price_snapshots(product_id, scraped_at DESC);
 CREATE INDEX IF NOT EXISTS idx_products_gtin ON products(gtin);
+-- Every refresh job's known_skus query filters by retailer, orders by
+-- staleness (see run.py cmd_refresh) - unindexed, this is a full seq scan +
+-- sort over the whole products table (700k+ rows across retailers) on every
+-- run, and a likely contributor to the statement_timeout failures documented
+-- in db.py's _connect_postgres (recurring DB-contention pattern, first
+-- observed 25 July). Expression must match the query's ORDER BY exactly for
+-- Postgres to use it for both the filter and the sort.
+CREATE INDEX IF NOT EXISTS idx_products_retailer_staleness ON products
+  (retailer, (COALESCE(price_updated_at, '1970-01-01')))
+  WHERE current_price IS NOT NULL;
 CREATE TABLE IF NOT EXISTS crawl_queue (
     retailer TEXT NOT NULL,
     url TEXT NOT NULL,
