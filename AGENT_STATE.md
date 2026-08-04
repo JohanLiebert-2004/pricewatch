@@ -541,12 +541,26 @@ Before changing anything:
   row without a manual DB write (port 5432 unreachable from this dev
   network, as usual - see [[reference-pricewatch-infra]]). **Same class of
   bug could exist on other multi-variant retailers using a "from" price
-  pattern - not audited this session, only Myer was reported.** Note: the
-  manually-triggered `enrich.yml` run took over 30 minutes to reach Myer's
-  job (matrix `max-parallel: 3`, several slower retailers queued ahead of
-  it) - whoever next has DB/PostgREST access should confirm
-  `discount_feed` for `myer`/`332108980` shows ~30% off, not 92%, and close
-  this note once seen.
+  pattern - not audited this session, only Myer was reported.** **Follow-up
+  (checked 4 August, after a multi-day session gap):** the manually-
+  triggered `enrich.yml` run completed, but `product_search` shows
+  `332108980` was never actually touched by it - `last_seen`/
+  `price_updated_at` are still frozen at the pre-fix `2026-07-31T21:50:19`,
+  gtin still the broken $10 variant's. Myer's crawl_queue is stalest-first
+  across the whole ~120k-product catalogue (`retailer_freshness` shows only
+  ~9.1k/120k "fresh" at any moment), so one specific already-tracked SKU
+  competing against a queue that size can easily miss a 1000-item batch;
+  the manual trigger did not specifically target this URL. Net effect: the
+  underlying row is still wrong, but it's not currently user-visible -
+  `discount_feed` now excludes it because `last_seen` aged past the
+  36-hour freshness cutoff, not because it was corrected. It will self-heal
+  (correctly, since the code fix is real) whenever the crawl queue reaches
+  it, or can be forced immediately with `python run.py url
+  https://www.myer.com.au/p/bambury-bedt-organica-cotton-and-tencel-jersey-sheet-set`
+  from a host with DB access (this dev machine has neither DB nor SSH
+  access to run it - see [[reference-pricewatch-infra]]). Low urgency since
+  it's not live-visible as a wrong deal right now, but don't assume it's
+  fixed in the DB just because it dropped out of the feed.
 
 - **1 August — health_alerts.py couldn't see a laptop outage; fixed
   (Claude), following an owner question about degraded Big W coverage.**
