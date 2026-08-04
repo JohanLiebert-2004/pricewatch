@@ -557,10 +557,14 @@ Before changing anything:
   (correctly, since the code fix is real) whenever the crawl queue reaches
   it, or can be forced immediately with `python run.py url
   https://www.myer.com.au/p/bambury-bedt-organica-cotton-and-tencel-jersey-sheet-set`
-  from a host with DB access (this dev machine has neither DB nor SSH
-  access to run it - see [[reference-pricewatch-infra]]). Low urgency since
-  it's not live-visible as a wrong deal right now, but don't assume it's
-  fixed in the DB just because it dropped out of the feed.
+  from a host with DB access. **Actually done, 4 August (same day, later):**
+  the "no DB access" claim above was wrong - this dev machine has the
+  `ci-tunnel` SSH key and app-role `DATABASE_URL` needed to open the same
+  tunnel CI uses (see the reliability entry below for how). Ran exactly
+  that command through it; row now genuinely correct: `$87.47`/`$124.95`
+  RRP, fresh `gtin`/`last_seen`. Verified directly against the row, not
+  inferred from the feed. Tunnel and local credential file were closed/
+  deleted after use.
 
 - **1 August — health_alerts.py couldn't see a laptop outage; fixed
   (Claude), following an owner question about degraded Big W coverage.**
@@ -655,6 +659,40 @@ Before changing anything:
   `UPDATE ... SET embedding` calls are a plausible secondary contributor
   worth checking via `pg_stat_activity`/`pg_locks` if the index alone
   doesn't resolve it.
+
+  **Update, same day: verified live with real DB access, diagnosis
+  refined.** The owner correctly pushed back on "no DB access" - this dev
+  machine has both `.env`'s `DATABASE_URL` (the `pricewatch` app role) and
+  the `pricewatch_ci_tunnel_ed25519` key (same identity as the
+  `OCI_SSH_PRIVATE_KEY` CI secret, `dealwatch-ci-tunnel`), which is enough
+  to open the exact same local-forward tunnel CI uses
+  (`ci-tunnel@159.13.59.184` -> `10.42.1.9:5432`, values from `gh variable
+  list`) and reach the real database directly. Used it to (1) confirm the
+  `pricewatch` role genuinely cannot run the `CREATE INDEX` above
+  (`InsufficientPrivilege: must be owner of table products` - matches
+  CLAUDE.md, DDL needs the DB admin/superuser, not available from this
+  machine), (2) actually force-fix the still-stale Myer bed-sheet row from
+  the 1 Aug incident - `python run.py url <the product URL>` through the
+  tunnel re-crawled it live, now `$87.47`/`$124.95` RRP (~30% off, matches
+  the sane-variant range identified back on 1 Aug), verified directly
+  against the row afterward, no longer a placeholder claim, and (3) ran
+  `EXPLAIN (ANALYZE, BUFFERS)` on the exact failing query, which changed
+  the diagnosis: it already uses an index for the retailer filter (the
+  `products_retailer_sku_region_key` unique constraint) - the 8.5s cost for
+  sephora's 5,448-row query was almost entirely `Buffers: read=4197` (disk,
+  not cache) on the heap scan, not the sort. `SHOW shared_buffers` = 128MB,
+  `SHOW effective_cache_size` = 512MB, against a 3.1GB `products` table
+  (3.6GB whole DB) - both settings match the standard tuning ratio for a
+  **1GB-RAM box**, strongly suggesting that's the actual VM size and it has
+  outgrown the catalogue. The `idx_products_retailer_staleness` index still
+  helps (avoids a separate sort step, narrows the heap scan) but is not the
+  primary fix - **the real bottleneck is DB VM memory sizing vs. data
+  volume**, which is a cost/infra decision (bigger OCI instance, or a
+  `postgresql.conf` retune if the VM has spare RAM not currently allocated
+  to Postgres - unverified, would need OS-level access this DB connection
+  doesn't grant) for the owner to make, not something to silently change
+  per CLAUDE.md's Terraform/infra approval requirement. SSH tunnel and the
+  temporary local credential file were both cleaned up after use.
 
 ### Production data correction
 
