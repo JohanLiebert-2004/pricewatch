@@ -566,6 +566,49 @@ Before changing anything:
   inferred from the feed. Tunnel and local credential file were closed/
   deleted after use.
 
+- **7 August — status check: laptop offline ~48h (alerts fired correctly,
+  laptop itself still needs attention), IKEA "missing deals" investigated
+  and is not a bug (Claude).** Owner asked for a general health check and
+  specifically "I don't see IKEA cases". `retailer_freshness` showed Big W
+  at 28/382,653 "fresh" products and Chemist Warehouse stuck at
+  `last_seen` 2026-08-05T15:28 (46h+ stale at check time). Confirmed via
+  the DB tunnel (kv table): `bigw_local_heartbeat`, `chemistwarehouse_
+  local_heartbeat`, and `jbhifi_local_heartbeat` all stopped within the
+  same ~2h window on 5 August (13:16-15:13 UTC) - the owner's Ubuntu
+  laptop has been off/unreachable since, taking all three of its owned
+  crawl lanes down together. **The 1 August health_alerts.py fix worked as
+  designed**: `health_alert:bigw_local_heartbeat`, `_chemistwarehouse_
+  local_heartbeat`, and `_jbhifi_local_heartbeat` kv rows show Telegram
+  alerts were sent for each within hours of going stale (fingerprint
+  `"stale"`), correctly deduped since (no repeat spam). CI's byte-capped
+  Webshare proxy fallback is covering Big W in the meantime but can only
+  refresh ~5-6MB/run against a 382k-product catalogue, explaining the
+  near-zero freshness. **Action needed from the owner: turn the laptop back
+  on** (or check why it's been off/unreachable for 2 days) - this is not a
+  code issue, the monitoring correctly identified and reported it.
+  Chemist Warehouse and JB Hi-Fi have no CI fallback at all (Cloudflare/
+  storefront blocks CI IPs outright, see the 18 July entries below), so
+  they're fully dark until the laptop is back. **IKEA investigated
+  separately, found to be working as intended, not a bug:** only ~1,036 of
+  22,170 IKEA products (4.7%) have any `current_rrp` recorded, and
+  `discount_feed`/`clearance_feed` had essentially nothing for IKEA at
+  check time. Verified live by fetching a real product page directly
+  (`lagan-single-lever-kitchen-mixer-tap...`): no `wasPrice`/`rrp`/
+  `listPrice`/`strikethroughPrice`/`highPrice` field anywhere on the page,
+  only the current price - IKEA's site itself doesn't expose a compare-at
+  price for most items (consistent with their everyday-low-price model,
+  they rarely run markdowns). `scrapers/ikea.py` has no `parse_product`
+  override and relies on the shared `base.py` JSON-LD/regex RRP extraction,
+  which is working correctly - there's simply nothing there to find on most
+  pages. IKEA's crawl itself is healthy (last_seen ~1h old, 2,800/22,170
+  "fresh" by the 36h window) and its one live `discount_feed` entry came
+  from a genuine 90-day price-history drop, confirming the history-based
+  signal still catches real IKEA markdowns when they happen - the retailer
+  just doesn't generate many. No code change made for IKEA; flagging in
+  case the owner wants a lower discount threshold or a different "deal"
+  definition specifically for low-discount-frequency retailers, but that's
+  a product decision, not a bug fix.
+
 - **1 August — health_alerts.py couldn't see a laptop outage; fixed
   (Claude), following an owner question about degraded Big W coverage.**
   The owner's Ubuntu laptop (runs Big W/Chemist Warehouse/JB Hi-Fi's real
