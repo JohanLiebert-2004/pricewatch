@@ -462,6 +462,7 @@ SITEMAP_PAGE_COUNT_CEILING = 3_000
 SITEMAP_FRESH_DAYS = 30  # Exclude abandoned catalogue rows from discovery.
 SITEMAP_TTL = 24 * 3600  # cache once daily: enough freshness without egress churn
 SITEMAP_CACHE_VERSION = 2  # Do not serve pre-freshness-filter cache files.
+SITEMAP_PAGE_COUNT_FALLBACK = int(os.environ.get("SITEMAP_PAGE_COUNT_FALLBACK", "400"))
 
 _sitemap_page_count_cache = {"value": None, "at": 0.0}
 
@@ -475,46 +476,56 @@ async def _sitemap_page_count() -> int:
     if (_sitemap_page_count_cache["value"] is not None
             and now - _sitemap_page_count_cache["at"] < SITEMAP_TTL):
         return _sitemap_page_count_cache["value"]
-    r = await client.get(
-        f"{SUPABASE_URL}/rest/v1/product_search",
-        params={"select": "retailer", "current_price": "gt.0",
-                "last_seen": f"gte.{_sitemap_fresh_after()}", "limit": 1},
-        headers={"Prefer": "count=exact", "Range": "0-0"})
+    try:
+        r = await client.get(
+            f"{SUPABASE_URL}/rest/v1/product_search",
+            params={"select": "retailer", "current_price": "gt.0",
+                    "last_seen": f"gte.{_sitemap_fresh_after()}", "limit": 1},
+            headers={"Prefer": "count=planned", "Range": "0-0"})
+    except httpx.HTTPError:
+        return _sitemap_page_count_cache["value"] or SITEMAP_PAGE_COUNT_FALLBACK
     total = None
     content_range = r.headers.get("content-range", "")
     if "/" in content_range:
         tail = content_range.split("/", 1)[1]
         if tail != "*":
-            total = int(tail)
+            try:
+                total = int(tail)
+            except ValueError:
+                total = None
     if total is None:
         # Count unavailable (transient error) - fall back to the last known
-        # good value, or a conservative single page if there isn't one yet.
-        return _sitemap_page_count_cache["value"] or 1
+        # good value, or a bounded estimate if there isn't one yet. Sitemap
+        # pages validate themselves by returning 404 when a requested page has
+        # no rows, so a high estimate is safer than dropping discovery URLs.
+        return _sitemap_page_count_cache["value"] or SITEMAP_PAGE_COUNT_FALLBACK
     pages = max(1, min(SITEMAP_PAGE_COUNT_CEILING,
                         -(-total // SITEMAP_PAGE_SIZE)))  # ceil div
     _sitemap_page_count_cache.update(value=pages, at=now)
     return pages
-
-
 async def _sitemap_products(page: int):
-    page_count = await _sitemap_page_count()
-    if page < 1 or page > page_count:
+    if page < 1 or page > SITEMAP_PAGE_COUNT_CEILING:
         raise HTTPException(404)
     cache_file = CACHE_DIR / f"sitemap-products-v{SITEMAP_CACHE_VERSION}-{page}.xml"
     if cache_file.exists() and time.time() - cache_file.stat().st_mtime < SITEMAP_TTL:
         return Response(cache_file.read_bytes(), media_type="application/xml")
 
-    r = await client.get(
-        f"{SUPABASE_URL}/rest/v1/product_search",
-        params={"select": "retailer,sku,price_updated_at,last_seen",
-                "current_price": "gt.0",
-                "last_seen": f"gte.{_sitemap_fresh_after()}",
-                "order": "last_seen.desc,retailer.asc,sku.asc",
-                "limit": SITEMAP_PAGE_SIZE,
-                "offset": (page - 1) * SITEMAP_PAGE_SIZE})
+    try:
+        r = await client.get(
+            f"{SUPABASE_URL}/rest/v1/product_search",
+            params={"select": "retailer,sku,price_updated_at,last_seen",
+                    "current_price": "gt.0",
+                    "last_seen": f"gte.{_sitemap_fresh_after()}",
+                    "order": "last_seen.desc,retailer.asc,sku.asc",
+                    "limit": SITEMAP_PAGE_SIZE,
+                    "offset": (page - 1) * SITEMAP_PAGE_SIZE})
+    except httpx.HTTPError:
+        raise HTTPException(503, "product sitemap unavailable")
     if r.status_code != 200:
         raise HTTPException(503, "product sitemap unavailable")
     rows = r.json()
+    if not rows and page > 1:
+        raise HTTPException(404)
     urls = "\n".join(
         f"  <url><loc>{html.escape(SITE_URL)}/p/{html.escape(quote(str(row['retailer']), safe=''))}/{html.escape(quote(str(row['sku']), safe=''))}</loc>"
         f"<lastmod>{html.escape(str(row.get('price_updated_at') or row['last_seen'])[:10])}</lastmod></url>"
@@ -536,9 +547,21 @@ async def sitemap_products():
     return await _sitemap_products(1)
 
 
+@app.head("/sitemap-products.xml")
+async def sitemap_products_head():
+    return Response(media_type="application/xml")
+
+
 @app.get("/sitemap-products-{page}.xml")
 async def sitemap_products_page(page: int):
     return await _sitemap_products(page)
+
+
+@app.head("/sitemap-products-{page}.xml")
+async def sitemap_products_page_head(page: int):
+    if page < 1 or page > SITEMAP_PAGE_COUNT_CEILING:
+        raise HTTPException(404)
+    return Response(media_type="application/xml")
 
 
 @app.get("/sitemap.xml")
@@ -556,6 +579,12 @@ async def sitemap_index():
             + "\n</sitemapindex>\n").encode()
     return Response(body, media_type="application/xml",
                      headers={"Cache-Control": f"public, max-age={SITEMAP_TTL}"})
+
+
+@app.head("/sitemap.xml")
+async def sitemap_index_head():
+    return Response(media_type="application/xml",
+                    headers={"Cache-Control": f"public, max-age={SITEMAP_TTL}"})
 
 
 @app.get("/healthz")
