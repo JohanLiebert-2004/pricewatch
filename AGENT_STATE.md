@@ -782,6 +782,8 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
 
 ## Task queue
 
+| P27 | Website audit and reproducible fixes | Codex | Blocked on Vercel CLI access (13 September 2026); local checks passed | web/search.html, web/style.css, web/vercel.json, web/sw.js, tests/website_browser.cjs, CHANGELOG.md and this file. Camera policy, scanner visibility/lifecycle and search race fixed and browser-tested. Not committed or deployed. Preserve pre-existing schema.sql edits. Resume checklist below. |
+
 | ID | Task | Owner | Status | Allowed files / notes |
 |---|---|---|---|---|
 | P1 | Verify Vercel Analytics receives first real visitor data | Unassigned | Waiting for traffic | Vercel dashboard only; do not add another analytics vendor. |
@@ -824,6 +826,50 @@ but its unit-file state remained disabled (so it was not durable across reboot).
 | P26 | Restore Target catalogue ingestion through Ultimate Web Scraper | Codex | **Implemented locally; deferred by user 1 Aug** | User explicitly chose Ultimate Web Scraper and does **not** have/want to wait for Commission Factory. Commit `f59e8b8` added a feed-first Target refresh path for stable HTTPS CSV/JSON exports, strict AUD/positive-price checks, normalized SKU/GTIN/stock/RRP/image/category fields, direct Target URL recovery, duplicate-SKU handling, secret-safe failures, and workflow wiring. The old serial storefront path remains a visible fallback; no Akamai bypass or browser stealth was added. UWS was not exposed as a callable connector in the Codex session, no UWS cloud task/export/webhook was configured, `TARGET_PRODUCT_FEED_URL` is not present in GitHub secrets, and no live Target recovery is claimed. The user said to leave setup for later. Do not pursue Commission Factory or spend UWS credits unless the user resumes this task. Thirteen tests, Python compilation, workflow YAML parsing, and `git diff --check` passed. |
 
 ## Handoff notes
+
+### 2026-09-13 - Codex: saved for user-requested permissions restart
+
+- User requested a website audit/fixes and continuously updated changelogs for
+  Claude. User then explicitly paused work to restart Codex with full permissions.
+- Authoritative repo: C:\Users\tarun\Downloads\pricewatch_4\pricewatch,
+  master at f1b46e3 (Fix dynamic sitemap timeouts). Read CLAUDE.md,
+  AGENT_PROTOCOL.md and current AGENT_STATE.md; fetched origin successfully.
+  The sibling pricewatch-v2 worktree is historical; do not switch branches.
+- At start, only schema.sql was modified. That change belongs to prior work;
+  it was not edited, staged, reverted or deployed in this session.
+- Live checks: https://dealwatch.com.au and homepage_bootstrap respond with
+  real data. Chromium reproduced cameraAllowed=false on /search.html and
+  scannerVisible=true before opening it. HTTP confirms camera=() policy.
+- Fixes saved: camera=(self) in web/vercel.json; .scanner[hidden] display rule
+  in web/style.css; session guards and stream cleanup for both native/ZXing
+  scanner paths, retry after library-load failure, AbortController plus stale
+  response guards for search in web/search.html; service-worker cache v9.
+- Added CHANGELOG.md and tests/website_browser.cjs. Browser regression PASSED:
+  camera policy, initially hidden/closed scanner, late permission stream cleanup,
+  out-of-order search results, actual bundled ZXing startup and stop using
+  Chromium's fake camera, no horizontal overflow at 390/1440px, no page errors.
+  git diff --check passed. Mobile screenshot visually inspected.
+- Local QA dependencies are outside the repo at ../.qa-tools/node_modules;
+  screenshots are ../.qa-tools/search-390.png and search-1440.png. No local
+  server or browser remains running; the test closes both automatically.
+- Rerun browser tests in PowerShell:
+  $env:PLAYWRIGHT_MODULE='C:\Users\tarun\Downloads\pricewatch_4\.qa-tools\node_modules\playwright-core'
+  $env:CHROMIUM_PATH='C:\Users\tarun\AppData\Local\ms-playwright\chromium-1228\chrome-win64\chrome.exe'
+  node C:\Users\tarun\Downloads\pricewatch_4\pricewatch\tests\website_browser.cjs
+- Nothing committed, pushed or deployed. The site still has the reproduced bugs.
+  No production database changes or real alert submissions were made.
+- Resume: inspect current git diff/status; finish live homepage/catalogue/search/
+  clearance/product/sitemap checks and desktop/mobile screenshots; run relevant
+  checks; commit only P27 files and push after fetching. Deploy the linked web
+  Vercel project (web/.vercel/project.json identifies projectName=web; repo root
+  is a different project). Verify live camera policy, scanner close/start,
+  search, homepage_bootstrap, /img, a /p/:retailer/:sku page and sitemap. Record
+  deployment URL/commit and actual results in CHANGELOG.md and this file.
+  Physical-phone camera/barcode recognition remains unverified.
+- Tool quirk in this session: exec_command started at C:\ despite workdir;
+  absolute paths and git -C were reliable. Restricted sandbox blocked Node
+  module resolution and initial git network access; approved elevated commands
+  succeeded. Do not infer code failures from those environment errors.
 
 ### 2026-08-01 — Codex
 - Decision: the user chose **Ultimate Web Scraper** for Target and confirmed
@@ -1042,3 +1088,19 @@ again is safe to re-run, `INSERT OR IGNORE` dedupes).
 1. Update this file's completed work/task queue with concise facts.
 2. Commit and push code/docs together when the work is complete.
 3. State exact production verification performed and any external dependency.
+
+### 2026-09-13 - Codex: production rollout retry
+- Resumed P27 with user authorization to fix production; preserved schema.sql.
+- Verified: browser regression suite passed again, 13 Python tests passed,
+  Python compilation, Terraform fmt/validate and git diff --check passed.
+- Git fetch succeeded with command-scoped http.sslBackend=openssl; master
+  matches origin/master before committing these fixes.
+- Live search response still sends camera=(); fixes are not deployed.
+- Vercel production deployment from web/ failed while retrieving the project.
+  Initial cache EPERM was avoided with workspace-local XDG_CACHE_HOME and
+  NO_UPDATE_NOTIFIER=1, but both deploy and whoami still fail with
+  ERR_OUT_OF_RANGE: err must be negative, received 1. No deployment succeeded.
+- Current session remains workspace-write with approval_policy=never, despite
+  the intended permissions restart. Do not report production fixed.
+- Next: restore working Vercel CLI/account access, deploy linked web project,
+  then complete live browser/API/image/product/sitemap checks.

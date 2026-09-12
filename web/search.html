@@ -94,7 +94,10 @@ function asOf(iso){
 }
 
 function skeletonHtml(){return `<div class="skeleton-list">${Array.from({length:6},()=>`<div class="skeleton-card"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>`).join("")}</div>`;}
+let searchController = null;
 async function search(q){
+  if(searchController) searchController.abort();
+  const controller = searchController = new AbortController();
   const list = document.getElementById("list");
   list.innerHTML = skeletonHtml();
   // PostgREST or= syntax breaks on , ( ) — strip them; * are wildcards
@@ -110,12 +113,14 @@ async function search(q){
   let rows = [];
   try{
     const parts = await Promise.all(urls.map(async u=>{
-      const r = await fetch(u);
+      const r = await fetch(u, {signal:controller.signal});
       if(!r.ok) throw new Error(r.status);
       return r.json();
     }));
+    if(controller !== searchController) return;
     rows = parts.flat();
   }catch(e){
+    if(controller !== searchController) return;
     list.innerHTML = `<div class="empty">The search couldn't complete — please try again in a moment.</div>`;
     return;
   }
@@ -164,12 +169,14 @@ document.getElementById("f").addEventListener("submit", e=>{
 });
 
 let scanStream = null, scanFrame = null, zxingReader = null, zxingLoad = null;
+let scanSession = 0;
 function setScannerState(state, message){
   const box = document.getElementById("scanner");
   box.dataset.state = state;
   if(message) document.getElementById("scanStatus").textContent = message;
 }
 function stopScanner(){
+  ++scanSession;
   if(scanFrame) cancelAnimationFrame(scanFrame);
   scanFrame = null;
   if(scanStream) scanStream.getTracks().forEach(track=>track.stop());
@@ -193,20 +200,30 @@ function loadZXing(){
     const s = document.createElement("script");
     s.src = "/vendor/zxing.min.js";
     s.onload = ()=>resolve();
-    s.onerror = ()=>reject(new Error("scanner library failed to load"));
+    s.onerror = ()=>{ zxingLoad = null; s.remove(); reject(new Error("scanner library failed to load")); };
     document.head.appendChild(s);
   });
   return zxingLoad;
 }
-async function startScannerNative(video, detector){
-  scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
-  video.srcObject = scanStream;
+async function acquireScanStream(session){
+  const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
+  // Permission prompts can resolve after Close or after another scan starts.
+  if(session !== scanSession){ stream.getTracks().forEach(track=>track.stop()); return null; }
+  scanStream = stream;
+  return stream;
+}
+async function startScannerNative(video, detector, session){
+  const stream = await acquireScanStream(session);
+  if(!stream) return;
+  video.srcObject = stream;
   await video.play();
+  if(session !== scanSession) return;
   setScannerState("scanning", "Camera ready — looking for a barcode…");
   const tick = async ()=>{
-    if(!scanStream) return;
+    if(session !== scanSession) return;
     try{
       const codes = await detector.detect(video);
+      if(session !== scanSession) return;
       const code = codes[0] && String(codes[0].rawValue || "").trim();
       if(code){
         document.getElementById("q").value = code;
@@ -215,13 +232,16 @@ async function startScannerNative(video, detector){
         return;
       }
     }catch(e){}
-    scanFrame = requestAnimationFrame(tick);
+    if(session === scanSession) scanFrame = requestAnimationFrame(tick);
   };
   tick();
 }
-async function startScannerZXing(video){
+async function startScannerZXing(video, session){
   setScannerState("loading", "Loading the barcode scanner…");
   await loadZXing();
+  if(session !== scanSession) return;
+  const stream = await acquireScanStream(session);
+  if(!stream) return;
   const hints = new Map();
   hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
     ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
@@ -229,7 +249,9 @@ async function startScannerZXing(video){
     ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39]);
   zxingReader = new ZXing.BrowserMultiFormatReader(hints);
   setScannerState("starting", "Starting camera…");
-  await zxingReader.decodeFromVideoDevice(undefined, video, (result)=>{
+  const reader = zxingReader;
+  await reader.decodeFromStream(stream, video, (result)=>{
+    if(session !== scanSession){ reader.reset(); return; }
     if(document.getElementById("scanner").dataset.state !== "scanning"){
       setScannerState("scanning", "Camera ready — looking for a barcode…");
     }
@@ -244,6 +266,7 @@ async function startScannerZXing(video){
 async function startScanner(){
   const box = document.getElementById("scanner"), video = document.getElementById("scanVideo");
   if(!box.hidden) return;
+  const session = ++scanSession;
   box.hidden = false;
   document.getElementById("scan").setAttribute("aria-expanded", "true");
   setScannerState("starting", "Starting camera…");
@@ -252,12 +275,13 @@ async function startScanner(){
     if("BarcodeDetector" in window){
       try{ detector = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39"]}); }catch(e){}
     }
-    if(detector) await startScannerNative(video, detector);
-    else await startScannerZXing(video);
+    if(detector) await startScannerNative(video, detector, session);
+    else await startScannerZXing(video, session);
   }catch(e){
-    if(scanStream) scanStream.getTracks().forEach(track=>track.stop());
-    scanStream = null;
-    video.srcObject = null;
+    if(session !== scanSession) return;
+    stopScanner();
+    box.hidden = false;
+    document.getElementById("scan").setAttribute("aria-expanded", "true");
     setScannerState("error", "Camera access was unavailable. You can still enter the barcode above.");
   }
 }
