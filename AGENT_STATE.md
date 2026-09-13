@@ -1,5 +1,28 @@
 # Pricewatch — shared agent state
 
+## Phase 3 resumed — Codex, in progress
+
+Owner explicitly requested completion after GTM installation. This supersedes
+the pause/deployment exclusions below. Finish real-data visual QA, history API
+boundary/performance checks, bounded category repair, methodology and production
+deployment. Preserve GTM and the unrelated schema.sql work. Scope remains the
+Phase 3 files, associated checks and handover.
+
+Progress saved: real-data local Chromium loaded history for all 24 homepage
+cards. Mobile grid starts at document y=859px versus 2726px before (390px
+width); screenshots phase3-after-390.png and phase3-cards-after-{390,1440}.png
+in ../.qa-tools were visually inspected. No badge overlap; images and step
+charts render. Desktop logged viewport y=320 after resizing a scrolled page,
+so it is not a comparable document-position measurement. Added methodology
+for daily chart summaries and category sources. Category repair can now
+target the existing deal feed and closes the PostgreSQL adapter correctly.
+
+History API verification saved: production 24-product batch took 133.820ms
+on first read and 2.468ms warm. Transaction-rolled-back fixtures verified
+30-day carry-forward, recorded changes/current endpoint, duplicate keys,
+empty input and rejection above 24 keys; anon could read the public result.
+No fixture product or snapshots were committed.
+
 ## Google Tag Manager — Codex, deployed and verified (13 September 2026)
 
 Owner supplied GTM-MF4PFW6M and authorized installation on every page.

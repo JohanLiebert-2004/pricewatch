@@ -28,13 +28,19 @@ def main():
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--after-id', type=int, default=0)
     parser.add_argument('--limit', type=int, default=5000)
+    parser.add_argument('--feed-only', action='store_true',
+                        help='Review only products currently in the public deal feed (PostgreSQL).')
     args = parser.parse_args()
     if not 1 <= args.limit <= 5000:
         parser.error('--limit must be between 1 and 5000')
     conn = db.connect()
+    if args.feed_only and not db.DATABASE_URL:
+        parser.error('--feed-only requires the production PostgreSQL database')
+    feed_filter = ("AND EXISTS (SELECT 1 FROM discount_feed d WHERE "
+                   "d.retailer=p.retailer AND d.sku=p.sku) " if args.feed_only else "")
     rows = conn.execute(
-        "SELECT id, retailer, gtin, subcategory, title, category FROM products "
-        "WHERE id > ? AND current_price > 0 ORDER BY id LIMIT ?",
+        "SELECT id, retailer, gtin, subcategory, title, category FROM products p "
+        "WHERE id > ? AND current_price > 0 " + feed_filter + "ORDER BY id LIMIT ?",
         (args.after_id, args.limit)).fetchall()
     updates = list(repairs(rows))
     for category, row_id, old in updates[:10]:
@@ -44,13 +50,16 @@ def main():
     if args.apply:
         for i in range(0, len(updates), 100):
             # Optimistic category guard preserves concurrent scraper updates.
-            conn.executemany('UPDATE products SET category=? WHERE id=? AND category=?',
-                             updates[i:i + 100])
+            conn.executemany('UPDATE products SET category=? WHERE id=? '
+                             'AND (category=? OR (category IS NULL AND ? IS NULL))',
+                             [(cat, row_id, old, old) for cat, row_id, old
+                              in updates[i:i + 100]])
             conn.commit()
         print('Applied reviewed category rules; refresh feed views through the next detect cycle.')
     else:
         print('Dry run: no changes. Use --apply to write this batch.')
-    conn.close()
+    # Production adapter exposes its psycopg connection as _c.
+    getattr(conn, '_c', conn).close()
 
 
 if __name__ == '__main__':
