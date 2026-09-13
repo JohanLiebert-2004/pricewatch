@@ -1,5 +1,68 @@
 # Pricewatch — shared agent state
 
+## Google Tag Manager — Codex, deployed and verified (13 September 2026)
+
+Owner supplied GTM-MF4PFW6M and authorized installation on every page.
+Scope: web HTML/templates, CSP, cache version, privacy copy, checks and
+handover. Working in ../pricewatch-gtm on codex/gtm-install, based on live
+Phase 2/origin master. Do not deploy the paused Phase 3 checkpoint b1eb4ef
+from the original worktree, or its unrelated schema.sql edit. Public GTM
+container currently returns HTTP 200; verify actual GA4 collection separately.
+
+Local checks passed: exact head/noscript snippets on all 13 HTML templates;
+real Google container HTTP 200, exactly one initialization, JavaScript-disabled
+iframe load and no CSP/browser errors on representative pages. CSP allows
+GTM and GA4 collection hosts, retains existing inline-script permission and
+does not add unsafe-eval. Privacy copy describes GTM separately from future
+analytics tags. Published container has no visible G- measurement ID; GA4
+collection is not yet proven. Helper: ../.qa-tools/gtm-check.cjs.
+
+Production: code 29d5359 pushed to origin/master, Vercel deployment
+https://web-80jy4nvbo-trest2.vercel.app READY and aliased to dealwatch.com.au;
+cache v11-gtm1. OCI /opt/pricewatch fast-forwarded to 29d5359, preserving
+.venv/. Template-only changes required no restart; service active/health ok.
+Live Chromium loaded GTM exactly once on homepage, About, retailer, category
+and product pages without CSP/page errors. Bootstrap, real image, both
+sitemaps and cache checks passed. No GA4 collect request observed; owner
+must configure/publish a Google tag using the GA4 G- Measurement ID inside
+this container before calling GA4 active. All 13 Python tests, both existing
+browser suites, compilation, Terraform fmt/validate and diff checks passed.
+Live helper: ../.qa-tools/gtm-live.cjs. Phase 3 sparklines absent from deployed
+homepage as intended. Main worktree retains the Phase 3 checkpoint.
+
+Production GTM branch has been merged into the main local worktree to retain
+the installation when Phase 3 resumes. Local cache is v12-gtm1; production
+remains v11-gtm1. Keep the local Phase 3 commits unpushed until resuming that
+work. The deployment-only worktree ../pricewatch-gtm tracks the shipped code.
+
+### Traffic audit — 13 September 2026
+
+Authenticated Vercel report for 14 August–12 September (UTC; API aggregate
+rounds its end to 13 September 01:00): 171 pageviews, 69 recorded visitors,
+all on dealwatch.com.au. AU: 9 visitors / 56 views; Google: 2 visitors / 2
+views, both to homepage. Direct/unspecified: 36 visitors / 108 views;
+m.baidu.com: 32 / 59; Bing 1 / 1; ChatGPT 1 / 1. Visitor segments overlap,
+and these counts are not a count of distinct humans across the month.
+Owner/QA activity may contribute. CN/unknown-device and Baidu aggregates
+coincide but this does not establish that these are bots.
+
+Retailer/category and About/methodology/legal/contact pages have no Vercel
+script, verified live for retailer/category/About. Absence of those pages
+from Vercel analytics is not proof of zero traffic. Current plan returned
+402 for custom events and UTM reports. Existing Search Console ownership
+and sitemap submission are documented, but its performance/indexing reports
+have not been accessed. Sample live canonical pages, robots and sitemap are
+reachable; homepage deal content still depends on browser JS, while landing
+pages contain product links in initial HTML.
+
+Growth priority: inspect Search Console indexing and query impressions;
+improve a few existing retailer/category pages around useful price-history
+information; test Australian referral channels with identifiable campaign
+links; measure product visits, retailer clicks and confirmed alerts once
+GA4 is configured. Do not treat visual polish or changing analytics vendors
+as a demonstrated solution to the low discovery numbers. No promotion was
+posted and no paid service was enabled.
+
 ## Phased improvements — owner authorized 13 September 2026
 
 **GitHub sync resolved:** owner explicitly approved the push; commits
