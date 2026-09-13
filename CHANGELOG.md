@@ -2,6 +2,10 @@
 
 ## 2026-09-13 - Phased improvements
 
+- GitHub sync completed after explicit owner approval: commits 266c636,
+  b922ed8 and b06e35c are on origin/master. Earlier push-block notes below
+  are historical; Phase 1 was already deployed and verified on production.
+
 - Search recovery verified: live keyword results from all 13 retailers,
   plus expected SKU/barcode matches. Website-role query plan uses the new
   trigram indexes; database statistics confirm ANALYZE completed.

@@ -2,7 +2,12 @@
 
 ## Phased improvements — owner authorized 13 September 2026
 
-- **Phase 1 — Codex, deployed and verified; Git push awaiting approval:** finish search recovery verification;
+**GitHub sync resolved:** owner explicitly approved the push; commits
+`266c636`, `b922ed8` and `b06e35c` were pushed to `origin/master` successfully.
+The earlier approval-block notes below are historical. Phase 1 remains live
+on Vercel, and the unrelated `schema.sql` edit remains local and untouched.
+
+- **Phase 1 — Codex, deployed, verified and pushed:** finish search recovery verification;
   add default sold-by-retailer filtering with an explicit marketplace option;
   explain email/Telegram alerts on feed cards. Scope: `web/index.html`,
   `web/style.css`, `web/sw.js`, browser checks, migration/docs already pending.
