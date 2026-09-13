@@ -12,9 +12,9 @@ on Vercel, and the unrelated `schema.sql` edit remains local and untouched.
   explain email/Telegram alerts on feed cards. Scope: `web/index.html`,
   `web/style.css`, `web/sw.js`, browser checks, migration/docs already pending.
   Preserve the unrelated existing `schema.sql` edit.
-- **Phase 2 — Codex, in progress (13 September):** surface exact-barcode comparisons more prominently
-  and improve About/methodology navigation. Owner identity and funding claims
-  need accurate owner-supplied details before publishing them.
+- **Phase 2 — Codex, deployed, verified and pushed (13 September):** surfaced
+  exact-barcode comparisons and improved About/methodology navigation. Owner
+  confirmed free public use and no affiliate links; no name was published.
   Claimed files: `web/product.html`, comparison/browser helper code and tests,
   `web/about.html`, public navigation/footer links, `web/style.css`,
   `web/how-it-works.html`, `web/vercel.json`, `web/sitemap-pages.xml`,
@@ -27,6 +27,40 @@ on Vercel, and the unrelated `schema.sql` edit remains local and untouched.
   variant matching, and retailer request-rate constraints.
 - Each phase needs focused commits, applicable tests, production deployment
   verification, and handover evidence before it is marked complete.
+
+### Phase 2 production evidence
+
+- Code commit `c93880c` is on origin/master. Vercel deployment
+  `https://web-13uux5ycb-trest2.vercel.app` is READY and serves
+  `https://dealwatch.com.au`; cache v11 is live.
+- OCI web host was fast-forwarded from f1b46e3 to c93880c. Host-local `.venv/`
+  was preserved. Product and landing templates are read per request, so no
+  service restart was needed; pricewatch-web is active and /healthz returned ok.
+- First Vercel deploy returned Not authorized even though whoami/project
+  access worked. Retrying with explicit `--scope trest2` succeeded; no login
+  reset or project relinking was needed.
+- Live Chromium verified `/about` and `/how-it-works` permanent redirects,
+  About links on homepage/static/retailer pages, owner's no-affiliate copy,
+  390/1440px page widths, and absence of page errors. Public bootstrap,
+  product page, real image proxy, both sitemaps and cache version passed.
+- Real product `/p/qbd/4893156045881` displayed its same-barcode Kmart match
+  `/p/kmart/110179174`; QBD's old current check generated no savings claim.
+  Existing old prices can appear under the older-matches disclosure.
+- Comparison rules validate GTIN length/check digits and normalize leading
+  zeroes. Exact requests are indexed, limited to 50 and independent of
+  optional brand suggestions; requests time out after 15s with explicit retry.
+  Model/title suggestions never generate price-saving claims. Recent prices
+  mean checked within 36 hours, not guaranteed stock/delivery or full coverage.
+- Both browser suites and all 13 Python tests passed, plus compilation,
+  Terraform fmt/validate, JSON/XML parsing and diff checks. Local cases cover
+  padding/invalid identifiers, stale and zero prices, seller labels, mixed
+  suggestions, independent requests, error/retry and missing barcodes.
+- Helpers: tests/phase2_browser.cjs and ../.qa-tools/phase2-live.cjs. Mobile
+  local screenshots were visually inspected; live product screenshot is
+  ../.qa-tools/phase2-live-product-390.png. No alert messages were submitted.
+- No production SQL or infrastructure changes in this phase. The unrelated
+  schema.sql edit remains local. Next: Phase 3 batched sparklines and category
+  quality, with database cost assessment before adding feed queries.
 
 ### Phase 1 production evidence
 

@@ -4,6 +4,11 @@ The supplied external review is useful direction, but several claimed gaps
 already have implementations. Owner subsequently authorized implementation
 in phases; AGENT_STATE.md tracks the active phase and remaining decisions.
 
+Phases 1 and 2 are now live: default marketplace exclusion/opt-in and alert
+copy, separate visible barcode comparisons, and a free/no-affiliate About
+page with navigation and canonical redirects. Owner supplied the no-affiliate
+policy. Next is Phase 3: batched history sparklines and category-quality work.
+
 | Suggestion | Verified state | Proposed scope |
 |---|---|---|
 | Marketplace filtering | Homepage labels marketplace stock but has no first-party filter. | Prioritize a sold-by-retailer filter and review default ranking. Current data tracks retailer/SKU, not separate marketplace seller identities, so do not promise seller-specific histories. |

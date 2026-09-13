@@ -1,6 +1,14 @@
 # Changelog
 
-## 2026-09-13 - Phase 2 (ready for production verification)
+## 2026-09-13 - Phase 2 (live and verified)
+
+- Commit c93880c pushed; Vercel production deployment
+  https://web-13uux5ycb-trest2.vercel.app is aliased to dealwatch.com.au.
+  OCI product/landing templates are on the same commit; health passed.
+- Live Chromium verifies About/navigation/redirects, a real QBD/Kmart barcode
+  match, stale-current savings exclusion, mobile/desktop widths, public API,
+  images, sitemaps, cache v11 and no page errors. Explicit Vercel team scope
+  trest2 resolved the initial deployment authorization error.
 
 - Product pages place barcode-matched retailer comparisons above alerts,
   with a shortcut near the product title, prices, check dates and marketplace
