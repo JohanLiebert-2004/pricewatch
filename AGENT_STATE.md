@@ -1,6 +1,42 @@
 # Pricewatch — shared agent state
 
-## Phase 3 resumed — Codex, in progress
+## Phase 3 — Codex, completed and live (13 September 2026)
+
+Final state supersedes the checkpoint and pause notes below. Frontend c0c3120
+is deployed at https://web-iwu8ntfeo-trest2.vercel.app, aliased to
+https://dealwatch.com.au, cache v12-gtm1. Backend/category safeguards 0864427
+are pushed and checked out on OCI. GTM-MF4PFW6M remains installed. The
+unrelated schema.sql edit remains local and was not deployed.
+
+- Shipped: 30-day card sparklines in bounded batches, compact mobile/desktop
+  homepage with expandable filters and visible quick finds, precise/non-glowing
+  30-day-low badges, clearer card text and reduced-motion support.
+- Category quality: preserve validated book identifiers; use first-party
+  native departments conservatively; never trust marketplace departments
+  over product titles; recognise trackpads and distinguish skincare toner.
+  Applied 18 reviewed current-OCI corrections from a bounded 5,000-row audit.
+  This is incremental cleanup, not an exhaustive catalogue reclassification.
+- Public feed refresh completed in 75.4 seconds; catalogue_stats in 44.1
+  seconds, concurrently without blocking reads. Earlier 60-second attempt
+  timed out safely. Public API verifies Kmart 43722655 as toys and 43640478
+  as tech; product_search verifies Good Guys 50077206 as tech. That product
+  was no longer in the fresh deal feed after refresh, so no stale deal was
+  forced back into the feed merely to verify the category.
+- Verification: all three browser suites, 19 Python tests, compilation,
+  Terraform fmt/validate, SQL input/permissions/history fixtures and diff
+  checks passed. Real-data and production screenshots inspected. Live checks
+  cover charts, pagination/cache, seller filters/reset, mobile/desktop, GTM,
+  methodology, product/alert UI, API, image proxy, robots and sitemaps.
+- Mobile first deal grid moved from y=2726 to y=859 at 390px width; desktop
+  y=958 to y=809 at 1440px. History batch cost: 134ms initial / 2.5ms warm
+  for 24 products. No actual alert was submitted.
+- Next phase remains Phase 4 discovery: reliable stock/freshness signals and
+  retailer expansion. Separately pending: GA4 tag configuration inside GTM,
+  Search Console growth audit, and review of the legacy web-host environment
+  file pointing at retired Supabase. The repair command now refuses that
+  retired host. Public API/database remains current OCI.
+
+### Phase 3 progress log
 
 Owner explicitly requested completion after GTM installation. This supersedes
 the pause/deployment exclusions below. Finish real-data visual QA, history API
@@ -150,7 +186,7 @@ on Vercel, and the unrelated `schema.sql` edit remains local and untouched.
   `web/how-it-works.html`, `web/vercel.json`, `web/sitemap-pages.xml`,
   `web/sw.js`, and handover/changelog. Deploy static files to Vercel and the
   product/landing templates to OCI; preserve `schema.sql` changes.
-- **Phase 3 — Codex, saved checkpoint (13 September, owner asked to save):** lightweight batched
+- **Phase 3 — Codex, completed and live (13 September):** lightweight batched
   price-history sparklines, category-quality fixes and desktop/mobile visual
   polish, preserving the existing blue/white palette. Claimed: homepage/shared
   styles, new history helper/RPC migration, categorisation, focused tests and

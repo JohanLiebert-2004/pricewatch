@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-13 - Phase 3 completed and live
+
+- Deployed c0c3120 to dealwatch.com.au via Vercel deployment
+  web-iwu8ntfeo-trest2.vercel.app; cache v12-gtm1. Category safeguards
+  0864427 deployed on OCI. Existing GTM installation preserved.
+- Added batched 30-day price-history sparklines, compact homepage/filter
+  layout, clearer cards, accurate 30-day-low labels and reduced-motion support.
+  Mobile first deals appear around 859px down instead of 2726px.
+- Validated book identifiers and cautious native-category use improve
+  categorisation; misleading marketplace departments cannot override titles.
+  Applied 18 reviewed corrections on current OCI and refreshed public feeds.
+- Three browser suites, 19 Python tests and required checks passed; live
+  desktop/mobile, charts, filters, GTM, API/images/sitemaps verified. Detailed
+  progress, database checks and follow-up items saved in AGENT_STATE.md.
+
 ## 2026-09-13 - Phase 3 checkpoint (website not deployed)
 
 - Saved at owner's request: batched 30-day feed sparklines, a compact
