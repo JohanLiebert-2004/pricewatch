@@ -63,3 +63,12 @@ comparison plan.
 
 The intended network posture is public HTTP/HTTPS, keys-only SSH with
 fail2ban, and PostgreSQL ingress restricted to the OCI VCN.
+
+## Product search indexes
+
+For PostgreSQL restores or new database hosts, apply
+`scripts/index_product_search.sql` with administrator `psql` after restoring
+products and applying schema/views. Run it outside a transaction: it installs
+pg_trgm and builds title/SKU partial GIN indexes concurrently for the public
+substring search. The existing GTIN index serves barcode equality searches.
+Verify index validity and an actual same-origin search after the build.

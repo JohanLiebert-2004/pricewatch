@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-09-13 - Phased improvements
+
+- Search recovery verified: live keyword results from all 13 retailers,
+  plus expected SKU/barcode matches. Website-role query plan uses the new
+  trigram indexes; database statistics confirm ANALYZE completed.
+- Phase 1 ready for deployment: default marketplace exclusion in the main
+  deal feed, opt-in checkbox, visible seller badges, and marketplace-free
+  personalized deal suggestions. Feed filtering is server-side and preserved
+  during pagination; seller selection is shown in the result summary.
+- Cards explain email/Telegram alerts and link directly to the watch panel.
+- Clear search & filters now resets all its advertised controls. API failures
+  show an error rather than claiming there are no matching deals.
+- Cache v10; browser regressions passed for seller selection, pagination,
+  alert links, reset, errors and mobile/desktop widths. All 13 Python tests,
+  compilation, Terraform formatting/validation, and diff checks passed.
+
 ## 2026-09-13 - Website audit (Codex)
 
 ### Fixed locally; production verification pending
@@ -41,3 +57,33 @@
   the project; whoami fails too (ERR_OUT_OF_RANGE, received 1). Moving cache
   into the workspace resolved cache permissions only. No production deployment.
 - Production verification remains pending until Vercel access works.
+
+### Login and Oracle follow-up
+
+- Website fix commit e3aea0e is now pushed to GitHub.
+- Updated Vercel CLI reports no saved credentials; device login started.
+- Oracle's live capacity report still returns OUT_OF_HOST_CAPACITY for
+  Sydney A1.Flex at 1 OCPU / 6 GB. Existing production VMs remain running.
+
+### Production deployed
+
+- Login completed; deployed e3aea0e to https://dealwatch.com.au using
+  https://web-r4tiuj762-trest2.vercel.app (READY).
+- Live Chromium confirms camera permission policy, initially hidden scanner,
+  ZXing startup with simulated camera, close/track cleanup, mobile/desktop
+  page widths, and cache v9. Homepage API, product page, sitemap, robots and
+  a real homepage image through /img return HTTP 200.
+- Live keyword search exposed a separate production 504: missing substring
+  indexes force scans of the 1,975 MB products heap (~897k estimated rows).
+  Concurrent title/SKU trigram indexes have now finished: a read-only server
+  check confirms both are valid/ready and no index build remains active.
+  SSH disconnected before final stdout, so final ANALYZE completion is
+  unconfirmed. Live keyword/SKU/barcode search verification remains pending.
+
+### Owner-requested handover
+
+- Current completed work, remaining checks, migration recovery details,
+  Oracle capacity result, and feature-review priorities are recorded at the
+  top of AGENT_STATE.md. Older failed-login/deployment notes are historical.
+- Migration and handover files remain local/uncommitted; schema.sql is
+  unrelated pre-existing work and must be preserved.

@@ -1,5 +1,97 @@
 # Pricewatch — shared agent state
 
+## Phased improvements — owner authorized 13 September 2026
+
+- **Phase 1 — Codex, in progress:** finish search recovery verification;
+  add default sold-by-retailer filtering with an explicit marketplace option;
+  explain email/Telegram alerts on feed cards. Scope: `web/index.html`,
+  `web/style.css`, `web/sw.js`, browser checks, migration/docs already pending.
+  Preserve the unrelated existing `schema.sql` edit.
+- **Phase 2 — queued:** surface exact-barcode comparisons more prominently
+  and improve About/methodology navigation. Owner identity and funding claims
+  need accurate owner-supplied details before publishing them.
+- **Phase 3 — queued:** lightweight batched price-history sparklines and
+  category-quality improvements after assessing database cost.
+- **Phase 4 — discovery:** reliable stock alerts, verified freshness reports,
+  and additional retailers with suitable data access. Keep existing privacy,
+  variant matching, and retailer request-rate constraints.
+- Each phase needs focused commits, applicable tests, production deployment
+  verification, and handover evidence before it is marked complete.
+
+## Latest handover — 13 September 2026 (Codex)
+
+This section supersedes the older deployment/login status below. Owner asked
+to document pending work first before continuing.
+
+### Completed and verified
+
+- Website commit `e3aea0e` is pushed to `origin/master` and deployed to
+  `https://dealwatch.com.au`; Vercel deployment
+  `https://web-r4tiuj762-trest2.vercel.app` is READY. CLI login is resolved.
+- Scanner camera policy, hidden panel, simulated-camera ZXing startup and
+  stop/track cleanup pass in live Chromium. Cache v9 is live. Homepage,
+  catalogue, clearance and search layout checks pass at 390/1440px.
+- Homepage API, a real product page, sitemap, robots, and a real homepage
+  image through `/img` returned HTTP 200. Local browser regressions, all
+  13 Python tests, compilation, Terraform fmt/validate passed.
+- OCI capacity check completed: Sydney A1.Flex at 1 OCPU / 6 GB returns
+  `OUT_OF_HOST_CAPACITY`. Existing two x86 VMs remain running. No new VM,
+  replacement, migration or paid resource was created.
+
+### Pending, in priority order
+
+1. **Search recovery verified on 13 September.** An initial follow-up still
+   failed, but subsequent live Chromium keyword search `pencil` returned rows
+   with HTTP 200 from all 13 retailers. SKU `43768172` and barcode
+   `70330905764` returned the expected product in ~1.7s and ~0.9s respectively.
+   The website-role EXPLAIN ANALYZE uses both trigram indexes and the GTIN
+   index; one keyword query took ~3.6s under concurrent workload. This proves
+   sampled recovery, not a latency guarantee for every query/load condition.
+2. **Index migration and ANALYZE completed.**
+   `scripts/index_product_search.sql` was applied through administrator psql
+   over SSH. First title build hit a 30-second lock timeout during validation,
+   leaving an invalid index. Script now uses a 15-minute lock wait and
+   repairs invalid named indexes with `REINDEX INDEX CONCURRENTLY`.
+   The resumed build reached `index validation: scanning table`, but local
+   exec session `84874` then ended with `Connection reset`. A subsequent
+   read-only server check confirmed BOTH named indexes have `indisvalid=true`
+   and `indisready=true`, with no build in `pg_stat_progress_create_index`.
+   No temporary index names appeared in the matching index inventory.
+   Do not rebuild these valid indexes. A later pg_stat_user_tables check
+   confirmed last_analyze=2026-09-12 20:20:11 UTC and subsequent autoanalyze.
+3. Monitor search reliability under normal workload. Local live test helper:
+   `../.qa-tools/production-check.cjs` currently expects cache v9; update its
+   expected cache version before using it for Phase 1 (v10).
+4. Finish a focused commit/push for the migration and final handover evidence.
+   Pending local files: `scripts/index_product_search.sql`, `DEPLOY.md`,
+   `AGENT_STATE.md`, `CHANGELOG.md`, `REVIEW_TRIAGE.md`.
+   **Preserve unrelated pre-existing `schema.sql` changes.**
+5. Physical-phone camera/barcode recognition remains unverified; automated
+   tests use simulated camera streams.
+6. Oracle: a future capacity recheck is needed if owner still wants ARM.
+   There is no retry loop running. Current official Always Free docs specify
+   2 OCPUs / 12 GB and 200 GB storage; do not reuse historical 4/24 assumptions.
+
+### Review suggestions — assessed, not implemented
+
+See `REVIEW_TRIAGE.md`. Priorities: sold-by-retailer filter and marketplace
+ranking; clearer email/Telegram alert labels; prominent exact-barcode
+comparisons; About/funding copy; then batched card sparklines. Stock alerts,
+crowdsourced freshness, category cleanup and new retailer integrations are
+separate follow-ups, not agreed implementation scope yet. Methodology,
+email/Telegram controls and product-page comparisons already exist. Owner
+identity/funding details require owner input; marketplace seller-specific
+history is unsupported by the current retailer/SKU data model.
+
+### Access and safe continuation
+
+- Production DB: `ubuntu@192.9.163.208`, SSH identity at
+  `C:/Users/tarun/.ssh/pricewatch_oci_ed25519`; run psql as postgres against
+  database `pricewatch`. Default SSH identity was rejected; explicit key works.
+- OCI SDK uses the existing user `.oci/config`; never print credential values.
+- Website deploys from `web/` with `vercel --prod --yes`. Git push alone does
+  not deploy this site. No real alert submissions were made during QA.
+
 *Updated: 21 July 2026 AWST. This is the durable summary for Codex and Claude;
 it deliberately records decisions and outcomes, not chat transcripts or secrets.*
 
@@ -782,7 +874,7 @@ over, next levers: Pro plan ($25/mo) or further cadence cuts.
 
 ## Task queue
 
-| P27 | Website audit and reproducible fixes | Codex | Blocked on Vercel CLI access (13 September 2026); local checks passed | web/search.html, web/style.css, web/vercel.json, web/sw.js, tests/website_browser.cjs, CHANGELOG.md and this file. Camera policy, scanner visibility/lifecycle and search race fixed and browser-tested. Not committed or deployed. Preserve pre-existing schema.sql edits. Resume checklist below. |
+| P27 | Website audit and reproducible fixes | Codex | Frontend deployed; search indexes valid; live search verification pending | e3aea0e pushed and deployed to dealwatch.com.au. Scanner verified with simulated camera. Follow-up scripts/index_product_search.sql indexes valid on production; verify real keyword/SKU/barcode searches and finish migration/docs commit. See latest handover at top. Preserve pre-existing schema.sql edits. |
 
 | ID | Task | Owner | Status | Allowed files / notes |
 |---|---|---|---|---|
@@ -1104,3 +1196,23 @@ again is safe to re-run, `INSERT OR IGNORE` dedupes).
   the intended permissions restart. Do not report production fixed.
 - Next: restore working Vercel CLI/account access, deploy linked web project,
   then complete live browser/API/image/product/sitemap checks.
+
+### 2026-09-13 - Codex: deployment login and Oracle capacity follow-up
+- User approved retrying deployment and checking whether the free Oracle VM
+  can now be set up. Existing production instances and Terraform unchanged.
+- Pushed tested website commit e3aea0e to origin/master after explicit
+  approval of the Git push. Vercel deployment still requires CLI login:
+  version 59.16.0 reports no credentials and its normal Data directory has
+  no auth.json. Started device login for the owner; authorization pending.
+- OCI API credentials work. Sydney is the tenancy home region and exposes
+  one AD. Both existing E2.1.Micro instances are RUNNING. Boot volumes use
+  47 GB each (94 GB total); no block volumes in the root compartment.
+- Live Compute Capacity Report for A1.Flex, 1 OCPU / 6 GB in Sydney returns
+  OUT_OF_HOST_CAPACITY. No launch, migration, replacement, or paid resource
+  was attempted. Historical 4 OCPU / 24 GB free-tier assumptions are stale:
+  current Oracle Always Free docs specify 2 OCPU / 12 GB and 200 GB storage.
+- Source: https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm
+- Follow-up claim (Codex, in progress): live search 504 diagnosis and
+  scripts/index_product_search.sql. Query plan scans retailer partitions of
+  a 1,975 MB products heap; missing title/SKU trigram indexes. Use concurrent
+  partial GIN indexes and leave the unrelated schema.sql changes intact.
