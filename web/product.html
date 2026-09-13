@@ -143,8 +143,9 @@
     Watch alerts fire once, by email, the first time the price reaches your
     target; unsubscribe any time from the link in that email.
   </div>
-</div><nav class="footlinks" aria-label="Site information"><a href="/how-it-works.html">How it works</a><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></footer>
+</div><nav class="footlinks" aria-label="Site information"><a href="/about.html">About</a><a href="/how-it-works.html">How it works</a><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></footer>
 
+<script src="/comparisons.js"></script>
 <script>
 const SUPABASE_URL = "";
 const SUPABASE_ANON_KEY = "";
@@ -378,16 +379,6 @@ function watchPanelHtml(p){
 }
 
 
-const MATCH_STOP = new Set(["the","and","with","for","from","set","pack","size","new","table","chair","desk","bed","white","black","grey","gray","cm","mm","m","l"]);
-function matchTokens(title, brand){const brandWords=new Set(String(brand||"").toLowerCase().match(/[a-z0-9]+/g)||[]);return new Set((String(title||"").toLowerCase().match(/[a-z0-9]+/g)||[]).filter(word=>word.length>1&&!MATCH_STOP.has(word)&&!brandWords.has(word)));}
-function modelCodes(title){return new Set((String(title||"").toLowerCase().match(/\b(?=[a-z0-9-]*\d)[a-z0-9-]{4,}\b/g)||[]));}
-function overlap(a,b){let n=0;for(const v of a)if(b.has(v))n++;return n;}
-async function relatedItems(p){const base=`${SUPABASE_URL}/rest/v1/product_search?select=retailer,sku,gtin,title,brand,category,url,image_url,current_price,current_rrp,price_updated_at`,calls=[];if(/^[0-9]{8,14}$/.test(String(p.gtin||"")))calls.push(fetch(`${base}&gtin=eq.${encodeURIComponent(p.gtin)}&retailer=neq.${encodeURIComponent(p.retailer)}`,{headers:HDRS}));if(p.brand&&String(p.brand).trim().length>=3)calls.push(fetch(`${base}&brand=ilike.${encodeURIComponent(String(p.brand).trim())}&retailer=neq.${encodeURIComponent(p.retailer)}&limit=80`,{headers:HDRS}));if(!calls.length)return[];const batches=await Promise.all(calls.map(r=>r.then(x=>x.ok?x.json():[]).catch(()=>[]))),seen=new Map(),tokens=matchTokens(p.title,p.brand),codes=modelCodes(p.title);for(const candidate of batches.flat()){const key=`${candidate.retailer}/${candidate.sku}`;if(seen.has(key)||!candidate.current_price)continue;let label="",score=0;if(p.gtin&&candidate.gtin&&String(p.gtin)===String(candidate.gtin)){label="Exact barcode match";score=3;}else if(String(candidate.brand||"").toLowerCase()===String(p.brand||"").toLowerCase()){const other=matchTokens(candidate.title,candidate.brand),common=overlap(tokens,other),union=new Set([...tokens,...other]).size||1,commonCode=overlap(codes,modelCodes(candidate.title));if(commonCode){label="Same model code";score=2+commonCode/10;}else if(common>=2&&common/union>=.32){label="Similar listing";score=1+common/union;}}if(label)seen.set(key,{...candidate,label,score});}return[...seen.values()].sort((a,b)=>b.score-a.score||Number(a.current_price)-Number(b.current_price)).slice(0,5);}
-function renderRelated(p,rows){
-  const box=document.getElementById("related");if(!rows.length){box.remove();return;}
-  const current=Number(p.current_price);
-  box.innerHTML=`<h2>Compare prices & suggested items</h2><p class="hint">“Same item” uses a matching barcode. Model and similar listings are suggestions—check size, variant, seller and delivery before buying.</p><div class="related-list">${rows.map(r=>{const store=RETAILER_LABEL[r.retailer]||r.retailer,save=current-Number(r.current_price);const label=r.label==="Exact barcode match"?"Same item":r.label;const exact=r.label==="Exact barcode match";return `<a class="related-item" href="/p/${encodeURIComponent(r.retailer)}/${encodeURIComponent(r.sku)}"><div><strong>${esc(r.title)}</strong><small><span class="pill ${exact?"deal":r.label==="Similar listing"?"fuzzy":""}">${label}</span> · ${esc(store)}</small></div><div class="price">${money(r.current_price)}${save>.005?`<span class="cheaper">${esc(store)} is ${money(save)} cheaper</span>`:""}</div></a>`}).join("")}</div>`;
-}
 function logInterest(p){const key=`dealwatch_interest_${p.retailer}_${p.sku}`,now=Date.now();try{if(now-Number(localStorage.getItem(key)||0)<4*60*60*1000)return;localStorage.setItem(key,String(now));}catch(e){}fetch(`${SUPABASE_URL}/rest/v1/rpc/log_product_interest`,{method:"POST",headers:{...HDRS,"Content-Type":"application/json"},body:JSON.stringify({p_retailer:p.retailer,p_sku:p.sku})}).catch(()=>{});}
 function hotCardLike(p){const store=RETAILER_LABEL[p.retailer]||p.retailer,href=`/p/${encodeURIComponent(p.retailer)}/${encodeURIComponent(p.sku)}`;return `<a class="hot-card" href="${href}"><strong>${esc(p.title)}</strong><div class="meta"><span class="pill">${esc(store)}</span>${p.category?`<span class="pill">${esc(p.category)}</span>`:""}</div><div class="hot-price">${money(p.current_price)}</div></a>`;}
 async function loadAiSimilar(p){const rows=await fetch(`${SUPABASE_URL}/rest/v1/rpc/similar_products`,{method:"POST",headers:{...HDRS,"Content-Type":"application/json"},body:JSON.stringify({p_retailer:p.retailer,p_sku:p.sku,p_limit:8})}).then(r=>r.ok?r.json():[]).catch(()=>[]);const box=document.getElementById("aiSimilar");if(!box)return;if(!rows.length){box.remove();return;}box.querySelector(".hot-grid").innerHTML=rows.map(hotCardLike).join("");}
@@ -463,6 +454,7 @@ async function load(){
           <span class="pill">SKU ${esc(p.sku)}</span>
           ${p.is_marketplace ? '<span class="pill mkt">marketplace</span>' : ""}
         </div>
+        <a class="comparison-jump" href="#compare-prices">Compare retailer prices</a>
       </div>
       <div class="pprice">
         <div class="now">${money(p.current_price)}</div>
@@ -473,6 +465,8 @@ async function load(){
       </div>
     </div>
 
+    <section class="related comparison" id="compare-prices" aria-live="polite" aria-busy="true"><h2>Compare the same barcode</h2><p>Checking other retailers…</p></section>
+
     <div class="stats" style="margin-top:16px">
       <div class="stat"><b>${money(p.current_price)}</b><span>current price</span></div>
       <div class="stat"><b>${money(allLow)}</b><span>lowest recorded price</span></div>
@@ -481,7 +475,7 @@ async function load(){
     </div>
 
     ${watchPanelHtml(p)}
-    <section class="related" id="related"><div class="empty" style="padding:12px 0">Finding comparable listings…</div></section>
+    <section class="related" id="related" hidden></section>
     <section class="hot-section" id="aiSimilar" aria-labelledby="ai-similar-title">
       <div class="hot-head"><div><h2 id="ai-similar-title">You might also like</h2><p>AI-suggested similar products. <a href="/how-it-works.html#ai-similar">How this works</a></p></div></div>
       <div class="hot-grid"><div class="empty" style="padding:12px 0">Finding similar items…</div></div>
@@ -499,7 +493,7 @@ async function load(){
     });
   }
   logInterest(p);
-  relatedItems(p).then(rows=>renderRelated(p,rows)).catch(()=>{const box=document.getElementById("related");if(box)box.remove();});
+  DealwatchComparisons.mount({product:p,element:document.getElementById('compare-prices'),suggestionElement:document.getElementById('related'),labels:RETAILER_LABEL});
   loadAiSimilar(p).catch(()=>{const box=document.getElementById("aiSimilar");if(box)box.remove();});
 }
 

@@ -12,9 +12,14 @@ on Vercel, and the unrelated `schema.sql` edit remains local and untouched.
   explain email/Telegram alerts on feed cards. Scope: `web/index.html`,
   `web/style.css`, `web/sw.js`, browser checks, migration/docs already pending.
   Preserve the unrelated existing `schema.sql` edit.
-- **Phase 2 — queued:** surface exact-barcode comparisons more prominently
+- **Phase 2 — Codex, in progress (13 September):** surface exact-barcode comparisons more prominently
   and improve About/methodology navigation. Owner identity and funding claims
   need accurate owner-supplied details before publishing them.
+  Claimed files: `web/product.html`, comparison/browser helper code and tests,
+  `web/about.html`, public navigation/footer links, `web/style.css`,
+  `web/how-it-works.html`, `web/vercel.json`, `web/sitemap-pages.xml`,
+  `web/sw.js`, and handover/changelog. Deploy static files to Vercel and the
+  product/landing templates to OCI; preserve `schema.sql` changes.
 - **Phase 3 — queued:** lightweight batched price-history sparklines and
   category-quality improvements after assessing database cost.
 - **Phase 4 — discovery:** reliable stock alerts, verified freshness reports,

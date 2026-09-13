@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-09-13 - Phase 2 (ready for production verification)
+
+- Product pages place barcode-matched retailer comparisons above alerts,
+  with a shortcut near the product title, prices, check dates and marketplace
+  labels. Valid GTINs use check digits and normalized leading-zero aliases.
+- Recent matches are separate from older checks; savings use only recent
+  valid prices. Model/title suggestions are separate and never claim savings.
+  Slow/failing suggestions no longer delay barcode matches. Comparison errors
+  show retry; missing barcodes and no matches have distinct explanations.
+- About page states the owner's confirmed policy: free for anyone to use,
+  no affiliate links. No personal identity was published. Homepage discovery
+  links and all public footers expose About/methodology. `/about` and
+  `/how-it-works` redirect to their canonical pages; About is in the sitemap.
+- Methodology describes match/freshness limitations and avoids presenting
+  scheduled checks as a guarantee that every product is current. Cache v11.
+- Both browser suites, 13 Python tests, compilation, Terraform fmt/validate,
+  configuration JSON/sitemap XML parsing and diff checks pass. Phase 2 browser
+  cases include invalid/equivalent GTINs, stale/zero prices, suggestions,
+  independent requests, retry, missing identifiers and 390/1440px layout.
+
 ## 2026-09-13 - Phased improvements
 
 - GitHub sync completed after explicit owner approval: commits 266c636,
