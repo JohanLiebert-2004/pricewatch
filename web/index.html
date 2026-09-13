@@ -115,6 +115,12 @@
     <div class="store-status" id="storeStatus" hidden></div>
     <div class="barlabel">Category</div>
     <div class="bar" id="cats"></div>
+    <div class="barlabel">Deal sellers</div>
+    <label class="seller-filter" for="includeMarketplace">
+      <input type="checkbox" id="includeMarketplace" aria-describedby="sellerHint">
+      Include marketplace sellers
+    </label>
+    <p class="seller-hint" id="sellerHint">Marketplace listings are hidden from this deal feed by default. Their advertised RRP may differ from previously recorded prices.</p>
     <div class="barlabel">Sort &amp; Price Range</div>
     <form class="pricebar" id="pbar">
       <select id="sort" aria-label="Sort deals">
@@ -209,7 +215,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let selRetailers = new Set(), selCats = new Set(), selSubcats = new Set(),
     minOff = 0, q = "", sort = "deep", pmin = null, pmax = null,
-    only30DayLow = false, quick = "", fetchSeq = 0;
+    only30DayLow = false, includeMarketplace = false, quick = "", fetchSeq = 0;
 const SHARED_CATS = [["tech","Tech"],["home","Home"],["kitchen","Kitchen"],
   ["toys","Toys & Baby"],["clothing","Clothing"],["beauty","Beauty"],
   ["books","Books"],["other","Other"]];
@@ -299,6 +305,7 @@ function selectedRetailerLabel(){
 function feedUrl(offset=0){
   let u = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
           `&order=${SORTS[sort]}&limit=${LIMIT}&offset=${offset}`;
+  if(!includeMarketplace) u += `&is_marketplace=is.false`;
   if(minOff > 0) u += `&pct_off=gte.${minOff}`;
   if(selRetailers.size) u += `&retailer=in.(${[...selRetailers].map(encodeURIComponent).join(",")})`;
   if(selCats.size) u += `&category=in.(${[...selCats].map(encodeURIComponent).join(",")})`;
@@ -342,13 +349,15 @@ function cardHtml(d, i){
       <div class="cname">${esc(d.title)}</div>
       <div class="ctags">
         <span class="pill">${esc(d.subcategory || d.category)}</span>
+        ${d.is_marketplace ? '<span class="pill mkt">Marketplace seller</span>' : ""}
       </div>
       <div class="cprices"><span class="cnow">${money(d.price)}</span>
         <span class="cwas">${money(d.reference_price)}</span></div>
       <div class="cfoot"><span>${RETAILER_LABEL[d.retailer]||esc(d.retailer)}</span>
         <span class="save">save ${money(save)}</span></div>
       <div class="trustline">${d.is_marketplace ? "Marketplace seller · " : ""}Compared with ${esc(d.reference_source || "recorded price")} · checked ${since(d.price_updated_at)}</div>
-      <a class="track-btn" href="${histUrl}">🔔 Track price &amp; get alerts</a>
+      <a class="track-btn" href="${histUrl}#watchpanel">🔔 Set a price alert</a>
+      <div class="alert-hint">Email or Telegram · no Dealwatch account needed</div>
     </div>
   </div>`;
 }
@@ -402,7 +411,7 @@ function renderPersonal(){
   const categories = [...new Set(recent.map(p=>p.category).filter(c=>c && c !== "other"))].slice(0,2);
   if(!categories.length) return;
   const filter = categories.map(encodeURIComponent).join(",");
-  fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=*&category=in.(${filter})&order=pct_off.desc,reference_price.desc&limit=6`, {headers:HDRS})
+  fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=*&is_marketplace=is.false&category=in.(${filter})&order=pct_off.desc,reference_price.desc&limit=6`, {headers:HDRS})
     .then(r=>r.ok ? r.json() : [])
     .then(rows=>{
       if(!rows.length) return;
@@ -420,6 +429,7 @@ function render(rows, total, append=false){
   renderedTotal = total;
   const retailerLabel = selectedRetailerLabel();
   const label = `${retailerLabel}` +
+    (includeMarketplace ? " · including marketplace sellers" : " · marketplace excluded") +
     (selCats.size ? ` · ${[...selCats].join(", ")}` : "") +
     (selSubcats.size ? ` · ${[...selSubcats].map(esc).join(", ")}` : "") +
     (minOff>0 ? ` · ${minOff}%+ off` : "") +
@@ -446,7 +456,8 @@ async function refresh(append=false){
   try{
     const r = await fetch(feedUrl(append ? renderedRows.length : 0), {headers:{...HDRS, Prefer:"count=exact"}});
     if(seq !== fetchSeq) return;      // a newer filter superseded this fetch
-    const rows = r.ok ? await r.json() : [];
+    if(!r.ok) throw new Error(`Deals request failed (${r.status})`);
+    const rows = await r.json();
     const total = Number((r.headers.get("content-range")||"").split("/")[1]) || rows.length;
     render(rows, total, append);
   }catch(e){
@@ -501,7 +512,26 @@ document.getElementById("qbar").addEventListener("submit", e=>{
 document.getElementById("qclear").addEventListener("click", ()=>{
   q = "";
   document.getElementById("q").value = "";
+  selRetailers.clear(); selCats.clear(); selSubcats.clear();
+  minOff = 0; pmin = pmax = null; only30DayLow = false; sort = "deep";
+  includeMarketplace = false;
+  document.getElementById("includeMarketplace").checked = false;
+  document.getElementById("sort").value = sort;
+  document.getElementById("pmin").value = "";
+  document.getElementById("pmax").value = "";
+  document.getElementById("minoff").value = 0;
+  document.getElementById("minoff").style.setProperty("--fill", "0%");
+  document.getElementById("minoffval").textContent = "any";
+  clearTimeout(sliderTimer);
+  document.querySelectorAll("#retailers .chip").forEach(b=>
+    b.setAttribute("aria-pressed", b.dataset.r === "all"));
+  renderCats(); renderStoreStatus();
   clearQuick();
+  refresh();
+});
+
+document.getElementById("includeMarketplace").addEventListener("change", e=>{
+  includeMarketplace = e.target.checked;
   refresh();
 });
 

@@ -87,6 +87,60 @@ const server = http.createServer((req, res) => {
     }
     assert.deepEqual(errors, []);
     console.log('PASS: camera policy, hidden panel, late permission cleanup, search race, real ZXing startup/stop, desktop/mobile overflow, no page errors');
+
+    // Exercise seller filtering through actual controls and paginated requests.
+    const feedRequests = [];
+    let failFeed = false;
+    const deals = Array.from({length:62}, (_, i) => ({
+      retailer:'myer', sku:String(i), title:i === 0 ? 'Marketplace item' : `Retailer item ${i}`,
+      is_marketplace:i === 0, category:'home', price:10, reference_price:100,
+      pct_off:90, reference_source:'Retailer RRP', price_updated_at:new Date().toISOString()
+    }));
+    await context.route('**/rest/v1/discount_feed?**', async route => {
+      const params = new URL(route.request().url()).searchParams;
+      feedRequests.push(params);
+      if(failFeed) return route.fulfill({status:503, json:{message:'Unavailable'}});
+      const rows = params.get('is_marketplace') === 'is.false' ? deals.filter(d=>!d.is_marketplace) : deals;
+      const offset = Number(params.get('offset') || 0), limit = Number(params.get('limit'));
+      await route.fulfill({json:rows.slice(offset, offset+limit), headers:{'content-range':`${offset}-${Math.min(offset+limit,rows.length)-1}/${rows.length}`}});
+    });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
+    await page.waitForFunction(() => document.querySelectorAll('#list .card').length === 24);
+    assert.equal(await page.locator('#includeMarketplace').isChecked(), false);
+    assert.doesNotMatch(await page.locator('#list').innerText(), /Marketplace item/);
+    assert.match(await page.locator('#list .alert-hint').first().innerText(), /Email or Telegram/);
+    assert.match(await page.locator('#list .track-btn').first().getAttribute('href'), /#watchpanel$/);
+    await page.locator('#loadMore').click();
+    await page.waitForFunction(() => document.querySelectorAll('#list .card').length === 48);
+    assert.equal(feedRequests.at(-1).get('is_marketplace'), 'is.false');
+    assert.equal(feedRequests.at(-1).get('offset'), '24');
+    await page.locator('#includeMarketplace').check();
+    await page.waitForFunction(() => document.querySelector('#list').textContent.includes('Marketplace item'));
+    assert.equal(feedRequests.at(-1).has('is_marketplace'), false);
+    assert.equal(feedRequests.at(-1).get('offset'), '0');
+    assert.match(await page.locator('#list .pill.mkt').innerText(), /Marketplace seller/);
+    await page.locator('#retailers [data-r="myer"]').click();
+    await page.locator('#sort').selectOption('price_asc');
+    await page.locator('#q').fill('item');
+    await page.locator('#qbar').evaluate(f=>f.requestSubmit());
+    await page.locator('#qclear').click();
+    await page.waitForFunction(() => document.querySelector('#total').textContent.includes('marketplace excluded'));
+    assert.equal(await page.locator('#q').inputValue(), '');
+    assert.equal(await page.locator('#sort').inputValue(), 'deep');
+    assert.equal(await page.locator('#includeMarketplace').isChecked(), false);
+    const reset = feedRequests.at(-1);
+    assert.equal(reset.get('is_marketplace'), 'is.false');
+    for(const param of ['retailer','or','category','price','pct_off']) assert.equal(reset.has(param),false);
+    failFeed = true;
+    await page.locator('#includeMarketplace').check();
+    await page.waitForFunction(() => document.querySelector('#list').textContent.includes("couldn't load"));
+    assert.doesNotMatch(await page.locator('#list').innerText(), /Nothing matches/);
+    for(const width of [390,1440]){
+      await page.setViewportSize({width,height:900});
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth), `Homepage overflow at ${width}`);
+    }
+    assert.deepEqual(errors, []);
+    console.log('PASS: default seller filter, marketplace opt-in, pagination, alert explanation/link, full reset, honest API errors, mobile/desktop layout');
     await context.close();
   } finally {
     await browser.close();

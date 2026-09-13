@@ -363,6 +363,11 @@ button.go:active{transform:scale(.96);opacity:.85}
 }
 
 /* ---------- footer ---------- */
+.seller-filter{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;cursor:pointer}
+.seller-filter input{width:18px;height:18px;accent-color:var(--flag)}
+.seller-hint{font-size:12px;line-height:1.6;color:var(--muted);margin:7px 0 18px;max-width:620px}
+.alert-hint{font-size:11px;line-height:1.5;text-align:center;color:var(--muted);margin-top:6px}
+
 footer{
   margin-top:60px;border-top:1px solid var(--hair);
   padding:36px 0 50px;color:var(--muted);background:var(--card);
