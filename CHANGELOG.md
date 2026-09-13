@@ -5,7 +5,7 @@
 - Search recovery verified: live keyword results from all 13 retailers,
   plus expected SKU/barcode matches. Website-role query plan uses the new
   trigram indexes; database statistics confirm ANALYZE completed.
-- Phase 1 ready for deployment: default marketplace exclusion in the main
+- Phase 1 deployed and verified: default marketplace exclusion in the main
   deal feed, opt-in checkbox, visible seller badges, and marketplace-free
   personalized deal suggestions. Feed filtering is server-side and preserved
   during pagination; seller selection is shown in the result summary.
@@ -15,6 +15,12 @@
 - Cache v10; browser regressions passed for seller selection, pagination,
   alert links, reset, errors and mobile/desktop widths. All 13 Python tests,
   compilation, Terraform formatting/validation, and diff checks passed.
+- Live at https://dealwatch.com.au through deployment
+  https://web-qdml8gn9g-trest2.vercel.app, commit b922ed8. Production browser
+  checks pass for seller controls, alert-panel links, both viewport widths,
+  endpoints, real images and cache v10. No actual alerts were submitted.
+- Commits 266c636 and b922ed8 remain local: automatic review rejected pushing
+  new commits to master without explicit approval. Deployment was allowed.
 
 ## 2026-09-13 - Website audit (Codex)
 

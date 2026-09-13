@@ -2,7 +2,7 @@
 
 ## Phased improvements — owner authorized 13 September 2026
 
-- **Phase 1 — Codex, in progress:** finish search recovery verification;
+- **Phase 1 — Codex, deployed and verified; Git push awaiting approval:** finish search recovery verification;
   add default sold-by-retailer filtering with an explicit marketplace option;
   explain email/Telegram alerts on feed cards. Scope: `web/index.html`,
   `web/style.css`, `web/sw.js`, browser checks, migration/docs already pending.
@@ -17,6 +17,33 @@
   variant matching, and retailer request-rate constraints.
 - Each phase needs focused commits, applicable tests, production deployment
   verification, and handover evidence before it is marked complete.
+
+### Phase 1 production evidence
+
+- Commits: `266c636` (search recovery/migration and phase plan), `b922ed8`
+  (seller filtering, alert explanations, reset and API error handling).
+- Deployed `b922ed8` via Vercel to `https://dealwatch.com.au`, deployment
+  `https://web-qdml8gn9g-trest2.vercel.app`, READY. Cache v10 is live.
+- Live Chromium: marketplace exclusion by default, opt-in marketplace badges,
+  reset to exclusion, email/Telegram copy, link to actual product watch panel,
+  390/1440px widths, and absence of page errors passed. Public bootstrap,
+  product page, sitemap, robots and real image proxy returned successful
+  responses. Paginated feed HTTP 206 is expected and successful.
+- Local browser regressions include seller filtering across pagination,
+  full reset, and HTTP-error display. All 13 Python tests, compilation,
+  Terraform fmt/validate and diff checks passed. No actual alert was submitted;
+  email delivery, Telegram delivery and physical-phone scanning are not proven
+  by this UI test.
+- Local verification helper: `../.qa-tools/phase1-live.cjs`; screenshots:
+  `../.qa-tools/phase1-390.png` and `phase1-1440.png` (mobile inspected).
+- **GitHub sync pending:** automatic approval review rejected the new push to
+  master, requiring explicit approval for these new commits. It allowed the
+  narrower Vercel deployment. Do not bypass the rejected push. These commits
+  remain local until the owner approves. `schema.sql` remains unrelated dirty
+  work and was not included in either commit.
+- Next phase: exact-barcode comparison visibility, then About/methodology
+  navigation. The existing comparison distinction between identical barcodes,
+  model suggestions and similar listings must remain explicit.
 
 ## Latest handover — 13 September 2026 (Codex)
 
@@ -62,9 +89,8 @@ to document pending work first before continuing.
 3. Monitor search reliability under normal workload. Local live test helper:
    `../.qa-tools/production-check.cjs` currently expects cache v9; update its
    expected cache version before using it for Phase 1 (v10).
-4. Finish a focused commit/push for the migration and final handover evidence.
-   Pending local files: `scripts/index_product_search.sql`, `DEPLOY.md`,
-   `AGENT_STATE.md`, `CHANGELOG.md`, `REVIEW_TRIAGE.md`.
+4. Migration and phase changes are committed locally; GitHub push awaits
+   explicit approval after automatic review rejection. See Phase 1 above.
    **Preserve unrelated pre-existing `schema.sql` changes.**
 5. Physical-phone camera/barcode recognition remains unverified; automated
    tests use simulated camera streams.
