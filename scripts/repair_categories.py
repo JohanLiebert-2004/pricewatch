@@ -6,19 +6,26 @@ Title refinements only repair 'other', never a retailer-assigned category.
 Use --after-id to resume the printed cursor; defaults to a dry run.
 """
 import argparse
+import re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import db
-from categorize import trusted_category, categorize
+from categorize import trusted_category
 
 
 def repairs(rows):
     for row in rows:
-        category = trusted_category(row["retailer"], row["gtin"], row["subcategory"])
-        if not category and row["category"] == "other":
-            category = categorize(row["title"])
+        category = trusted_category(row["retailer"], row["gtin"], row["subcategory"], row["is_marketplace"])
+        # Existing non-book categories need corroboration; do not wholesale
+        # replace labels using broad retailer departments or title guesses.
+        if category and category != 'books' and row['category'] not in (None, '', 'other', category):
+            if not (category == 'toys' and re.search(r'\b(lego|duplo|board game|puzzle|action figures?)\b', row['title'] or '', re.I)):
+                category = None
+        if not category and row["category"] == "other" and re.search(r'\btrackpad\b', row['title'] or '', re.I):
+            category = 'tech'
         if category and category != row["category"]:
             yield category, row["id"], row["category"]
 
@@ -33,13 +40,16 @@ def main():
     args = parser.parse_args()
     if not 1 <= args.limit <= 5000:
         parser.error('--limit must be between 1 and 5000')
-    conn = db.connect()
+    database_host = urlparse(db.DATABASE_URL or '').hostname or ''
+    if database_host.endswith(('.supabase.com', '.supabase.co')):
+        parser.error('Refusing retired Supabase database; use the current OCI connection.')
     if args.feed_only and not db.DATABASE_URL:
         parser.error('--feed-only requires the production PostgreSQL database')
+    conn = db.connect()
     feed_filter = ("AND EXISTS (SELECT 1 FROM discount_feed d WHERE "
                    "d.retailer=p.retailer AND d.sku=p.sku) " if args.feed_only else "")
     rows = conn.execute(
-        "SELECT id, retailer, gtin, subcategory, title, category FROM products p "
+        "SELECT id, retailer, gtin, subcategory, title, category, is_marketplace FROM products p "
         "WHERE id > ? AND current_price > 0 " + feed_filter + "ORDER BY id LIMIT ?",
         (args.after_id, args.limit)).fetchall()
     updates = list(repairs(rows))
@@ -51,7 +61,7 @@ def main():
         for i in range(0, len(updates), 100):
             # Optimistic category guard preserves concurrent scraper updates.
             conn.executemany('UPDATE products SET category=? WHERE id=? '
-                             'AND (category=? OR (category IS NULL AND ? IS NULL))',
+                             'AND (category=? OR (category IS NULL AND CAST(? AS TEXT) IS NULL))',
                              [(cat, row_id, old, old) for cat, row_id, old
                               in updates[i:i + 100]])
             conn.commit()

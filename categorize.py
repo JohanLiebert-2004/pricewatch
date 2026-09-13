@@ -78,14 +78,16 @@ NATIVE_CATEGORIES = {"kmart": {
 }}
 
 
-def trusted_category(retailer, gtin=None, subcategory=None):
+def trusted_category(retailer, gtin=None, subcategory=None, is_marketplace=False):
     if is_book_identifier(gtin):
         return "books"
-    return NATIVE_CATEGORIES.get(retailer, {}).get(subcategory)
+    # Marketplace departments contain unrelated furniture/appliances in the
+    # live catalogue. They cannot safely establish a product category.
+    return None if is_marketplace else NATIVE_CATEGORIES.get(retailer, {}).get(subcategory)
 
 
-def classify_product(title, retailer=None, gtin=None, subcategory=None):
-    return trusted_category(retailer, gtin, subcategory) or categorize(title)
+def classify_product(title, retailer=None, gtin=None, subcategory=None, is_marketplace=False):
+    return trusted_category(retailer, gtin, subcategory, is_marketplace) or categorize(title)
 
 
 # -- per-store subcategories (site's per-retailer chips) ----------------------
@@ -172,12 +174,12 @@ def backfill(conn) -> int:
     entire job.
     """
     rows = conn.execute(
-        "SELECT id, title, retailer, gtin, subcategory FROM products "
+        "SELECT id, title, retailer, gtin, subcategory, is_marketplace FROM products "
         "WHERE category IS NULL OR category = '' ORDER BY id").fetchall()
     if not rows:
         return 0
     updates = [(classify_product(r["title"], r["retailer"], r["gtin"],
-                                 r["subcategory"]), r["id"]) for r in rows]
+                                 r["subcategory"], r["is_marketplace"]), r["id"]) for r in rows]
     for i in range(0, len(updates), 1000):
         _update_batch_with_retry(conn, updates[i:i + 1000])
     return len(updates)
@@ -210,13 +212,13 @@ def repair_misclassified_books(conn) -> int:
     created by the older broad rule.
     """
     rows = conn.execute(
-        "SELECT id, title, retailer, gtin, subcategory FROM products "
+        "SELECT id, title, retailer, gtin, subcategory, is_marketplace FROM products "
         "WHERE category='books' "
         "AND (gtin IS NULL OR (gtin NOT LIKE '978%' AND gtin NOT LIKE '979%'))"
     ).fetchall()
     updates = [(category, row["id"]) for row in rows
                if (category := classify_product(row["title"], row["retailer"],
-                                                row["gtin"], row["subcategory"])) != "books"]
+                                                row["gtin"], row["subcategory"], row["is_marketplace"])) != "books"]
     for i in range(0, len(updates), 1000):
         _update_batch_with_retry(conn, updates[i:i + 1000])
     return len(updates)

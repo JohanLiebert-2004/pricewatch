@@ -23,6 +23,34 @@ on first read and 2.468ms warm. Transaction-rolled-back fixtures verified
 empty input and rejection above 24 keys; anon could read the public result.
 No fixture product or snapshots were committed.
 
+Deployment progress saved: code c0c3120 pushed and deployed to Vercel
+https://web-iwu8ntfeo-trest2.vercel.app (READY, dealwatch.com.au alias), OCI
+checkout fast-forwarded to c0c3120 with .venv preserved; health ok. Cache
+v12-gtm1. Public Chromium verified chart loading, batches of 24, pagination
+cache, seller opt-in/reset, 390/1440px layout, GTM, methodology, product
+alerts UI, bootstrap, real image, robots and sitemaps; no page errors. Live
+grid document y=859 mobile / 809 desktop. Category preview inspected 5,000
+active-feed rows and proposed 206 changes, cursor 7352354. Sample native
+taxonomies reviewed; application and feed refresh are the remaining steps.
+
+Repair correction saved: the web host's legacy /opt/pricewatch.env still has
+a retired Supabase DATABASE_URL. Its dry run was therefore not a current-OCI
+data preview. The attempted first UPDATE batch failed at parameter parsing
+(IndeterminateDatatype on untyped NULL check), before any write/commit.
+No category repair was committed there. Corrected the parameter cast and
+added a fail-closed retired-host guard. Use the current DB host's postgres
+administrator connection for the actual preview/apply; do not reuse that
+legacy environment file. The public frontend/API remains on OCI and healthy.
+
+Current OCI preview: 5,000 feed rows, cursor 4645676. Its initial 466
+proposals revealed unreliable marketplace department tags (furniture tagged
+Beauty/Tech). None applied. Tightened rules: marketplace departments never
+override titles; existing non-book categories need explicit toy-title
+corroboration; retrospective title repairs limited to the verified trackpad
+case. Added regressions for the rejected database host and misleading
+marketplace taxonomy. Category quality is an incremental correction, not a
+claim that all retailer taxonomy or all catalogue labels are reliable.
+
 ## Google Tag Manager — Codex, deployed and verified (13 September 2026)
 
 Owner supplied GTM-MF4PFW6M and authorized installation on every page.
