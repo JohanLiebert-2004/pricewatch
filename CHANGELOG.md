@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-13 - Google Tag Manager installation
+
+- Added owner-supplied GTM-MF4PFW6M head and noscript snippets to all 13
+  HTML templates, including OCI-rendered product/retailer/category pages.
+- Allowed GTM loading and GA4 collection endpoints through CSP, updated
+  privacy disclosure and bumped the deployed cache to v11-gtm1.
+- This change is based on Phase 2; paused Phase 3 work is excluded.
+  GTM loading is verified separately from GA4 tag configuration/collection.
+
 ## 2026-09-13 - Phase 2 (live and verified)
 
 - Commit c93880c pushed; Vercel production deployment
