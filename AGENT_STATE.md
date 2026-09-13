@@ -51,6 +51,22 @@ case. Added regressions for the rejected database host and misleading
 marketplace taxonomy. Category quality is an incremental correction, not a
 claim that all retailer taxonomy or all catalogue labels are reliable.
 
+Current OCI repair applied: 18 reviewed corrections committed using the
+database host's postgres connection, guarded by prior category, department,
+GTIN and seller status. Examples: Kmart 43722655 (VTech sports toy) -> toys;
+Good Guys 50077206 (Apple Magic Trackpad) -> tech. No broad 466-row rewrite.
+Fix commit 0864427 pushed and pulled on OCI; 19 Python tests pass. The
+frontend deployment remains c0c3120 (no web changes in 0864427). Concurrent
+refresh of discount_feed/catalogue_stats is running with a 60-second timeout;
+final public category verification remains before the phase is marked done.
+
+Refresh update: 60-second attempt timed out and rolled back its view refresh;
+the 18 base-product corrections remain committed. Retrying only the
+concurrent feed/statistics refresh with a 180-second statement timeout and
+8MB work_mem. No crawler or alert run was triggered. The corrected category
+UPDATE statement also passed PostgreSQL PREPARE/DEALLOCATE without executing
+a write, verifying the formerly ambiguous parameter now has a type.
+
 ## Google Tag Manager — Codex, deployed and verified (13 September 2026)
 
 Owner supplied GTM-MF4PFW6M and authorized installation on every page.
