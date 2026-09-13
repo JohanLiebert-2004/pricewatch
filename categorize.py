@@ -1,9 +1,4 @@
-"""Title-based product categorisation.
-
-Retailers don't expose category data in listings, so we bucket products by
-keyword rules on the title. Mirrors the rules in web/index.html so the deal
-feed and the catalogue agree.
-"""
+"""Prefer known retailer taxonomy and validated book identifiers to title rules."""
 import re
 import time
 
@@ -17,8 +12,8 @@ RULES = [
     ("tech", re.compile(
         r"\b(laptop|notebook pc|monitor|headphone|earbud|ear ?pod|speaker|"
         r"soundbar|tablet|ipad|iphone|galaxy|pixel|phone|charger|power ?bank|"
-        r"usb|hdmi|ssd|hard ?drive|mouse|keyboard|printer|ink cartridge|"
-        r"ink refill|toner|camera|"
+        r"usb|hdmi|ssd|hard ?drive|mouse|trackpad|keyboard|printer|ink cartridge|"
+        r"ink refill|toner cartridge|camera|"
         r"webcam|smart ?watch|fitbit|garmin|television|tv|console|playstation|"
         r"xbox|nintendo|router|modem|drone|projector|chromebook|macbook|"
         r"airpod|kindle|e-?reader|gpu|cpu|ram)\b", re.I)),
@@ -65,6 +60,32 @@ def categorize(title: str | None) -> str:
         if rx.search(t):
             return cat
     return "other"
+
+
+def is_book_identifier(value: str | None) -> bool:
+    """ISBN-13 uses the 978/979 prefix and a valid EAN check digit."""
+    value = str(value or "")
+    return bool(re.fullmatch(r"97[89][0-9]{10}", value)) and sum(
+        int(digit) * (1 if i % 2 == 0 else 3)
+        for i, digit in enumerate(value)) % 10 == 0
+
+
+# These labels come from Kmart's actual SECTION_LABEL, not inferred chips.
+# Broad mixed departments (Home & Living, Kids & Baby, Entertainment) do
+# not establish a single category and deliberately remain title-based.
+NATIVE_CATEGORIES = {"kmart": {
+    "Toys": "toys", "Beauty": "beauty", "Tech & Gaming": "tech",
+}}
+
+
+def trusted_category(retailer, gtin=None, subcategory=None):
+    if is_book_identifier(gtin):
+        return "books"
+    return NATIVE_CATEGORIES.get(retailer, {}).get(subcategory)
+
+
+def classify_product(title, retailer=None, gtin=None, subcategory=None):
+    return trusted_category(retailer, gtin, subcategory) or categorize(title)
 
 
 # -- per-store subcategories (site's per-retailer chips) ----------------------
@@ -151,11 +172,12 @@ def backfill(conn) -> int:
     entire job.
     """
     rows = conn.execute(
-        "SELECT id, title FROM products "
+        "SELECT id, title, retailer, gtin, subcategory FROM products "
         "WHERE category IS NULL OR category = '' ORDER BY id").fetchall()
     if not rows:
         return 0
-    updates = [(categorize(r["title"]), r["id"]) for r in rows]
+    updates = [(classify_product(r["title"], r["retailer"], r["gtin"],
+                                 r["subcategory"]), r["id"]) for r in rows]
     for i in range(0, len(updates), 1000):
         _update_batch_with_retry(conn, updates[i:i + 1000])
     return len(updates)
@@ -188,13 +210,15 @@ def repair_misclassified_books(conn) -> int:
     created by the older broad rule.
     """
     rows = conn.execute(
-        "SELECT id, title FROM products WHERE category='books'").fetchall()
+        "SELECT id, title, retailer, gtin, subcategory FROM products "
+        "WHERE category='books' "
+        "AND (gtin IS NULL OR (gtin NOT LIKE '978%' AND gtin NOT LIKE '979%'))"
+    ).fetchall()
     updates = [(category, row["id"]) for row in rows
-               if (category := categorize(row["title"])) != "books"]
+               if (category := classify_product(row["title"], row["retailer"],
+                                                row["gtin"], row["subcategory"])) != "books"]
     for i in range(0, len(updates), 1000):
-        conn.executemany("UPDATE products SET category=? WHERE id=?",
-                         updates[i:i + 1000])
-        conn.commit()
+        _update_batch_with_retry(conn, updates[i:i + 1000])
     return len(updates)
 def backfill_subcategories(conn) -> int:
     """Tag subcategory from titles for retailers with no native category data."""

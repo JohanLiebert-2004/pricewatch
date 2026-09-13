@@ -5,6 +5,7 @@ import re
 from html import unescape
 
 from db import ProductRecord
+from categorize import classify_product
 from .base import BaseScraper, Blocked, _brand, _find_rrp, _image, _num, extract_jsonld
 
 
@@ -76,7 +77,9 @@ class BooktopiaScraper(_GzipSitemapScraper):
                 gtin=str(block.get("gtin13") or block.get("isbn") or block.get("productID") or "") or None,
                 title=block.get("name") or "",
                 brand=_brand(block.get("brand")) or _brand(block.get("publisher")),
-                category="books", url=url, image_url=_image(block.get("image")),
+                category=classify_product(block.get("name"), self.name,
+                    str(block.get("gtin13") or block.get("isbn") or block.get("productID") or "")),
+                url=url, image_url=_image(block.get("image")),
                 price=price, rrp=rrp,
                 in_stock="InStock" in availability if availability else None,
                 is_marketplace=False,
@@ -107,7 +110,7 @@ class QBDScraper(_GzipSitemapScraper):
             retailer=self.name, sku=unescape(sku),
             gtin=unescape(sku) if re.fullmatch(r"\d{13}", sku) else None,
             title=unescape(title), brand=unescape(author.group(1)) if author else None,
-            category="books", url=url,
+            category=classify_product(unescape(title), self.name, unescape(sku)), url=url,
             image_url=unescape(image.group(1)) if image else None,
             price=price, rrp=_find_rrp(html, price),
             in_stock="Add to Cart" in html, is_marketplace=False,

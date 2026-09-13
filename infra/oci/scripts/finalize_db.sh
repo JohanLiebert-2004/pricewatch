@@ -55,6 +55,8 @@ sudo -u postgres psql --dbname pricewatch --set=ON_ERROR_STOP=1 \
   --file /opt/pricewatch/schema.sql
 sudo -u postgres psql --dbname pricewatch --set=ON_ERROR_STOP=1 \
   --file /opt/pricewatch/views.sql
+sudo -u postgres psql --dbname pricewatch --set=ON_ERROR_STOP=1 \
+  --file /opt/pricewatch/scripts/feed_price_history.sql
 systemctl enable --now pricewatch-postgrest.service pricewatch-backup.timer
 systemctl reload nginx
 echo "Database roles, schema, API, and backup timer are ready."

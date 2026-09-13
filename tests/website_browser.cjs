@@ -114,6 +114,7 @@ const server = http.createServer((req, res) => {
     await page.waitForFunction(() => document.querySelectorAll('#list .card').length === 48);
     assert.equal(feedRequests.at(-1).get('is_marketplace'), 'is.false');
     assert.equal(feedRequests.at(-1).get('offset'), '24');
+    await page.locator('#dealFilters summary').click();
     await page.locator('#includeMarketplace').check();
     await page.waitForFunction(() => document.querySelector('#list').textContent.includes('Marketplace item'));
     assert.equal(feedRequests.at(-1).has('is_marketplace'), false);

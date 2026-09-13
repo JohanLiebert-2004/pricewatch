@@ -20,13 +20,75 @@ on Vercel, and the unrelated `schema.sql` edit remains local and untouched.
   `web/how-it-works.html`, `web/vercel.json`, `web/sitemap-pages.xml`,
   `web/sw.js`, and handover/changelog. Deploy static files to Vercel and the
   product/landing templates to OCI; preserve `schema.sql` changes.
-- **Phase 3 — queued:** lightweight batched price-history sparklines and
-  category-quality improvements after assessing database cost.
+- **Phase 3 — Codex, saved checkpoint (13 September, owner asked to save):** lightweight batched
+  price-history sparklines, category-quality fixes and desktop/mobile visual
+  polish, preserving the existing blue/white palette. Claimed: homepage/shared
+  styles, new history helper/RPC migration, categorisation, focused tests and
+  handover/changelog. Assess indexed database cost before enabling feed
+  requests. Preserve the unrelated `schema.sql` edit.
 - **Phase 4 — discovery:** reliable stock alerts, verified freshness reports,
   and additional retailers with suitable data access. Keep existing privacy,
   variant matching, and retailer request-rate constraints.
 - Each phase needs focused commits, applicable tests, production deployment
   verification, and handover evidence before it is marked complete.
+
+### Phase 3 checkpoint — saved at owner's request
+
+**Resume here. Phase 3 is not marked complete and the new frontend is not
+deployed.** Production Vercel/OCI application code remains Phase 2 (c93880c,
+cache v11). Only the additive SQL history RPC below has reached production.
+
+- Implemented locally: homepage 30-day card sparklines, sequential batches
+  of at most 24 products, five-minute bounded browser cache, sparse/error
+  states and detached-node protection when filters change. Charts use daily
+  last recorded prices, step lines, accessible descriptions and no fabricated
+  pre-tracking history. Pagination reuses cached previous cards.
+- Visual changes locally: compact hero/statistics, expandable retailer/filter
+  panel with persistent quick finds and an active-filter summary; deal feed
+  before Hot right now; clearer type, quieter cards, precise 30-day-low badges,
+  no badge glow, darker savings text, reduced-motion support. Existing blue/
+  white palette remains. Added input labels and fixed personal-section width.
+- Live BEFORE audit: first deal grid began at y=2726px on a 390px phone and
+  y=958px at 1440px desktop. Screenshots in ../.qa-tools/phase3-before-*.png
+  and phase3-cards-before-*.png; helper phase3-audit.cjs. Initial mobile images
+  were visually inspected. AFTER visual inspection with real product data
+  remains necessary; mocked layout tests alone do not finish visual QA.
+- Category code: validated ISBN-13 and three unambiguous native Kmart labels
+  precede title inference; book cleanup no longer reclassifies ISBN-prefixed
+  books by title. Book scrapers distinguish non-book merchandise. Added
+  trackpad recognition and stopped generic skincare toner matching tech.
+  scripts/repair_categories.py defaults to dry run, bounds scans to 5,000
+  rows, offers a cursor, and writes 100-row batches with category guards.
+  No production category data has been repaired; Python code is not deployed.
+- **Already applied to production DB:** scripts/feed_price_history.sql,
+  additive function only, no materialized-view recreation and no new index.
+  Read-only SECURITY DEFINER uses pinned pg_catalog/public search_path,
+  revoked PUBLIC execute, anon execute only, max 24 product keys / 1,000
+  recent snapshots per product. Carries a pre-window price only if the cap
+  was not hit. PostgREST schema reload notified. Public same-origin POST
+  returned HTTP 200 with two samples for Kmart/110179174.
+- Database assessment: 24-item call including the existing feed-selection
+  query took 790ms on a cold read (289ms selecting the feed, roughly 500ms
+  history work). Separate EXPLAIN confirms products_retailer_sku_region_key
+  and idx_snap_product index scans (0.056ms warm for sampled recent lookup).
+  No load test or repeated warm-batch measurement yet. Further rollout
+  assessment should consider this small DB's crawler contention.
+- Checks passed: website_browser.cjs, phase2_browser.cjs, new
+  phase3_browser.cjs; 17 Python unit tests; compilation of changed Python
+  plus db/run/preview service; Terraform fmt/validate; git diff --check.
+  Phase 3 tests cover batch size, cache/pagination, sparse/flat/rising/falling
+  history, stale responses, API failures, filters, non-overlapping badges,
+  reduced motion, and layout at 320/390/768/1440px. No real alerts submitted.
+
+**Pending to finish Phase 3:** inspect AFTER desktop/mobile screenshots with
+real data; refine any layout findings; review RPC boundary/cap and warm-batch
+cost; preview and apply a bounded category repair; update methodology copy
+for daily 30-day card history/category sources; rerun checks for subsequent
+changes; deploy static web via Vercel web project with --scope trest2 and pull
+intended application commit on OCI; verify production pages/API/images/
+sitemaps/cache v12 and update this handover with deployment evidence. A fresh
+DB bootstrap now applies the history migration after views.sql. Preserve
+the unrelated schema.sql edit throughout. Do not call this checkpoint live.
 
 ### Phase 2 production evidence
 

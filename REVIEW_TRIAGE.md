@@ -7,7 +7,11 @@ in phases; AGENT_STATE.md tracks the active phase and remaining decisions.
 Phases 1 and 2 are now live: default marketplace exclusion/opt-in and alert
 copy, separate visible barcode comparisons, and a free/no-affiliate About
 page with navigation and canonical redirects. Owner supplied the no-affiliate
-policy. Next is Phase 3: batched history sparklines and category-quality work.
+policy. Phase 3 is saved as a working checkpoint at the owner's request:
+batched sparklines, category fixes and visual polish are implemented and
+locally tested; the additive history RPC is live, but the Phase 3 frontend
+and categorisation code are not deployed. See AGENT_STATE.md for remaining
+real-data visual review, category repair and deployment steps.
 
 | Suggestion | Verified state | Proposed scope |
 |---|---|---|

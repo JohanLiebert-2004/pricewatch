@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-13 - Phase 3 checkpoint (website not deployed)
+
+- Saved at owner's request: batched 30-day feed sparklines, a compact
+  homepage/filter layout, clearer non-glowing badges, typography and mobile
+  spacing, plus category rules preserving book identifiers/native taxonomy.
+- Additive feed_price_history RPC is installed on production and publicly
+  smoke-tested. Frontend and categorisation remain local; production website
+  is still Phase 2. No category repair has been applied.
+- Three browser suites and 17 Python tests passed, plus compilation,
+  Terraform checks and diff validation. Real-data AFTER visual review,
+  category repair and frontend/application deployment are pending; details
+  and database cost measurements are in AGENT_STATE.md.
+
 ## 2026-09-13 - Phase 2 (live and verified)
 
 - Commit c93880c pushed; Vercel production deployment

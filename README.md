@@ -156,7 +156,12 @@ Never commit `.env`, database credentials, API tokens, proxy credentials,
 Terraform state, or private keys.
 
 For a new PostgreSQL database, apply `schema.sql` first and `views.sql`
-second. The optional similarity pipeline additionally uses
+second, then `scripts/feed_price_history.sql` for the bounded card-history RPC.
+Existing databases can apply that additive migration without rebuilding views.
+`scripts/repair_categories.py` previews up to 5,000 catalogue rows; `--apply`
+writes only high-confidence or previously unclassified corrections. Its printed
+`--after-id` cursor allows gradual repair without a full-catalogue transaction.
+The optional similarity pipeline additionally uses
 `requirements-embed.txt` and `embed_products.py`.
 
 ## Verification
