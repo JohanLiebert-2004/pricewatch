@@ -2,6 +2,10 @@
 
 ## 2026-09-13 - Google Tag Manager installation
 
+- Deployed commit 29d5359 to Vercel (web-80jy4nvbo-trest2.vercel.app) and
+  OCI templates. Public GTM loads once without CSP errors; endpoints healthy.
+  No GA4 collection observed; configure/publish a Google tag inside GTM next.
+
 - Added owner-supplied GTM-MF4PFW6M head and noscript snippets to all 13
   HTML templates, including OCI-rendered product/retailer/category pages.
 - Allowed GTM loading and GA4 collection endpoints through CSP, updated

@@ -1,6 +1,6 @@
 # Pricewatch — shared agent state
 
-## Google Tag Manager — Codex, in progress (13 September 2026)
+## Google Tag Manager — Codex, deployed and verified (13 September 2026)
 
 Owner supplied GTM-MF4PFW6M and authorized installation on every page.
 Scope: web HTML/templates, CSP, cache version, privacy copy, checks and
@@ -16,6 +16,19 @@ GTM and GA4 collection hosts, retains existing inline-script permission and
 does not add unsafe-eval. Privacy copy describes GTM separately from future
 analytics tags. Published container has no visible G- measurement ID; GA4
 collection is not yet proven. Helper: ../.qa-tools/gtm-check.cjs.
+
+Production: code 29d5359 pushed to origin/master, Vercel deployment
+https://web-80jy4nvbo-trest2.vercel.app READY and aliased to dealwatch.com.au;
+cache v11-gtm1. OCI /opt/pricewatch fast-forwarded to 29d5359, preserving
+.venv/. Template-only changes required no restart; service active/health ok.
+Live Chromium loaded GTM exactly once on homepage, About, retailer, category
+and product pages without CSP/page errors. Bootstrap, real image, both
+sitemaps and cache checks passed. No GA4 collect request observed; owner
+must configure/publish a Google tag using the GA4 G- Measurement ID inside
+this container before calling GA4 active. All 13 Python tests, both existing
+browser suites, compilation, Terraform fmt/validate and diff checks passed.
+Live helper: ../.qa-tools/gtm-live.cjs. Phase 3 sparklines absent from deployed
+homepage as intended. Main worktree retains the Phase 3 checkpoint.
 
 ### Traffic audit — 13 September 2026
 
