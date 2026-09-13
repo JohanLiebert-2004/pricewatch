@@ -1,5 +1,20 @@
 # Pricewatch — shared agent state
 
+## Saved checkpoint — 14 September 2026
+
+Owner requested all progress be saved. Phase 3 implementation, deployment
+evidence, traffic audit and GTM installation are committed and pushed.
+Production remains as recorded below; no new deployment was made for this
+checkpoint. Pending: GA4 Google-tag configuration, Search Console audit,
+legacy OCI web-host database environment review, and Phase 4 discovery.
+
+The pre-existing, unrelated schema.sql edit remains untouched in the working
+tree. A versioned copy is saved in
+`checkpoints/schema-pending-2026-09-14.patch` so it can be recovered without
+including it in a deployment or treating it as completed migration work.
+Local screenshots and live-check helpers remain in ../.qa-tools; their paths
+and outcomes are recorded below. No credentials or runtime data were added.
+
 ## Phase 3 — Codex, completed and live (13 September 2026)
 
 Final state supersedes the checkpoint and pause notes below. Frontend c0c3120

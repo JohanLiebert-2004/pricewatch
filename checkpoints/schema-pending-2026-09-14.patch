@@ -1,0 +1,15 @@
+diff --git a/schema.sql b/schema.sql
+index 2b3afc0..f2a1195 100644
+--- a/schema.sql
++++ b/schema.sql
+@@ -48,6 +48,10 @@ CREATE INDEX IF NOT EXISTS idx_products_gtin ON products(gtin);
+ CREATE INDEX IF NOT EXISTS idx_products_retailer_staleness ON products
+   (retailer, (COALESCE(price_updated_at, '1970-01-01')))
+   WHERE current_price IS NOT NULL;
++CREATE INDEX IF NOT EXISTS idx_products_sitemap_recent ON products
++  (last_seen DESC, retailer ASC, sku ASC)
++  INCLUDE (price_updated_at)
++  WHERE current_price IS NOT NULL AND current_price > 0;
+ CREATE TABLE IF NOT EXISTS crawl_queue (
+     retailer TEXT NOT NULL,
+     url TEXT NOT NULL,
