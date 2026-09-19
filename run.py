@@ -4,6 +4,7 @@
   python run.py scrape all --limit 20           scrape every retailer
   python run.py url <product-url>               ingest one specific product page
   python run.py detect                          run anomaly engine
+  python run.py publish                         refresh public website feeds
   python run.py deals                           show current deals
 """
 import argparse
@@ -11,12 +12,14 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 import time
+from urllib.parse import urlparse
 
 import alerts
 import categorize as categorize_mod
 import db
 import watch_alerts
 from anomaly import BIG_DROP, run as detect
+from publication import refresh_public_views
 from scrapers import REGISTRY
 from scrapers.base import Blocked, NotFound, verify_price
 
@@ -426,16 +429,20 @@ def cmd_detect(args):
     watched = watch_alerts.send_watch_alerts(conn)
     if watched:
         print(f"resend: {watched} watch alert(s) sent")
-    if db.DATABASE_URL:
-        # Keep the website's precomputed aggregate feeds current. Running these
-        # scans during detect keeps public page loads fast and reliable.
-        for view in ("discount_feed", "growth_daily", "catalogue_stats", "retailer_freshness", "subcategory_stats"):
-            try:
-                conn.execute(f"refresh materialized view concurrently {view}")
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                print(f"  ! {view} refresh failed: {e}")
+    if db.DATABASE_URL and not getattr(args, "skip_publish", False):
+        refresh_public_views(conn)
+
+
+def cmd_publish(args):
+    """Publish independently, even when detection or notifications fail."""
+    host = urlparse(db.DATABASE_URL or "").hostname or ""
+    if not host or host.endswith((".supabase.com", ".supabase.co")):
+        raise RuntimeError("Publication requires the current OCI PostgreSQL connection")
+    conn = db.connect()
+    try:
+        refresh_public_views(conn)
+    finally:
+        conn.close()
 
 
 def cmd_deals(args):
@@ -475,7 +482,11 @@ if __name__ == "__main__":
     u = sub.add_parser("url")
     u.add_argument("url")
     u.set_defaults(fn=cmd_url)
-    sub.add_parser("detect").set_defaults(fn=cmd_detect)
+    dt = sub.add_parser("detect")
+    dt.add_argument("--skip-publish", action="store_true",
+                    help="publish separately using the independent publication job")
+    dt.set_defaults(fn=cmd_detect)
+    sub.add_parser("publish").set_defaults(fn=cmd_publish)
     sub.add_parser("deals").set_defaults(fn=cmd_deals)
     a = ap.parse_args()
     a.fn(a)

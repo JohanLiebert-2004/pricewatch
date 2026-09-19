@@ -53,6 +53,18 @@ SSH host/user and the private DB address are repository variables. Keep values
 only in GitHub/host secret stores. After workflow edits, manually verify
 checkout, tunnel creation, jobs, detection, and resulting freshness.
 
+Website feed publication is a separate `publish` job. It runs after refresh
+and detection settle even if either failed, with its own connection and
+timeout. Detection uses `--skip-publish` in CI; plain `run.py detect` retains
+publication for manual use. A failed view refresh fails publication after
+attempting the remaining views.
+
+To recover stale public feeds without sending notifications, run
+`python -u run.py publish` using the current OCI database connection. It
+refreshes existing materialized views concurrently; it does not apply schema
+or views.sql. Verify the public `homepage_bootstrap` freshness timestamps and
+sample deal prices afterwards. This does not repair a blocked retailer feed.
+
 ## Terraform
 
 `infra/oci/` has separate web and DB cloud-init templates. The x86 DB is

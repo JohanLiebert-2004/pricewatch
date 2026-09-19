@@ -46,20 +46,15 @@ def run(conn) -> list[dict]:
     cutoff_row = conn.execute(
         "SELECT v FROM kv WHERE k = 'anomaly_last_detect_at'").fetchone()
     cutoff = cutoff_row["v"] if cutoff_row else None
-    changed_ids = None
+    # Keep the changed-product set in the database. Expanding a multi-day
+    # backlog into one bound parameter per ID exceeds PostgreSQL's protocol
+    # limit and prevents the detector from ever advancing its watermark.
+    changed_sql = "SELECT product_id FROM price_snapshots WHERE scraped_at > ?"
     if cutoff:
-        changed_ids = [r["product_id"] for r in conn.execute(
-            "SELECT DISTINCT product_id FROM price_snapshots "
-            "WHERE scraped_at > ?", (cutoff,))]
-
-    if changed_ids is not None and not changed_ids:
-        products = []
-    elif changed_ids is not None:
-        ph = ",".join("?" * len(changed_ids))
         products = conn.execute(
             f"SELECT id, retailer, title, url, is_marketplace, "
-            f"current_price, current_rrp FROM products WHERE id IN ({ph})",
-            changed_ids).fetchall()
+            f"current_price, current_rrp FROM products WHERE id IN ({changed_sql})",
+            (cutoff,)).fetchall()
     else:
         # no marker yet (first run after this change) - one full pass, then
         # every run after this becomes incremental
@@ -70,17 +65,14 @@ def run(conn) -> list[dict]:
     # one bulk pass instead of a per-product query: with change-only
     # snapshots the whole table stays small enough to group in memory
     history_by_pid = {}
-    if changed_ids:
-        ph = ",".join("?" * len(changed_ids))
+    if cutoff:
         hist_rows = conn.execute(
             f"SELECT product_id, price, rrp FROM price_snapshots "
-            f"WHERE product_id IN ({ph}) ORDER BY scraped_at DESC", changed_ids)
-    elif changed_ids is None:
+            f"WHERE product_id IN ({changed_sql}) ORDER BY scraped_at DESC", (cutoff,))
+    else:
         hist_rows = conn.execute(
             "SELECT product_id, price, rrp FROM price_snapshots "
             "ORDER BY scraped_at DESC")
-    else:
-        hist_rows = []
     for s in hist_rows:
         h = history_by_pid.setdefault(s["product_id"], [])
         if len(h) < 90:

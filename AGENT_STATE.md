@@ -1,5 +1,36 @@
 # Pricewatch — shared agent state
 
+## 19 September 2026 — production update recovery
+
+- Owner: Codex. Status: Blocked on production access; local fixes verified.
+- Scope: diagnose failed Kmart refresh/detection and stale public materialized
+  views; change only implicated Python/SQL/workflow files and regression tests.
+- Preserve the pre-existing schema.sql sitemap index edit.
+- Initial evidence: four recent refresh workflows failed; latest run
+  35411169048 failed Kmart refresh and detection. Public freshness is September
+  12–13 (Target September 10). Homepage/bootstrap and representative pages
+  respond, but one ordered catalogue query timed out.
+- Access: GitHub job-log downloads return 403; the session cannot read the
+  user's SSH directory. Requested access/error text while investigating locally.
+- `gh auth status` reports the saved JohanLiebert-2004 token is invalid.
+- Local changes: anomaly.py keeps changed IDs in a SQL subquery instead of
+  binding one parameter per product; publication.py/run.py add an independent
+  publish command; crawl.yml publishes after refresh/detect settle regardless
+  of their result, with an independent timeout. Each failed view is rolled back,
+  remaining views are attempted, and publication fails visibly. db.py adds
+  adapter close support; DEPLOY.md records the recovery command.
+- Verified: all 27 Python tests pass, compilation and workflow YAML checks pass.
+  Reproduced the old detector's parameter failure at 65,536 changed products in
+  SQLite with a 65,535 variable limit; the fixed detector processes all 65,536.
+  This confirms a code defect, not the unseen production traceback.
+- Public product_search shows recent Kmart (September 18) and Officeworks
+  (September 19) rows despite the stale materialized summary. Some collection
+  therefore continues; do not describe every base product as six days stale.
+- Not deployed. No production mutation, alert send, or workflow dispatch.
+  Kmart's specific failure still requires logs. After access recovery, inspect
+  both failed steps, resolve their actual causes, push/deploy verified changes,
+  run publication, and verify live freshness plus a successful pipeline.
+
 ## Saved checkpoint — 14 September 2026
 
 Owner requested all progress be saved. Phase 3 implementation, deployment

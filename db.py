@@ -496,3 +496,6 @@ class _PgShim:
 
     def rollback(self):
         self._c.rollback()
+
+    def close(self):
+        self._c.close()
