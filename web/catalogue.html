@@ -10,13 +10,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Catalogue — Dealwatch</title>
-<meta name="description" content="Browse the Dealwatch catalogue by retailer, category and price.">
+<title>Compare Australian Retail Prices &amp; Products | Dealwatch</title>
+<meta name="description" content="Browse products from Australian retailers by store, category and price. Open a product to check recorded price history and set a price alert.">
 <link rel="canonical" href="https://dealwatch.com.au/catalogue.html">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Dealwatch">
-<meta property="og:title" content="The Catalogue — Dealwatch">
-<meta property="og:description" content="Browse the Dealwatch catalogue by retailer, category and price.">
+<meta property="og:title" content="Compare Australian Retail Prices &amp; Products | Dealwatch">
+<meta property="og:description" content="Browse products from Australian retailers by store, category and price. Open a product to check recorded price history and set a price alert.">
 <meta property="og:url" content="https://dealwatch.com.au/catalogue.html">
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
@@ -223,15 +223,29 @@ async function loadPage(reset){
   const serial = ++requestSerial;
   if(pageRequest) pageRequest.abort();
   pageRequest = new AbortController();
+  document.getElementById("catalogueError")?.remove();
+  document.getElementById("more").hidden = true;
   if(reset){ offset = 0; document.getElementById("list").innerHTML =
     `<div class="empty">Curating the catalogue…</div>`; }
   const q = filterUrl() + `&order=${SORT_ORDER[sort]}&limit=${PAGE}&offset=${offset}`;
   let rows = [];
   try {
     const r = await fetch(q, {headers:HDRS, signal:pageRequest.signal});
-    rows = r.ok ? await r.json() : [];
+    if(!r.ok) throw new Error(`Catalogue request failed: ${r.status}`);
+    rows = await r.json();
+    if(!Array.isArray(rows)) throw new Error("Invalid catalogue response");
   } catch(err) {
-    if(err.name === "AbortError") return;
+    if(err.name === "AbortError" || serial !== requestSerial) return;
+    const list = document.getElementById("list");
+    if(reset) list.innerHTML = "";
+    const error = document.createElement("div");
+    error.id = "catalogueError";
+    error.className = "empty";
+    error.setAttribute("role", "alert");
+    error.innerHTML = `We couldn't load ${reset ? "the catalogue" : "more products"}. Please try again. <button type="button">Retry</button>`;
+    error.querySelector("button").addEventListener("click", () => loadPage(reset));
+    list.append(error);
+    return;
   }
   // A slower response for an earlier filter must never replace newer results.
   if(serial !== requestSerial) return;

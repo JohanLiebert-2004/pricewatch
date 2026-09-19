@@ -1,5 +1,77 @@
 # Pricewatch — shared agent state
 
+## 19 September 2026 — SEO improvements
+
+- OCI deployment completed: SSH access was granted to the session, a temporary
+  restricted copy of the deployment key was used, and removed after use. Remote
+  `/opt/pricewatch` had only its expected untracked `.venv/` change. The
+  prepared `services/preview_app.py` and `web/landing.html` patch applied after
+  root-owned file backups; `pricewatch-web.service` restarted successfully and
+  local `/healthz` returned `ok`.
+- Live OCI/Vercel verification: `/deals/books`, `/retailers/kmart`, and a
+  product page return 200 with titles and rendered content. A cache-busting
+  category request confirms the new ISBN guidance, recorded-date cards,
+  BreadcrumbList, and no template placeholders. A first uncached request may
+  still serve the previous 600-second Vercel/SSR cache until it expires.
+
+- OCI follow-up requested: confirmed SSH directory read is denied and ssh-add
+  reports no agent. Requested session access; do not bypass the restriction.
+  Prepared ../.qa-tools/oci-seo-deploy/seo.patch containing only preview_app.py
+  and landing.html, plus file hashes. Before applying, inspect remote changes,
+  back up the two files, and check patch applicability. Restart only
+  pricewatch-web.service, then verify port 8300 health and public landing HTML.
+
+- Production update: static website successfully deployed after device login
+  using a writable CLI config outside the repository. Vercel deployment
+  dpl_Ch8xBjSaxwZEEDnAKs4qWhtdxGgM / web-kli7m9t1e-trest2.vercel.app is READY
+  and aliased to https://dealwatch.com.au.
+- Live verified: homepage/clearance/catalogue/search titles, /index.html 308 to
+  /, raw landing template noindex, robots/sitemap/bootstrap/category HTTP 200.
+  Clearance layout checks pass at 320/390/1440px; homepage browser suite passes.
+- Remaining: services/preview_app.py and matching landing template changes need
+  deployment to OCI; SSH access is still unavailable. No Search Console submission
+  or Google ranking claim. Static deployment also includes the catalogue retry fix.
+
+- Owner steering: prioritise clearance deals and cheap products; deployment
+  explicitly requested. Updated homepage/clearance metadata, headings, visible
+  guidance and clearance discovery link. Homepage browser suite passes.
+- Deployment attempted with `vercel --prod --yes` from web/; Vercel returned
+  `Not authorized`. Subsequent team lookup started device authentication and
+  is waiting for the owner. No successful deployment yet. Earlier `whoami`
+  returned an account name but did not establish deployment authorization.
+
+- Owner: Codex. Status: Static SEO live; OCI SEO deployment blocked on SSH access.
+- Scope: static page metadata/content, Vercel canonical redirects and template
+  indexing, SSR landing content/breadcrumbs/freshness, SEO regression tests.
+- Preserve earlier catalogue error handling and unrelated schema.sql changes.
+- Implemented: descriptive titles, homepage buying guidance/internal links,
+  category advice, retailer context, contextual links and BreadcrumbList markup;
+  landing cards show recorded dates instead of unsupported freshness claims.
+  Vercel config consolidates /index.html and excludes the raw landing template.
+- Verified: 30 Python tests, all three browser suites, JSON config parsing and
+  diff checks pass. Live robots/sitemap/sample landing checks returned HTTP 200.
+- SEO.md records the live baseline, deployment sequence and Search Console
+  measurement steps. Google indexing/rankings and rich-result eligibility have
+  not been verified; no Search Console access or deployment was available.
+
+## 19 September 2026 — website check and catalogue errors
+
+- Owner: Codex. Status: Local fix complete; production recovery blocked on access.
+- Scope: web/catalogue.html and tests/website_browser.cjs; distinguish API
+  failures from empty results and allow retry without losing pagination.
+- Live bootstrap still reports September 10–13 freshness; GitHub authentication
+  remains invalid. Preserve the unrelated schema.sql edit.
+- Fixed: catalogue HTTP/network/invalid-response errors now show a retry action;
+  failed pagination preserves existing rows and retries the same offset.
+- Verified: 27 Python tests and all three browser suites pass; updated website
+  suite verifies initial failure/retry and failed second-page recovery. Diff check
+  passes. Live homepage renders deals with week-old timestamps; four-page browser
+  smoke check reports no JavaScript errors, but catalogue/clearance were still
+  loading at the sampling point (not verified as successful loads).
+- Not deployed: GitHub token invalid, SSH directory access denied, and no Vercel
+  auth file at the checked CLI location. Restore authenticated production access
+  to deploy and run the publication recovery described in DEPLOY.md.
+
 ## 19 September 2026 — production update recovery
 
 - Owner: Codex. Status: Blocked on production access; local fixes verified.

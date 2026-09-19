@@ -89,6 +89,47 @@ class ProductSeoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.status_code, 503)
 
 
+class LandingSeoTests(unittest.IsolatedAsyncioTestCase):
+    async def render_landing(self, kind, value, rows):
+        with patch.object(preview_app, "LANDING_TEMPLATE_PATH", ROOT / "web" / "landing.html"), \
+                patch.object(preview_app, "_fetch_landing_deals", AsyncMock(return_value=rows)):
+            return await preview_app._landing_page(request_for("/"), kind, value)
+
+    async def test_category_has_initial_links_guidance_and_matching_breadcrumbs(self):
+        rows = [{"retailer": "kmart", "sku": "123", "title": "Book <test>",
+                 "category": "books", "price": 10, "pct_off": 50,
+                 "price_updated_at": "2026-01-02T00:00:00Z", "is_30d_low": True}]
+        response = await self.render_landing("category", "books", rows)
+        body = response.body.decode()
+        self.assertIn("Use the ISBN", body)
+        self.assertIn('href="/p/kmart/123"', body)
+        self.assertIn('href="/retailers/kmart"', body)
+        self.assertIn("Book &lt;test&gt;", body)
+        self.assertIn("Price checked 2 January 2026", body)
+        self.assertNotIn("recently checked", body)
+        self.assertNotIn("checked hourly", body)
+        self.assertNotIn("{{", body)
+        data = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>', body, re.S)[1])
+        self.assertEqual(data["breadcrumb"]["itemListElement"][-1]["item"],
+                         "https://dealwatch.com.au/deals/books")
+        self.assertEqual(data["mainEntity"]["itemListElement"][0]["url"],
+                         "https://dealwatch.com.au/p/kmart/123")
+
+    async def test_empty_retailer_keeps_useful_content_without_fabricated_deals(self):
+        response = await self.render_landing("retailer", "kmart", [])
+        body = response.body.decode()
+        self.assertIn("recorded Kmart discounts", body)
+        self.assertIn("independent tracker", body)
+        self.assertIn("No recorded discounts", body)
+        self.assertNotIn("recently verified", body)
+        self.assertNotIn("{{", body)
+
+    async def test_unknown_category_returns_404(self):
+        with self.assertRaises(HTTPException) as caught:
+            await self.render_landing("category", "unknown", [])
+        self.assertEqual(caught.exception.status_code, 404)
+
+
 class SitemapSeoTests(unittest.IsolatedAsyncioTestCase):
     async def test_sitemap_requests_only_recent_positive_price_rows(self):
         now = datetime.now(timezone.utc).isoformat()

@@ -95,6 +95,17 @@ CATEGORY_LABEL = {
     "books": "Books", "other": "Other",
 }
 
+CATEGORY_GUIDANCE = {
+    "tech": "Match the exact model, storage size and included accessories when comparing electronics. A similar product name does not always mean the same specification.",
+    "home": "Check dimensions, materials and delivery costs when comparing furniture, bedding and homewares. These differences can outweigh an advertised discount.",
+    "kitchen": "Compare appliance model numbers, capacity and included attachments. For cookware, check the number of pieces and compatibility with your cooktop.",
+    "toys": "Check age suitability, set size and included pieces when comparing toys and baby products. Similar packaging can contain different versions.",
+    "clothing": "Confirm size, colour and return conditions with the retailer. A recorded clothing price may apply to only one variant or clearance size.",
+    "beauty": "Compare pack size and concentration as well as the product name. Gift sets, refills and different volumes are not directly equivalent.",
+    "books": "Use the ISBN to compare the same edition and format. Paperback, hardcover, ebook and boxed-set prices can differ even when the title is identical.",
+    "other": "Check the exact product variant and included items before comparing prices. Review delivery costs and the last recorded check before buying.",
+}
+
 
 def _product_path(retailer: str, sku: str) -> str:
     return f"/p/{quote(retailer, safe='')}/{quote(str(sku), safe='')}"
@@ -197,7 +208,9 @@ def _landing_card(row: dict) -> str:
            else "")
     save = (f'<span class="save">Save ${reference - price:.2f}</span>'
             if reference > price else "")
-    lowest = '<span class="badge lowest">Lowest Price!</span>' if row.get("is_30d_low") else ""
+    lowest = '<span class="badge lowest">30-day low when checked</span>' if row.get("is_30d_low") else ""
+    checked = _display_date(row.get("price_updated_at"))
+    freshness = f"Price checked {checked}" if checked else "Check date unavailable"
     href = _product_path(retailer, sku)
     return f'''<article class="card">
   <a class="card-link" href="{html.escape(href, quote=True)}" aria-label="View price history for {html.escape(title, quote=True)}"></a>
@@ -205,6 +218,7 @@ def _landing_card(row: dict) -> str:
   <div class="cbody"><div class="cname">{html.escape(title)}</div>
     <div class="cprices"><span class="cnow">${price:.2f}</span>{was}</div>
     <div class="cfoot"><span>{html.escape(label)}</span>{save}</div>
+    <p class="hint">{html.escape(freshness)}</p>
     <a class="track-btn" href="{html.escape(href, quote=True)}">View price history</a>
   </div>
 </article>'''
@@ -224,7 +238,7 @@ async def _fetch_landing_deals(field: str, value: str) -> list[dict]:
 def _landing_insight(kind: str, rows: list[dict]) -> str:
     """A compact, data-backed summary instead of generic SEO filler."""
     if not rows:
-        return ("No recently verified discounts are available here right now. "
+        return ("No recorded discounts are available here right now. "
                 "Dealwatch will update this page when fresh prices arrive.")
     prices = [float(row["price"]) for row in rows if row.get("price") is not None]
     discounts = [float(row["pct_off"]) for row in rows if row.get("pct_off") is not None]
@@ -234,9 +248,9 @@ def _landing_insight(kind: str, rows: list[dict]) -> str:
     else:
         dimensions = {row.get("category") for row in rows if row.get("category")}
         scope = f"across {len(dimensions)} categor{'ies' if len(dimensions) != 1 else 'y'}"
-    facts = [f"This page highlights {len(rows)} recently checked deal{'s' if len(rows) != 1 else ''} {scope}"]
+    facts = [f"This page highlights {len(rows)} recorded deal{'s' if len(rows) != 1 else ''} {scope}"]
     if prices:
-        facts.append(f"current prices start at ${min(prices):.2f}")
+        facts.append(f"recorded prices start at ${min(prices):.2f}")
     if discounts:
         facts.append(f"the largest displayed discount is {round(max(discounts))}%")
     return "; ".join(facts) + ". Open a product to verify its recorded price history."
@@ -249,7 +263,7 @@ async def _landing_page(request: Request, kind: str, value: str):
         if not label:
             raise HTTPException(404)
         heading = f"{label} deals in Australia"
-        description = (f"Compare current {label.lower()} deals from major Australian retailers. "
+        description = (f"Compare tracked {label.lower()} deals from major Australian retailers. "
                        "See tracked price history before you buy.")
         canonical = f"{SITE_URL}/deals/{quote(value, safe='')}"
     else:
@@ -258,7 +272,7 @@ async def _landing_page(request: Request, kind: str, value: str):
         if not label:
             raise HTTPException(404)
         heading = f"{label} deals and price history"
-        description = (f"See current {label} price drops, compare discounts, and review "
+        description = (f"See tracked {label} price drops, compare discounts, and review "
                        "tracked price history on Dealwatch.")
         canonical = f"{SITE_URL}/retailers/{quote(value, safe='')}"
 
@@ -268,7 +282,25 @@ async def _landing_page(request: Request, kind: str, value: str):
              for i, row in enumerate(rows, 1) if row.get("retailer") and row.get("sku")]
     jsonld = {"@context": "https://schema.org", "@type": "CollectionPage",
               "name": title, "url": canonical, "description": description,
+              "breadcrumb": {"@type": "BreadcrumbList", "itemListElement": [
+                  {"@type": "ListItem", "position": 1, "name": "Dealwatch", "item": SITE_URL + "/"},
+                  {"@type": "ListItem", "position": 2, "name": heading, "item": canonical}]},
               "mainEntity": {"@type": "ItemList", "itemListElement": items}}
+    if kind == "category":
+        guidance = CATEGORY_GUIDANCE[value]
+        related = [(f"/retailers/{key}", f"{name} deals")
+                   for key, name in RETAILER_LABEL.items()
+                   if any(row.get("retailer") == key for row in rows)]
+    else:
+        guidance = (f"Use this page to explore recorded {label} discounts, then open a product "
+                    "to review its price history and set an alert. A listed RRP is not proof "
+                    "of a previous selling price. Check the seller, delivery charges and stock "
+                    f"on {label}'s website; Dealwatch is an independent tracker, not the retailer.")
+        related = [(f"/deals/{key}", f"{name} deals")
+                   for key, name in CATEGORY_LABEL.items()
+                   if any(row.get("category") == key for row in rows)]
+    related_links = " ".join(f'<a href="{html.escape(url, quote=True)}">{html.escape(name)}</a>'
+                             for url, name in related)
     template = LANDING_TEMPLATE_PATH.read_text(encoding="utf-8")
     rendered = (template.replace("{{base_url}}", html.escape(_base_origin(request), quote=True))
                 .replace("{{title}}", html.escape(title, quote=True))
@@ -277,6 +309,8 @@ async def _landing_page(request: Request, kind: str, value: str):
                 .replace("{{heading}}", html.escape(heading))
                 .replace("{{jsonld}}", json.dumps(jsonld).replace("</", "<\\/"))
                 .replace("{{insight}}", html.escape(_landing_insight(kind, rows)))
+                .replace("{{guidance}}", html.escape(guidance))
+                .replace("{{related_links}}", related_links)
                 .replace("{{cards}}", "\n".join(_landing_card(row) for row in rows)
                  or '<p class="empty">No current deals are available for this page yet.</p>'))
     return Response(rendered, media_type="text/html",

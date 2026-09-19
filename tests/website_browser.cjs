@@ -142,6 +142,34 @@ const server = http.createServer((req, res) => {
     }
     assert.deepEqual(errors, []);
     console.log('PASS: default seller filter, marketplace opt-in, pagination, alert explanation/link, full reset, honest API errors, mobile/desktop layout');
+    let catalogueFailure = true;
+    const catalogueOffsets = [];
+    await context.route('**/rest/v1/product_search?**', route => {
+      const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
+      catalogueOffsets.push(offset);
+      if(catalogueFailure) return route.fulfill({status:503, json:{message:'Timeout'}});
+      return route.fulfill({json:Array.from({length:50}, (_, i) => ({
+        retailer:'kmart', sku:String(offset+i), title:`Catalogue product ${offset+i}`,
+        current_price:10, url:'https://example.com', category:'home'
+      }))});
+    });
+    await page.goto(`http://127.0.0.1:${server.address().port}/catalogue.html`);
+    await page.waitForSelector('#catalogueError');
+    assert.doesNotMatch(await page.locator('#list').innerText(), /Nothing here yet/);
+    catalogueFailure = false;
+    await page.locator('#catalogueError button').click();
+    await page.waitForFunction(() => document.querySelectorAll('#list .row').length === 50);
+    catalogueFailure = true;
+    await page.locator('#more').click();
+    await page.waitForSelector('#catalogueError');
+    assert.equal(await page.locator('#list .row').count(), 50);
+    catalogueFailure = false;
+    await page.locator('#catalogueError button').click();
+    await page.waitForFunction(() => document.querySelectorAll('#list .row').length === 100);
+    assert.deepEqual(catalogueOffsets, [0, 0, 50, 50]);
+    assert.equal(await page.locator('#catalogueError').count(), 0);
+    assert.deepEqual(errors, []);
+    console.log('PASS: catalogue errors, retry, retained products and pagination offset');
     await context.close();
   } finally {
     await browser.close();

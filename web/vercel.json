@@ -1,6 +1,11 @@
 {
   "redirects": [
     {
+      "source": "/index.html",
+      "destination": "/",
+      "permanent": true
+    },
+    {
       "source": "/about",
       "destination": "/about.html",
       "permanent": true
@@ -57,6 +62,15 @@
     }
   ],
   "headers": [
+    {
+      "source": "/landing.html",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, follow"
+        }
+      ]
+    },
     {
       "source": "/product.html",
       "headers": [
