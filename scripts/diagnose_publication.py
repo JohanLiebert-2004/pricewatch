@@ -15,8 +15,10 @@ with psycopg.connect(os.environ['DATABASE_URL'], connect_timeout=20,
         'sessions': """SELECT usename, state, wait_event_type, wait_event, count(*)
                        FROM pg_stat_activity WHERE datname=current_database()
                        GROUP BY 1,2,3,4""",
-        'active': """SELECT pid, usename, application_name, state, wait_event_type,
+        'active': """SELECT pid, leader_pid, backend_type, usename, application_name, state, wait_event_type,
                      wait_event, clock_timestamp()-query_start AS age,
+                     CASE WHEN query LIKE 'REFRESH MATERIALIZED VIEW%'
+                          THEN query ELSE split_part(ltrim(query), ' ', 1) END AS operation,
                      pg_blocking_pids(pid) AS blockers
                      FROM pg_stat_activity WHERE datname=current_database()
                      AND pid<>pg_backend_pid() AND state <> 'idle'
