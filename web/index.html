@@ -251,7 +251,7 @@ const SORTS = {
   deep:  "pct_off.desc,reference_price.desc",
   price_asc:  "price.asc,pct_off.desc",
   price_desc: "price.desc,pct_off.desc",
-  fresh: "book_priority.asc,rotation_key.asc,retailer.asc,sku.asc",
+  fresh: "price_updated_at.desc.nullslast,pct_off.desc,retailer.asc,sku.asc",
   arrivals: "first_seen.desc,pct_off.desc",
 };
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
@@ -264,6 +264,7 @@ const SHARED_CATS = [["tech","Tech"],["home","Home"],["kitchen","Kitchen"],
   ["books","Books"],["other","Other"]];
 let SUBSTATS = {};   // retailer -> [subcategory labels] desc by item count
 let FRESHNESS = {};
+let rotationUniverse = 0, rotationOffset = 0;
 
 async function loadBootstrap(){
   try{
@@ -350,10 +351,13 @@ function selectedRetailerLabel(){
 }
 
 function feedUrl(offset=0){
-  let u = `${SUPABASE_URL}/rest/v1/${sort === "fresh" ? "hourly_deal_feed" : "discount_feed"}?select=*` +
+  let u = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
           `&price_updated_at=gte.${encodeURIComponent(feedCutoff)}` +
           `&order=${SORTS[sort]}&limit=${LIMIT}&offset=${offset}`;
   if(!includeMarketplace) u += `&is_marketplace=is.false`;
+  // Books stay available via their explicit category or retailer filters.
+  if(!selCats.size && !selRetailers.has("qbd") && !selRetailers.has("booktopia"))
+    u += "&category=neq.books";
   if(minOff > 0) u += `&pct_off=gte.${minOff}`;
   if(selRetailers.size) u += `&retailer=in.(${[...selRetailers].map(encodeURIComponent).join(",")})`;
   if(selCats.size) u += `&category=in.(${[...selCats].map(encodeURIComponent).join(",")})`;
@@ -506,16 +510,41 @@ function render(rows, total, append=false){
 }
 
 async function refresh(append=false){
-  if(!append) feedCutoff = recentCutoff();
+  if(!append){
+    feedCutoff = recentCutoff();
+    // Advance about 10% of the recent feed each hour. The same page order stays
+    // stable all hour, and pagination continues from this starting position.
+    const hourlyStart = Math.floor(Date.now()/3600000) * LIMIT * 24;
+    rotationOffset = sort !== "fresh" ? 0
+      : rotationUniverse > 0 ? hourlyStart % rotationUniverse : hourlyStart;
+  }
   const seq = ++fetchSeq;
   const button = document.getElementById("loadMore");
   if(append) button.disabled = true;
   try{
-    const r = await fetch(feedUrl(append ? renderedRows.length : 0), {headers:{...HDRS, Prefer:"count=exact"},cache:"no-store"});
+    let offset = append ? (rotationOffset + renderedRows.length) % Math.max(renderedTotal, 1) : rotationOffset;
+    let r = await fetch(feedUrl(offset), {headers:{...HDRS, Prefer:"count=exact"},cache:"no-store"});
     if(seq !== fetchSeq) return;      // a newer filter superseded this fetch
     if(!r.ok) throw new Error(`Deals request failed (${r.status})`);
-    const rows = await r.json();
-    const total = Number((r.headers.get("content-range")||"").split("/")[1]) || rows.length;
+    let rows = await r.json();
+    let total = Number((r.headers.get("content-range")||"").split("/")[1]) || rows.length;
+    if(!append && total > 0 && offset >= total){
+      if(!rotationUniverse && !selRetailers.size && !selCats.size && !selSubcats.size &&
+         !includeMarketplace && !minOff && pmin === null && pmax === null && !only30DayLow && !q)
+        rotationUniverse = total;
+      rotationOffset = sort === "fresh"
+        ? (Math.floor(Date.now()/3600000) * LIMIT * 24) % total : 0;
+      offset = rotationOffset;
+      r = await fetch(feedUrl(offset), {headers:{...HDRS, Prefer:"count=exact"},cache:"no-store"});
+      if(seq !== fetchSeq) return;
+      if(!r.ok) throw new Error(`Deals request failed (${r.status})`);
+      rows = await r.json();
+      total = Number((r.headers.get("content-range")||"").split("/")[1]) || rows.length;
+    }
+    if(!append && !rotationUniverse && sort === "fresh" && !selRetailers.size &&
+       !selCats.size && !selSubcats.size && !includeMarketplace && !minOff &&
+       pmin === null && pmax === null && !only30DayLow && !q)
+      rotationUniverse = total;
     render(rows, total, append);
   }catch(e){
     if(seq !== fetchSeq) return;
@@ -650,6 +679,14 @@ const SEARCH_PROMPTS=["Search 'Anko Air Fryer'…","Paste a Kmart item number…
 let promptIndex=0;
 setInterval(()=>{const input=document.getElementById("q");if(input&&document.activeElement!==input){promptIndex=(promptIndex+1)%SEARCH_PROMPTS.length;input.placeholder=SEARCH_PROMPTS[promptIndex];}},3600);
 refresh();
+function scheduleHourlyDealRotation(){
+  const delay = 3600000 - (Date.now() % 3600000) + 250;
+  setTimeout(()=>{
+    if(sort === "fresh") refresh();
+    scheduleHourlyDealRotation();
+  }, delay);
+}
+scheduleHourlyDealRotation();
 </script>
 <nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html" class="active" aria-current="page"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</a><a href="/catalogue.html"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Catalogue</a><a href="/clearance.html"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>Clearance</a><a href="/search.html"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>Search</a><a href="/alerts.html"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Alerts</a></nav></body>
 </html>
