@@ -96,11 +96,18 @@ const server = http.createServer((req, res) => {
       is_marketplace:i === 0, category:'home', price:10, reference_price:100,
       pct_off:90, reference_source:'Retailer RRP', price_updated_at:new Date().toISOString()
     }));
+    deals.push({...deals[1], sku:'stale', title:'Old discounted item', pct_off:99,
+      price_updated_at:new Date(Date.now()-30*86400000).toISOString()});
+    deals.push({...deals[1], sku:'undated', title:'Undated discounted item', price_updated_at:null});
+    deals[2].price_updated_at = new Date(Date.now()-86400000).toISOString();
     await context.route('**/rest/v1/discount_feed?**', async route => {
       const params = new URL(route.request().url()).searchParams;
       feedRequests.push(params);
       if(failFeed) return route.fulfill({status:503, json:{message:'Unavailable'}});
-      const rows = params.get('is_marketplace') === 'is.false' ? deals.filter(d=>!d.is_marketplace) : deals;
+      let rows = params.get('is_marketplace') === 'is.false' ? deals.filter(d=>!d.is_marketplace) : [...deals];
+      const cutoff = params.get('price_updated_at');
+      if(cutoff) rows = rows.filter(d=>d.price_updated_at && Date.parse(d.price_updated_at)>=Date.parse(cutoff.slice(4)));
+      if(params.get('order').startsWith('price_updated_at.desc')) rows.sort((a,b)=>Date.parse(b.price_updated_at)-Date.parse(a.price_updated_at));
       const offset = Number(params.get('offset') || 0), limit = Number(params.get('limit'));
       await route.fulfill({json:rows.slice(offset, offset+limit), headers:{'content-range':`${offset}-${Math.min(offset+limit,rows.length)-1}/${rows.length}`}});
     });
@@ -108,12 +115,23 @@ const server = http.createServer((req, res) => {
     await page.waitForFunction(() => document.querySelectorAll('#list .card').length === 24);
     assert.equal(await page.locator('#includeMarketplace').isChecked(), false);
     assert.doesNotMatch(await page.locator('#list').innerText(), /Marketplace item/);
+    assert.equal(await page.locator('#sort').inputValue(), 'fresh');
+    assert.match(feedRequests.at(-1).get('order'), /^price_updated_at.desc.nullslast/);
+    const initialCutoff = feedRequests.at(-1).get('price_updated_at');
+    assert(Math.abs(Date.parse(initialCutoff.slice(4)) - (Date.now()-7*86400000)) < 10000);
+    assert.doesNotMatch(await page.locator('#list').innerText(), /Old discounted item|Undated discounted item|Retailer item 2\n/);
+    assert.match(await page.locator('#total').innerText(), /last 7 days/);
     assert.match(await page.locator('#list .alert-hint').first().innerText(), /Email or Telegram/);
     assert.match(await page.locator('#list .track-btn').first().getAttribute('href'), /#watchpanel$/);
     await page.locator('#loadMore').click();
     await page.waitForFunction(() => document.querySelectorAll('#list .card').length === 48);
     assert.equal(feedRequests.at(-1).get('is_marketplace'), 'is.false');
     assert.equal(feedRequests.at(-1).get('offset'), '24');
+    assert.equal(feedRequests.at(-1).get('price_updated_at'), initialCutoff);
+    await page.locator('#loadMore').click();
+    await page.waitForFunction(() => document.querySelectorAll('#list .card').length === 61);
+    assert.doesNotMatch(await page.locator('#list').innerText(), /Old discounted item|Undated discounted item/);
+    assert.equal(await page.locator('#list .cname').last().innerText(), 'Retailer item 2');
     await page.locator('#dealFilters summary').click();
     await page.locator('#includeMarketplace').check();
     await page.waitForFunction(() => document.querySelector('#list').textContent.includes('Marketplace item'));
@@ -127,11 +145,26 @@ const server = http.createServer((req, res) => {
     await page.locator('#qclear').click();
     await page.waitForFunction(() => document.querySelector('#total').textContent.includes('marketplace excluded'));
     assert.equal(await page.locator('#q').inputValue(), '');
-    assert.equal(await page.locator('#sort').inputValue(), 'deep');
+    assert.equal(await page.locator('#sort').inputValue(), 'fresh');
     assert.equal(await page.locator('#includeMarketplace').isChecked(), false);
     const reset = feedRequests.at(-1);
     assert.equal(reset.get('is_marketplace'), 'is.false');
+    assert(reset.get('price_updated_at').startsWith('gte.'));
     for(const param of ['retailer','or','category','price','pct_off']) assert.equal(reset.has(param),false);
+    await page.locator('#sort').selectOption('deep');
+    await page.waitForFunction(() => document.querySelector('#total').textContent.includes('biggest discount'));
+    assert(feedRequests.at(-1).get('price_updated_at').startsWith('gte.'));
+    assert.doesNotMatch(await page.locator('#list').innerText(), /Old discounted item|Undated discounted item/);
+    await page.locator('[data-quick="half"]').click();
+    await page.waitForFunction(() => document.querySelector('#total').textContent.includes('50%+ off'));
+    assert.equal(await page.locator('#sort').inputValue(), 'fresh');
+    assert(feedRequests.at(-1).get('price_updated_at').startsWith('gte.'));
+    // A stopped data refresh must result in an honest empty feed, not old deals.
+    deals.forEach(d => { d.price_updated_at = new Date(Date.now()-30*86400000).toISOString(); });
+    await page.locator('#qclear').click();
+    await page.waitForSelector('#list .empty');
+    assert.match(await page.locator('#list').innerText(), /No recently updated deals/);
+    assert.equal(await page.locator('#loadMore').isVisible(), false);
     failFeed = true;
     await page.locator('#includeMarketplace').check();
     await page.waitForFunction(() => document.querySelector('#list').textContent.includes("couldn't load"));
@@ -141,7 +174,7 @@ const server = http.createServer((req, res) => {
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth), `Homepage overflow at ${width}`);
     }
     assert.deepEqual(errors, []);
-    console.log('PASS: default seller filter, marketplace opt-in, pagination, alert explanation/link, full reset, honest API errors, mobile/desktop layout');
+    console.log('PASS: newest-first feed, seven-day cutoff, stale/undated exclusions, pagination, sort/quick filters, reset, stale-only empty state, seller filters, API errors, mobile/desktop layout');
     let catalogueFailure = true;
     const catalogueOffsets = [];
     await context.route('**/rest/v1/product_search?**', route => {

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock
 
 import db
 from db import ProductRecord
@@ -25,6 +26,18 @@ class _Connection:
 
 
 class PostgresBulkUpsertTests(unittest.TestCase):
+    def test_unparameterized_like_keeps_literal_percent(self):
+        connection = Mock()
+        sql = "SELECT id FROM products WHERE gtin NOT LIKE '978%'"
+        db._PgShim(connection).execute(sql)
+        connection.cursor.return_value.execute.assert_called_once_with(sql, None)
+
+    def test_parameterized_query_keeps_binding(self):
+        connection = Mock()
+        db._PgShim(connection).execute("SELECT id FROM products WHERE sku=?", ("001",))
+        connection.cursor.return_value.execute.assert_called_once_with(
+            "SELECT id FROM products WHERE sku=%s", ("001",))
+
     def test_values_cells_are_explicitly_typed(self):
         conn = _Connection()
         rows = [

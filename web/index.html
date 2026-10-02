@@ -51,6 +51,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .search-launch{padding:22px}.search-launch #q{font-size:17px;padding:13px 16px;box-shadow:0 0 0 0 transparent;transition:border-color .2s,box-shadow .2s}.search-launch #q:focus{border-color:var(--flag);box-shadow:0 0 0 4px var(--flag-soft)}
   .personal{margin-top:34px}
   .personal[hidden]{display:none}
+  .load-more[hidden]{display:none}
   .personal h2{font-size:18px;letter-spacing:-.02em;margin:0}
   .personal .hint{margin:4px 0 0}
   .sectionhead{display:flex;justify-content:space-between;gap:16px;align-items:baseline;margin:22px 0 10px}
@@ -87,6 +88,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div class="eyebrow"><span class="live"></span> price drops · australia</div>
   <h1 class="display">Cheap finds.<br><em>Check the price history.</em></h1>
   <p class="sub">Find cheap products and price drops across Australian retailers.
+    Only prices updated in the last 7 days appear below, newest first.
     Browse clearance deals, check price history and set a free alert.</p>
   <nav class="discovery-links" aria-label="Explore price comparisons">
     <a href="/clearance.html">Browse clearance deals</a>
@@ -146,7 +148,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <option value="deep">Biggest discount</option>
         <option value="price_asc">Price: low to high</option>
         <option value="price_desc">Price: high to low</option>
-        <option value="fresh">Newest price drops</option>
+        <option value="fresh" selected>Latest price updates</option>
         <option value="arrivals">New arrivals</option>
       </select>
       <input type="number" id="pmin" aria-label="Minimum price" placeholder="min $" min="0" inputmode="numeric">
@@ -167,7 +169,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div class="bar quickbar" id="quickFilters">
       <button class="chip" type="button" data-quick="half" aria-pressed="false">50%+ off</button>
       <button class="chip" type="button" data-quick="under50" aria-pressed="false">Under $50</button>
-      <button class="chip" type="button" data-quick="fresh" aria-pressed="false">New drops</button>
+      <button class="chip" type="button" data-quick="fresh" aria-pressed="false">Latest updates</button>
       <button class="chip" type="button" data-quick="low30" aria-pressed="false">30-day lows</button>
     </div>
   </div>
@@ -223,6 +225,16 @@ const SUPABASE_URL = "";
 const SUPABASE_ANON_KEY = "";
 const HDRS = {};
 const LIMIT = 24;
+const RECENT_DAYS = 7;
+let feedCutoff = recentCutoff();
+function recentCutoff(){
+  // Match the UTC text timestamps emitted by the ingestion jobs.
+  return new Date(Date.now() - RECENT_DAYS * 86400000).toISOString().replace(/\.\d{3}Z$/, "+00:00");
+}
+function isRecentPrice(row){
+  const updated = Date.parse(row.price_updated_at);
+  return Number.isFinite(updated) && updated >= Date.parse(feedCutoff) && updated <= Date.now();
+}
 
 // ---- render ------------------------------------------------------------
 function skeletonCards(n){return Array.from({length:n||12},()=>`<div class="skeleton-card"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>`).join("");}
@@ -238,13 +250,13 @@ const SORTS = {
   deep:  "pct_off.desc,reference_price.desc",
   price_asc:  "price.asc,pct_off.desc",
   price_desc: "price.desc,pct_off.desc",
-  fresh: "price_updated_at.desc,pct_off.desc",
+  fresh: "price_updated_at.desc.nullslast,pct_off.desc,retailer.asc,sku.asc",
   arrivals: "first_seen.desc,pct_off.desc",
 };
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let selRetailers = new Set(), selCats = new Set(), selSubcats = new Set(),
-    minOff = 0, q = "", sort = "deep", pmin = null, pmax = null,
+    minOff = 0, q = "", sort = "fresh", pmin = null, pmax = null,
     only30DayLow = false, includeMarketplace = false, quick = "", fetchSeq = 0;
 const SHARED_CATS = [["tech","Tech"],["home","Home"],["kitchen","Kitchen"],
   ["toys","Toys & Baby"],["clothing","Clothing"],["beauty","Beauty"],
@@ -334,6 +346,7 @@ function selectedRetailerLabel(){
 
 function feedUrl(offset=0){
   let u = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
+          `&price_updated_at=gte.${encodeURIComponent(feedCutoff)}` +
           `&order=${SORTS[sort]}&limit=${LIMIT}&offset=${offset}`;
   if(!includeMarketplace) u += `&is_marketplace=is.false`;
   if(minOff > 0) u += `&pct_off=gte.${minOff}`;
@@ -402,6 +415,7 @@ function hotCard(p){
   return `<a class="hot-card" href="${href}"><strong>${esc(p.title)}</strong><div class="meta"><span class="pill">${esc(store)}</span>${p.category ? `<span class="pill">${esc(p.category)}</span>` : ""}</div><div class="hot-price">${money(p.current_price)}</div>${heat}</a>`;
 }
 function renderHotNow(rows){
+  rows = Array.isArray(rows) ? rows.filter(isRecentPrice) : [];
   if(!Array.isArray(rows) || !rows.length) return;
   document.getElementById("hotList").innerHTML = rows.slice(0,8).map(hotCard).join("");
   document.getElementById("hotNow").hidden = false;
@@ -418,7 +432,7 @@ function recentHtml(p){
   const image = p.image_url ? `<img src="${esc(thumbSrc(p.image_url))}" width="72" height="72" loading="lazy" alt="${esc(p.title)}">`
     : `<div class="recentthumb">${esc(store[0] || "?")}</div>`;
   return `<a class="recentcard" href="${href}">${image}<div><div class="recentname">${esc(p.title)}</div>
-    <div class="recentmeta">${esc(store)}${p.current_price != null ? ` · ${money(p.current_price)}` : ""}</div></div></a>`;
+    <div class="recentmeta">${esc(store)} · View latest price</div></div></a>`;
 }
 function renderPersonal(){
   const recent = recentItems();
@@ -434,6 +448,8 @@ function renderPersonal(){
      body:JSON.stringify({p_retailer:latest.retailer, p_sku:latest.sku, p_limit:8})})
     .then(r=>r.ok ? r.json() : [])
     .then(rows=>{
+      // Recommendations without a recorded update cannot be presented as current.
+      rows = rows.filter(isRecentPrice);
       if(!rows.length) return;
       document.getElementById("aiSimilarTitle").textContent = latest.title;
       document.getElementById("aiSimilarWrap").hidden = false;
@@ -442,7 +458,7 @@ function renderPersonal(){
   const categories = [...new Set(recent.map(p=>p.category).filter(c=>c && c !== "other"))].slice(0,2);
   if(!categories.length) return;
   const filter = categories.map(encodeURIComponent).join(",");
-  fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=*&is_marketplace=is.false&category=in.(${filter})&order=pct_off.desc,reference_price.desc&limit=6`, {headers:HDRS})
+  fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=*&is_marketplace=is.false&category=in.(${filter})&price_updated_at=gte.${encodeURIComponent(feedCutoff)}&order=${SORTS.fresh}&limit=6`, {headers:HDRS,cache:"no-store"})
     .then(r=>r.ok ? r.json() : [])
     .then(rows=>{
       if(!rows.length) return;
@@ -452,7 +468,7 @@ function renderPersonal(){
     }).catch(()=>{});
 }
 const SORT_LABEL = {deep:"biggest discount", price_asc:"price low→high",
-                    price_desc:"price high→low", fresh:"newest drops",
+                    price_desc:"price high→low", fresh:"latest price updates",
                     arrivals:"new arrivals"};
 let renderedRows = [], renderedTotal = 0;
 function render(rows, total, append=false){
@@ -461,7 +477,7 @@ function render(rows, total, append=false){
   const retailerLabel = selectedRetailerLabel();
   document.getElementById("filterSummary").textContent = retailerLabel +
     (includeMarketplace ? " · marketplace included" : " · marketplace excluded") +
-    (selCats.size || selSubcats.size || minOff || pmin!==null || pmax!==null || only30DayLow || sort!=="deep" ? " · filters applied" : "");
+    (selCats.size || selSubcats.size || minOff || pmin!==null || pmax!==null || only30DayLow || sort!=="fresh" ? " · filters applied" : "");
   const label = `${retailerLabel}` +
     (includeMarketplace ? " · including marketplace sellers" : " · marketplace excluded") +
     (selCats.size ? ` · ${[...selCats].join(", ")}` : "") +
@@ -469,15 +485,14 @@ function render(rows, total, append=false){
     (minOff>0 ? ` · ${minOff}%+ off` : "") +
     (pmin!==null||pmax!==null ? ` · $${pmin??0}–${pmax!==null?"$"+pmax:"any"}` : "") +
     (only30DayLow ? " · at a 30-day low" : "") +
-    ` · ${SORT_LABEL[sort]}` +
+    ` · updated in the last ${RECENT_DAYS} days · ${SORT_LABEL[sort]}` +
     (q ? ` · “${esc(q)}”` : "");
   document.getElementById("total").innerHTML =
     `${total.toLocaleString("en-AU")} discounted item${total===1?"":"s"} <span>· ${label}` +
     (total > renderedRows.length ? ` · showing ${renderedRows.length}` : "") + `</span>`;
   const list = document.getElementById("list");
   if(!renderedRows.length){ list.innerHTML =
-    `<div class="empty" style="grid-column:1/-1">Nothing matches this combination just yet.<br>Try a lower
-     minimum discount or a wider price range.</div>`;
+    `<div class="empty" style="grid-column:1/-1">No recently updated deals match these filters.<br>Only prices updated in the last ${RECENT_DAYS} days are shown. Try a wider price range or <a href="/catalogue.html">browse the catalogue</a>.</div>`;
     document.getElementById("loadMore").hidden = true; return; }
   list.innerHTML = renderedRows.map(cardHtml).join("");
   window.DealwatchSparklines?.mount(list);
@@ -485,11 +500,12 @@ function render(rows, total, append=false){
 }
 
 async function refresh(append=false){
+  if(!append) feedCutoff = recentCutoff();
   const seq = ++fetchSeq;
   const button = document.getElementById("loadMore");
   if(append) button.disabled = true;
   try{
-    const r = await fetch(feedUrl(append ? renderedRows.length : 0), {headers:{...HDRS, Prefer:"count=exact"}});
+    const r = await fetch(feedUrl(append ? renderedRows.length : 0), {headers:{...HDRS, Prefer:"count=exact"},cache:"no-store"});
     if(seq !== fetchSeq) return;      // a newer filter superseded this fetch
     if(!r.ok) throw new Error(`Deals request failed (${r.status})`);
     const rows = await r.json();
@@ -548,7 +564,7 @@ document.getElementById("qclear").addEventListener("click", ()=>{
   q = "";
   document.getElementById("q").value = "";
   selRetailers.clear(); selCats.clear(); selSubcats.clear();
-  minOff = 0; pmin = pmax = null; only30DayLow = false; sort = "deep";
+  minOff = 0; pmin = pmax = null; only30DayLow = false; sort = "fresh";
   includeMarketplace = false;
   document.getElementById("includeMarketplace").checked = false;
   document.getElementById("sort").value = sort;
@@ -594,7 +610,7 @@ document.getElementById("pclear").addEventListener("click", ()=>{
 document.getElementById("quickFilters").addEventListener("click", e=>{
   const b = e.target.closest(".chip"); if(!b) return;
   quick = b.dataset.quick;
-  minOff = 0; pmin = pmax = null; only30DayLow = false; sort = "deep";
+  minOff = 0; pmin = pmax = null; only30DayLow = false; sort = "fresh";
   if(quick === "half") minOff = 50;
   if(quick === "under50"){ pmax = 50; sort = "price_asc"; }
   if(quick === "fresh") sort = "fresh";

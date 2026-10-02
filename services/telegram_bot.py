@@ -18,12 +18,14 @@ NOTE: this is the only getUpdates consumer allowed; `python alerts.py
 whoami` (a setup helper that also calls getUpdates) will conflict while
 this service runs - stop the service first if you ever need whoami again.
 
-Env (from /opt/pricewatch.env): TELEGRAM_BOT_TOKEN, DATABASE_URL.
+Env: TELEGRAM_BOT_TOKEN from /opt/pricewatch.env; DATABASE_URL overridden by
+/etc/pricewatch-kmart.env, the same production database used by the crawler.
 """
 import html
 import os
 import re
 import time
+from urllib.parse import urlsplit
 
 import httpx
 import psycopg
@@ -54,6 +56,9 @@ HELP = (
 
 
 def db():
+    host = (urlsplit(DATABASE_URL).hostname or "").lower()
+    if not host or host == "supabase.com" or host.endswith(".supabase.com") or host == "supabase.co" or host.endswith(".supabase.co"):
+        raise RuntimeError("Telegram requires the current OCI DATABASE_URL; check the service environment files")
     return psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=True)
 
 
@@ -75,7 +80,7 @@ def product_title(conn, retailer: str, sku: str) -> str | None:
 
 
 def handle_start(conn, chat_id: int, payload: str):
-    m = PAYLOAD_RX.match(payload or "")
+    m = PAYLOAD_RX.fullmatch(payload or "") if len(payload or "") <= 64 else None
     if not m:
         send(chat_id, HELP)
         return

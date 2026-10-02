@@ -8,6 +8,8 @@ Type=simple
 User=www-data
 Group=www-data
 EnvironmentFile=/opt/pricewatch.env
+# Match the production crawler database; never fall back to the retired DB.
+EnvironmentFile=/etc/pricewatch-kmart.env
 WorkingDirectory=/opt/pricewatch/services
 ExecStart=/opt/pricewatch/.venv/bin/python telegram_bot.py
 Restart=always

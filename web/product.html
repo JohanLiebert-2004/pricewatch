@@ -358,7 +358,7 @@ function watchPanelHtml(p){
   }
   // Telegram deep-link payloads only allow [A-Za-z0-9_-]; every current
   // retailer's SKUs fit, but hide the button rather than break if not
-  const tgOk = /^[A-Za-z0-9_-]{1,48}$/.test(sku);
+  const tgOk = /^[A-Za-z0-9_-]{1,48}$/.test(sku) && `i_${retailer}_${sku}`.length <= 64;
   const store = RETAILER_LABEL[retailer] || retailer;
   const tg = `<div class="barlabel">Telegram alerts</div>
     <div class="watchnote" style="margin-top:0">Instant pings in Telegram — no email needed.</div>

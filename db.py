@@ -483,7 +483,9 @@ class _PgShim:
 
     def execute(self, sql, params=()):
         cur = self._c.cursor()
-        cur.execute(self._q(sql), params)
+        # An empty parameter tuple still enables psycopg placeholder parsing.
+        # Literal LIKE patterns (e.g. '978%') must be sent without parameters.
+        cur.execute(self._q(sql), params if params else None)
         return cur
 
     def executemany(self, sql, seq):
