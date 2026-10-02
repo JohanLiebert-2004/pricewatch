@@ -1,4 +1,4 @@
-const CACHE = 'dealwatch-static-v16-hourly-rotation';
+const CACHE = 'dealwatch-static-v17-filtered-hourly-rotation';
 const CORE = ['/', '/index.html', '/search.html', '/catalogue.html', '/style.css', '/manifest.webmanifest', '/icon.svg'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(
