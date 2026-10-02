@@ -91,10 +91,11 @@ const server = http.createServer((req, res) => {
     // Exercise seller filtering through actual controls and paginated requests.
     const feedRequests = [];
     let failFeed = false;
+    const fixtureUpdatedAt = new Date().toISOString();
     const deals = Array.from({length:62}, (_, i) => ({
       retailer:'myer', sku:String(i), title:i === 0 ? 'Marketplace item' : `Retailer item ${i}`,
       is_marketplace:i === 0, category:'home', price:10, reference_price:100,
-      pct_off:90, reference_source:'Retailer RRP', price_updated_at:new Date().toISOString()
+      pct_off:90, reference_source:'Retailer RRP', price_updated_at:fixtureUpdatedAt
     }));
     deals.push({...deals[1], sku:'stale', title:'Old discounted item', pct_off:99,
       price_updated_at:new Date(Date.now()-30*86400000).toISOString()});
@@ -165,10 +166,18 @@ const server = http.createServer((req, res) => {
     await page.waitForSelector('#list .empty');
     assert.match(await page.locator('#list').innerText(), /No recently updated deals/);
     assert.equal(await page.locator('#loadMore').isVisible(), false);
+    assert.equal(await page.locator('#s-deals').innerText(), '0');
+    await page.evaluate(() => {
+      FRESHNESS = {myer:{last_seen:'2026-01-01T00:00:00Z'}};
+      renderNetworkStatus();
+    });
+    assert.match(await page.locator('#networkStatus').innerText(), /Deal updates are delayed/);
+    assert.equal(await page.locator('#networkStatus').isVisible(), true);
     failFeed = true;
     await page.locator('#includeMarketplace').check();
     await page.waitForFunction(() => document.querySelector('#list').textContent.includes("couldn't load"));
     assert.doesNotMatch(await page.locator('#list').innerText(), /Nothing matches/);
+    assert.equal(await page.locator('#s-deals').innerText(), '–');
     for(const width of [390,1440]){
       await page.setViewportSize({width,height:900});
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth), `Homepage overflow at ${width}`);

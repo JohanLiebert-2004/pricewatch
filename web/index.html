@@ -103,10 +103,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   </form>
   <button type="button" class="clear herosearch-clear" id="qclear">Clear search &amp; filters</button>
   <div class="stats">
-    <div class="stat"><b id="s-deals">–</b><span>live deals, 50%+ off</span></div>
-    <div class="stat"><b id="s-items">–</b><span>products under watch</span></div>
+    <div class="stat"><b id="s-deals">–</b><span>matching recent deals</span></div>
+    <div class="stat"><b id="s-items">–</b><span>catalogued products</span></div>
     <div class="stat"><b>13</b><span>retailers covered</span></div>
-    <div class="stat"><b>Hourly</b><span>frequent updates</span></div>
+    <div class="stat"><b>Hourly</b><span>scheduled checks</span></div>
   </div>
 </div></header>
 
@@ -272,8 +272,6 @@ async function loadBootstrap(){
     const data = await r.json();
     if(Number(data.catalogue_items)) document.getElementById("s-items").textContent =
       Number(data.catalogue_items).toLocaleString("en-AU");
-    if(Number(data.deal_count)) document.getElementById("s-deals").textContent =
-      Number(data.deal_count).toLocaleString("en-AU");
     for(const row of data.freshness || []) FRESHNESS[row.retailer] = row;
     for(const row of data.subcategories || [])
       (SUBSTATS[row.retailer] = SUBSTATS[row.retailer] || []).push(row.subcategory);
@@ -308,6 +306,12 @@ function since(iso){
 }
 function renderNetworkStatus(){
   const el = document.getElementById("networkStatus");
+  const dates = Object.values(FRESHNESS).map(row => Date.parse(row.last_seen)).filter(Number.isFinite);
+  if(dates.length && Math.max(...dates) < Date.now() - RECENT_DAYS * 86400000){
+    const last = new Date(Math.max(...dates)).toLocaleDateString("en-AU", {day:"numeric", month:"long", year:"numeric"});
+    el.textContent = `Deal updates are delayed. The latest feed report is from ${last}. Older prices are hidden until fresh updates are available.`;
+    el.hidden = false; return;
+  }
   const target = FRESHNESS.target;
   if(!target || !target.last_seen || Number(target.fresh_products) >= Number(target.products)){
     el.hidden = true; return;
@@ -472,6 +476,7 @@ const SORT_LABEL = {deep:"biggest discount", price_asc:"price low→high",
                     arrivals:"new arrivals"};
 let renderedRows = [], renderedTotal = 0;
 function render(rows, total, append=false){
+  document.getElementById("s-deals").textContent = total.toLocaleString("en-AU");
   renderedRows = append ? renderedRows.concat(rows) : rows;
   renderedTotal = total;
   const retailerLabel = selectedRetailerLabel();
@@ -513,6 +518,7 @@ async function refresh(append=false){
     render(rows, total, append);
   }catch(e){
     if(seq !== fetchSeq) return;
+    document.getElementById("s-deals").textContent = "–";
     document.getElementById("list").innerHTML =
       `<div class="empty" style="grid-column:1/-1">We couldn't load the deals — please try again in a moment.</div>`;
     button.hidden = true;
