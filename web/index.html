@@ -88,7 +88,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div class="eyebrow"><span class="live"></span> price drops · australia</div>
   <h1 class="display">Cheap finds.<br><em>Check the price history.</em></h1>
   <p class="sub">Find cheap products and price drops across Australian retailers.
-    Only prices updated in the last 7 days appear below, newest first.
+    Only prices updated in the last 7 days appear below. Deals rotate every hour;
+    books appear after other categories.
     Browse clearance deals, check price history and set a free alert.</p>
   <nav class="discovery-links" aria-label="Explore price comparisons">
     <a href="/clearance.html">Browse clearance deals</a>
@@ -148,7 +149,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <option value="deep">Biggest discount</option>
         <option value="price_asc">Price: low to high</option>
         <option value="price_desc">Price: high to low</option>
-        <option value="fresh" selected>Latest price updates</option>
+        <option value="fresh" selected>Hourly deal rotation</option>
         <option value="arrivals">New arrivals</option>
       </select>
       <input type="number" id="pmin" aria-label="Minimum price" placeholder="min $" min="0" inputmode="numeric">
@@ -169,7 +170,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div class="bar quickbar" id="quickFilters">
       <button class="chip" type="button" data-quick="half" aria-pressed="false">50%+ off</button>
       <button class="chip" type="button" data-quick="under50" aria-pressed="false">Under $50</button>
-      <button class="chip" type="button" data-quick="fresh" aria-pressed="false">Latest updates</button>
+      <button class="chip" type="button" data-quick="fresh" aria-pressed="false">Rotate deals</button>
       <button class="chip" type="button" data-quick="low30" aria-pressed="false">30-day lows</button>
     </div>
   </div>
@@ -250,7 +251,7 @@ const SORTS = {
   deep:  "pct_off.desc,reference_price.desc",
   price_asc:  "price.asc,pct_off.desc",
   price_desc: "price.desc,pct_off.desc",
-  fresh: "price_updated_at.desc.nullslast,pct_off.desc,retailer.asc,sku.asc",
+  fresh: "book_priority.asc,rotation_key.asc,retailer.asc,sku.asc",
   arrivals: "first_seen.desc,pct_off.desc",
 };
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
@@ -349,7 +350,7 @@ function selectedRetailerLabel(){
 }
 
 function feedUrl(offset=0){
-  let u = `${SUPABASE_URL}/rest/v1/discount_feed?select=*` +
+  let u = `${SUPABASE_URL}/rest/v1/${sort === "fresh" ? "hourly_deal_feed" : "discount_feed"}?select=*` +
           `&price_updated_at=gte.${encodeURIComponent(feedCutoff)}` +
           `&order=${SORTS[sort]}&limit=${LIMIT}&offset=${offset}`;
   if(!includeMarketplace) u += `&is_marketplace=is.false`;
@@ -462,7 +463,7 @@ function renderPersonal(){
   const categories = [...new Set(recent.map(p=>p.category).filter(c=>c && c !== "other"))].slice(0,2);
   if(!categories.length) return;
   const filter = categories.map(encodeURIComponent).join(",");
-  fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=*&is_marketplace=is.false&category=in.(${filter})&price_updated_at=gte.${encodeURIComponent(feedCutoff)}&order=${SORTS.fresh}&limit=6`, {headers:HDRS,cache:"no-store"})
+  fetch(`${SUPABASE_URL}/rest/v1/discount_feed?select=*&is_marketplace=is.false&category=in.(${filter})&price_updated_at=gte.${encodeURIComponent(feedCutoff)}&order=price_updated_at.desc.nullslast,pct_off.desc&limit=6`, {headers:HDRS,cache:"no-store"})
     .then(r=>r.ok ? r.json() : [])
     .then(rows=>{
       if(!rows.length) return;
@@ -472,7 +473,7 @@ function renderPersonal(){
     }).catch(()=>{});
 }
 const SORT_LABEL = {deep:"biggest discount", price_asc:"price low→high",
-                    price_desc:"price high→low", fresh:"latest price updates",
+                    price_desc:"price high→low", fresh:"hourly deal rotation",
                     arrivals:"new arrivals"};
 let renderedRows = [], renderedTotal = 0;
 function render(rows, total, append=false){

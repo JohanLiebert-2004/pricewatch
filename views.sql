@@ -70,6 +70,19 @@ create unique index discount_feed_pk on discount_feed (retailer, sku);
 revoke all on discount_feed from anon, authenticated;
 grant select on discount_feed to anon;
 
+-- Stable ordering for the default homepage that changes with each UTC hour.
+-- This lightweight view keeps the large discount snapshot refresh unchanged;
+-- the seeded MD5 only sorts its already-filtered rows. Books remain available
+-- in category/retailer filters but are placed behind other categories by default.
+create or replace view hourly_deal_feed as
+select d.*,
+       case when d.category = 'books' then 1 else 0 end as book_priority,
+       md5(floor(extract(epoch from statement_timestamp()) / 3600)::bigint::text
+           || ':' || d.retailer || ':' || d.sku) as rotation_key
+from discount_feed d;
+revoke all on hourly_deal_feed from public, anon, authenticated;
+grant select on hourly_deal_feed to anon;
+
 -- Clearance page: products the retailer itself has labeled clearance/outlet
 -- (not a computed discount - see kmart_group.py). Only Kmart populates
 -- is_clearance today; the view stays retailer-agnostic so others show up
