@@ -1,8 +1,8 @@
 """Sephora AU scraper.
 
 Sephora Asia platform (one backend serving AU/NZ/SG/MY/PH...) behind Akamai -
-plain requests get an edgesuite Access Denied page, but curl_cffi Chrome
-impersonation passes. Product pages are a client-rendered Vue app with no
+the local collector opts into standard Firefox after HTTP-client refusals.
+The legacy HTTP transport remains the default elsewhere. Product pages are a client-rendered Vue app with no
 JSON-LD, so everything goes through the storefront JSON:API instead:
 
   /api/v2.6/products?page[size]=500&page[number]=N&include=brand
@@ -35,10 +35,7 @@ class SephoraScraper(BaseScraper):
     needs_impersonation = True
     impersonate = "chrome124"   # validated against Sephora's Akamai tier
     warmup_url = "https://www.sephora.com.au/"
-    use_proxy = False  # already crawls cleanly direct from GitHub Actions
-                        # runner IPs (in production since launch) - proxy
-                        # bandwidth is reserved for bigw, which is fully
-                        # blocked without it.
+    use_proxy = False  # local browser and legacy HTTP both use direct access
 
     # Explicit country headers keep every request on the AU price book.
     _COUNTRY_HEADERS = {"X-Platform": "Web", "X-Site-Country": "AU"}

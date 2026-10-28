@@ -2,7 +2,7 @@
 
 ## 28 October 2026 — Sephora Firefox laptop collection
 
-- Owner: Codex. Status: In progress.
+- Owner: Codex. Status: Done — enabled and first rolling window verified.
 - Owner requests enabling Sephora after successful standard Firefox test.
   Scope: Firefox same-origin AU API transport, Sephora scraper, bounded
   laptop wrapper/service/timer, CI ownership gate, focused tests and live
@@ -41,6 +41,24 @@
   initial full-sweep/three-hour design above. Added commit-failure/cursor tests;
   all 96 local tests and workflow parsing pass. First one-page verification
   will precede the normal two-page schedule.
+- Final rolling implementation published as
+  76fb1c1e9f5b6117aaad918613ebda83810ae6e1 and deployed to laptop/web source.
+  Final deployed checks: 11 Sephora-specific and nine crawler-outcome tests
+  pass; updated sources compile. Timer enabled/active at :08/:38 with jitter.
+- First bounded service finished successfully at 09:08:20 UTC: 500 listings
+  observed, 282 retained, zero additional changed-price snapshots (earlier
+  trial had already updated these records). Health is ok, success heartbeat
+  09:08:19 UTC, persisted next_page=2. The timer started a subsequent run at
+  09:09:33 UTC using that cursor. It inherited the one-page verification
+  override before cleanup; later runs use the normal two-page window.
+- Removed temporary verification drop-in and reloaded user units; normal
+  budget is two pages. Public HTTPS catalogue API independently returned
+  an updated Sephora price and last_seen. Python on the Windows workstation
+  had a local trust-store validation error, but Windows curl verified HTTPS
+  successfully and served certificate is valid until 9 January 2027. No
+  website certificate/configuration change was needed.
+- Collection is restored and rotating; a complete 15-page rotation remains
+  pending. No claim that every historical Sephora listing is already fresh.
 
 ## 28 October 2026 — standard Firefox comparison
 
