@@ -3,7 +3,8 @@
 JSON-LD Product blocks on product pages. Marketplace listings link to
 /marketplace/sellers and show "Sold & shipped by <seller>". The strikethrough
 reference price renders as $<amount> near a wasPrice flag in the page state.
-Akamai-protected: requires curl_cffi (chrome99_android profile passes).
+The local collector can opt into standard Firefox with BIGW_BROWSER=firefox.
+Other deployments retain the existing curl_cffi HTTP transport.
 
 Fast path (July 2026): live category pages server-render up to 144 products
 per page (?page=N&perPage=144) inside __NEXT_DATA__ at
@@ -55,6 +56,20 @@ class BigWScraper(BaseScraper):
     use_proxy = True   # Akamai-fronted; direct requests are blocked outright
                         # (see PROXY_CYCLE_BYTE_CAP above for the tradeoff
                         # this brings)
+
+    def __init__(self):
+        mode = os.environ.get('BIGW_BROWSER', '').strip().lower()
+        if not mode:
+            super().__init__()
+        elif mode == 'firefox':
+            if os.environ.get('PROXY_URL'):
+                raise ValueError('Big W Firefox mode requires direct local collection')
+            from .firefox import FirefoxSession
+            self.session = FirefoxSession()
+            self._cffi = False
+            self._warmed = False
+        else:
+            raise ValueError('Unknown BIGW_BROWSER mode')
 
     @property
     def _proxied(self) -> bool:

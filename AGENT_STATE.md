@@ -1,5 +1,34 @@
 # Pricewatch — shared agent state
 
+## 28 October 2026 — standard Firefox comparison
+
+- Owner: Codex. Status: Big W Firefox enabled; other failing retailers under assessment.
+- Owner requests a standard Firefox test on the laptop. Scope: one bounded
+  same-product browser test and diagnostic notes. Isolated profile, ordinary
+  WebDriver settings, existing user browser untouched, stop on refusal.
+- Standard installed Firefox 157 headless returned HTTP 200 for the same
+  LEGO product; existing parser extracted its $39 price. Headed startup failed
+  locally (cannot open display), before any retailer request. Expand scope to
+  an opt-in Big W Firefox transport, focused tests and bounded catalogue
+  verification before enabling the laptop job; no changes to other retailers.
+- Integrated standard Firefox as an explicit BIGW_BROWSER=firefox option;
+  existing default transport and other retailers are unchanged. Seven
+  transport tests and all 82 local Python tests pass. Installed transport,
+  Big W scraper and focused tests on the laptop; seven laptop tests pass.
+- Live integrated verification: warm-up, LEGO catalogue and same product all
+  HTTP 200. Catalogue parsed 144 records, six reference prices; product $39.
+  A bounded production-database refresh then saw 144, retained 68 and wrote
+  19 changed-price snapshots. Notifications and missing-product probes were
+  disabled for this bounded verification only; no full-sweep heartbeat set.
+  Health detail explicitly says bounded verification, complete sweep pending.
+- Enabled BIGW_BROWSER=firefox in laptop private environment; backup retained
+  locally as .env.before-bigw-firefox-20261028 (never copied or committed).
+  Next scheduled Big W job uses Firefox; complete rolling catalogue recovery
+  remains unverified. Rollback/setup: infra/oci/BIGW-FIREFOX.md.
+- Owner additionally requests Firefox tests for other failing retailers.
+  Scope expanded to current health assessment and bounded serial standard-
+  Firefox tests; only enable another transport after usable data is verified.
+
 ## 28 October 2026 — restore Big W laptop collection
 
 - Owner: Codex. Status: Job fix deployed; collection still blocked externally.
