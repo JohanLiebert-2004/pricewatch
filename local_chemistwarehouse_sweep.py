@@ -75,16 +75,19 @@ def main():
         lines = open(LOG, encoding="utf-8", errors="replace").readlines()
         if len(lines) > LOG_KEEP_LINES:
             open(LOG, "w", encoding="utf-8").writelines(lines[-LOG_KEEP_LINES:])
+    success = False
     with open(LOG, "a", encoding="utf-8") as f:
         log(f, "=== sweep start ===")
         try:
             with db_tunnel.open_db_tunnel(TUNNEL_KEY) as endpoint:
                 env["DATABASE_URL"] = db_tunnel.tunneled_database_url(
                     env["DATABASE_URL"], endpoint)
-                _run_sweep(env, f)
+                success = _run_sweep(env, f)
         except Exception as e:
             log(f, f"tunnel: {type(e).__name__}: {e} - sweep skipped")
         log(f, "=== sweep end ===")
+    if not success:
+        raise SystemExit(1)
 
 
 def _run_sweep(env, f):
@@ -102,7 +105,7 @@ def _run_sweep(env, f):
         # lane - and silence the CI fallback attempt - when real
         # product pages actually came back.
         m = re.search(r"batch done: (\d+)/\d+ products stored", r.stdout)
-        crawl_ok = bool(m) and int(m.group(1)) > 0
+        crawl_ok = r.returncode == 0 and bool(m) and int(m.group(1)) > 0
         if not crawl_ok:
             log(f, "crawl stored 0 products - NOT writing heartbeat; "
                    "CI will keep trying its own (likely blocked) attempt")
@@ -121,6 +124,9 @@ def _run_sweep(env, f):
             log(f, f"heartbeat written: {now}")
         except Exception as e:
             log(f, f"heartbeat FAILED: {type(e).__name__}: {e}")
+            return False
+
+    return crawl_ok
 
 
 if __name__ == "__main__":

@@ -113,14 +113,18 @@ def cmd_crawl(args):
         if proxy_state.get("_proxy_bytes", 0) >= PROXY_CYCLE_BYTE_CAP:
             print(f"bigw: proxy byte budget spent for cycle {cycle}, "
                   "skipping crawl batch until it renews")
-            return
+            record_scraper_health(conn, args.retailer, "budget_exhausted",
+                                  detail="Proxy byte budget exhausted; no crawl performed")
+            raise RuntimeError("Big W proxy budget exhausted")
     rows = conn.execute(
         """SELECT url FROM crawl_queue WHERE retailer=? AND fails < 3
-           ORDER BY last_scraped IS NOT NULL, last_scraped LIMIT ?""",
+           ORDER BY last_scraped ASC NULLS FIRST, url ASC LIMIT ?""",
         (args.retailer, args.batch)).fetchall()
+    conn.commit()  # Do not hold a read transaction across retailer requests.
     if not rows:
-        print(f"queue empty - run: python run.py index {args.retailer}")
-        return
+        detail = f"queue empty - run: python run.py index {args.retailer}"
+        record_scraper_health(conn, args.retailer, "empty", detail=detail)
+        raise RuntimeError(detail)
     ok = 0
     blocked = False
     watch_hits = []   # already-tracked products whose price moved this batch
@@ -137,7 +141,9 @@ def cmd_crawl(args):
             # Without this, this exact URL's last_scraped stays NULL forever,
             # so the oldest-first ordering keeps re-picking it first on every
             # future cycle and the batch never advances past it.
-            conn.execute("UPDATE crawl_queue SET fails=fails+1, last_scraped=? "
+            # A store-wide block is not evidence of a broken product URL.
+            # Advance the cursor without exhausting this URL's retry budget.
+            conn.execute("UPDATE crawl_queue SET last_scraped=? "
                          "WHERE retailer=? AND url=?", (now, args.retailer, url))
             conn.commit()
             break
@@ -188,9 +194,13 @@ def cmd_crawl(args):
                      (json.dumps(proxy_state), "bigw_cat_state"))
         conn.commit()
     if not blocked:
-        record_scraper_health(conn, args.retailer, "ok", stored=ok, attempted=len(rows))
+        record_scraper_health(conn, args.retailer, "ok" if ok else "empty",
+                              stored=ok, attempted=len(rows),
+                              detail="No products stored" if not ok else "")
     print(f"batch done: {ok}/{len(rows)} products stored "
           f"(rerun to continue through the queue)")
+    if blocked or not ok:
+        raise RuntimeError(f"{args.retailer}: crawl {'blocked' if blocked else 'stored no products'}")
 
 
 MIN_KEEP_PRICE = 40.0   # don't ingest NEW items normally under this - deals
@@ -216,31 +226,23 @@ def cmd_refresh(args):
     """
     conn = db.connect()
     names = list(REGISTRY) if args.retailer == "all" else [args.retailer]
+    failures = []
     for name in names:
         scraper = REGISTRY[name]()
         if not hasattr(scraper, "refresh_listings"):
             print(f"== {name}: no fast refresh path, skipping ==")
             continue
         print(f"== {name}: bulk refresh (budget {args.budget} requests) ==")
-        # sku-only: pulling every URL too shipped ~10MB per cycle out of
-        # Supabase across the matrix (egress quota); the <= MISSING_CHECK_BUDGET
-        # URLs the delisting check needs are fetched individually below
-        known_skus = [r["sku"] for r in conn.execute(
-            "SELECT sku FROM products WHERE retailer=? AND current_price IS NOT NULL "
-            "ORDER BY COALESCE(price_updated_at, '1970-01-01') ASC", (name,))]
-        known = set(known_skus)
         kwargs = {}
         if name == "officeworks":
             # bulk API needs a SKU list: items worth watching (>=$50 or not
             # yet priced) + SKUs recoverable from queued sitemap URLs
             skus = {r["sku"] for r in conn.execute(
-                "SELECT sku FROM products WHERE retailer=? AND "
-                "(current_price IS NULL OR current_price >= ?)",
-                (name, MIN_KEEP_PRICE))}
+                "SELECT sku FROM products WHERE retailer=?", (name,))}
             for r in conn.execute(
                     "SELECT url FROM crawl_queue WHERE retailer=?", (name,)):
                 sku = scraper.sku_from_url(r["url"])
-                if sku and sku not in known:
+                if sku:
                     skus.add(sku)
             kwargs["skus"] = sorted(skus)
             print(f"  {len(skus)} SKUs to refresh")
@@ -251,26 +253,43 @@ def cmd_refresh(args):
                                ("bigw_cat_state",)).fetchone()
             cat_state = json.loads(row["v"]) if row else {}
             kwargs["state"] = cat_state
+        conn.commit()  # Preload reads must not remain open during network I/O.
         seen = 0
         kept = 0
         sweep_blocked = False
+        sweep_error = None
         snaps = 0
         batch = []
         seen_skus = set()
 
-        def worth_keeping(rec):
-            if rec.sku in known:
-                return True          # never lose sight of a tracked item
-            if rec.price is not None and rec.price >= MIN_KEEP_PRICE:
-                return True
-            return bool(rec.rrp and rec.rrp >= MIN_KEEP_PRICE)
+        def flush_pending():
+            nonlocal batch, snaps, kept
+            if not batch:
+                return
+            # Only cheap listings need an existence check. Looking up their
+            # keys in a bounded batch avoids preloading an entire retailer.
+            cheap = sorted({r.sku for r in batch if r.price is not None
+                            and 0 < r.price < MIN_KEEP_PRICE
+                            and not (r.rrp and r.rrp >= MIN_KEEP_PRICE)})
+            known = {r['sku'] for r in conn.execute(
+                "SELECT sku FROM products WHERE retailer=? AND sku IN (" +
+                ','.join('?' for _ in cheap) + ')', (name, *cheap)).fetchall()} if cheap else set()
+            conn.commit()
+            selected = [r for r in batch if r.price is not None and r.price > 0
+                        and (r.sku in known or r.price >= MIN_KEEP_PRICE
+                             or (r.rrp and r.rrp >= MIN_KEEP_PRICE))]
+            changed = db.bulk_upsert(conn, selected)
+            snaps += len(changed)
+            kept += len(selected)
+            batch = []
+            if name == 'jbhifi':
+                alerts.send_ram_watch(changed)
+            alerts.send_item_watch(conn, changed)
 
         try:
             for rec in scraper.refresh_listings(budget=args.budget, **kwargs):
                 seen += 1
                 seen_skus.add(rec.sku)
-                if not worth_keeping(rec):
-                    continue
                 # Listing feeds can go stale for individual SKUs (see
                 # alerts.py's live-verify for the alert path) - a claimed
                 # 80%+ discount gets a live page check before it's ever
@@ -284,14 +303,8 @@ def cmd_refresh(args):
                               f"live page says ${live:.2f} - using live price")
                         rec.price = live
                 batch.append(rec)
-                kept += 1
-                if len(batch) >= 400:
-                    changed = db.bulk_upsert(conn, batch)
-                    snaps += len(changed)
-                    if name == "jbhifi":
-                        alerts.send_ram_watch(changed)
-                    alerts.send_item_watch(conn, changed)
-                    batch = []
+                if len(batch) >= 100:
+                    flush_pending()
                     if seen % 4000 == 0:
                         print(f"  ...{seen} listings, {snaps} price changes")
         except Blocked as e:
@@ -303,11 +316,8 @@ def cmd_refresh(args):
             print(f"  refresh error after {seen} listings: "
                   f"{type(e).__name__}: {e}")
             conn.rollback()   # a failed transaction would poison the flush
-        changed = db.bulk_upsert(conn, batch)
-        snaps += len(changed)
-        if name == "jbhifi":
-            alerts.send_ram_watch(changed)
-        alerts.send_item_watch(conn, changed)
+            sweep_error = f"{type(e).__name__}: {e}"
+        flush_pending()
         if cat_state is not None:
             conn.execute("INSERT OR IGNORE INTO kv (k, v) VALUES (?,?)",
                          ("bigw_cat_state", "{}"))
@@ -316,8 +326,15 @@ def cmd_refresh(args):
             conn.commit()
         print(f"  -> {seen} listings seen, {kept} kept (>= ${MIN_KEEP_PRICE:.0f} "
               f"or already tracked), {snaps} snapshots written")
-        if not sweep_blocked:
+        if not seen and name in {"bigw", "kmart", "target", "officeworks", "jbhifi", "sephora"}:
+            sweep_error = sweep_error or "Listing refresh returned no products"
+        if sweep_error:
+            record_scraper_health(conn, name, "error", stored=kept,
+                                  attempted=seen, detail=sweep_error)
+        elif not sweep_blocked:
             record_scraper_health(conn, name, "ok", stored=kept, attempted=seen)
+        if sweep_blocked or sweep_error:
+            failures.append(name)
 
         # After a Blocked sweep the delist probes would run on a connection
         # Akamai just flagged - its 404s are less trustworthy, and with few/no
@@ -325,31 +342,27 @@ def cmd_refresh(args):
         # future sweep resumes the delist backlog. (Retailers whose refresh
         # lane is a legitimate no-op - Myer, Good Guys - are unaffected: they
         # end with seen=0 but no Blocked, and this stays their delist path.)
-        missing = ([] if sweep_blocked else
-                   [sku for sku in known_skus if sku not in seen_skus]
-                   [:MISSING_CHECK_BUDGET])
-        missing_urls = {r["sku"]: r["url"] for r in conn.execute(
-            f"SELECT sku, url FROM products WHERE retailer=? "
-            f"AND sku IN ({','.join('?' * len(missing))})",
-            (name, *missing)).fetchall()} if missing else {}
+        candidates = ([] if sweep_blocked or sweep_error else conn.execute(
+            "SELECT sku,url FROM products WHERE retailer=? AND current_price IS NOT NULL "
+            "ORDER BY last_seen ASC,sku ASC LIMIT ?", (name, MISSING_CHECK_BUDGET * 10)).fetchall())
+        conn.commit()
+        missing_urls = {r['sku']: r['url'] for r in candidates if r['sku'] not in seen_skus}
+        missing = list(missing_urls)[:MISSING_CHECK_BUDGET]
         delisted = 0
         for sku in missing:
             url = missing_urls.get(sku)
             if not url:
                 continue
             try:
-                try:
-                    rec = scraper.parse_product(url, scraper.get(url))
-                except Blocked:
-                    # This check runs right after the bulk listing sweep has
-                    # already burned its request budget, so it's the part of
-                    # the run most likely to catch a transient rate limit -
-                    # without a retry, a real 404 reads as "inconclusive"
-                    # every single time and a delisted item never clears.
-                    # Worth one patient retry since this loop is small (<=
-                    # MISSING_CHECK_BUDGET items).
-                    time.sleep(10)
-                    rec = scraper.parse_product(url, scraper.get(url))
+                rec = scraper.parse_product(url, scraper.get(url))
+                if rec:
+                    db.upsert(conn, rec)
+                    conn.commit()
+            except Blocked as exc:
+                record_scraper_health(conn, name, "blocked", stored=kept,
+                                      attempted=seen, detail=str(exc))
+                failures.append(name)
+                break
             except NotFound:
                 # confirmed HTTP 404 - not a bot-block, the listing is genuinely
                 # gone (product delisted/discontinued). Stop showing it as a
@@ -371,6 +384,8 @@ def cmd_refresh(args):
                   f"checked directly, {delisted} confirmed delisted\n")
         else:
             print()
+    if failures:
+        raise RuntimeError("Refresh incomplete: " + ", ".join(sorted(set(failures))))
 
 
 def cmd_url(args):

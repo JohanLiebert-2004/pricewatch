@@ -175,7 +175,7 @@ def backfill(conn) -> int:
     """
     rows = conn.execute(
         "SELECT id, title, retailer, gtin, subcategory, is_marketplace FROM products "
-        "WHERE category IS NULL OR category = '' ORDER BY id").fetchall()
+        "WHERE category IS NULL OR category = '' ORDER BY id LIMIT 1000").fetchall()
     if not rows:
         return 0
     updates = [(classify_product(r["title"], r["retailer"], r["gtin"],
@@ -223,12 +223,16 @@ def repair_misclassified_books(conn) -> int:
         _update_batch_with_retry(conn, updates[i:i + 1000])
     return len(updates)
 def backfill_subcategories(conn) -> int:
-    """Tag subcategory from titles for retailers with no native category data."""
+    """Bound each retailer pass; advance past titles without a matching rule."""
     total = 0
     for retailer in SUBCAT_RULES:
+        key = f"subcategory_cursor:{retailer}"
+        row = conn.execute("SELECT v FROM kv WHERE k=?", (key,)).fetchone()
+        cursor = int(row['v']) if row and str(row['v']).isdigit() else 0
         rows = conn.execute(
             "SELECT id, title FROM products "
-            "WHERE retailer=? AND subcategory IS NULL", (retailer,)).fetchall()
+            "WHERE retailer=? AND subcategory IS NULL AND id>? ORDER BY id LIMIT 1000",
+            (retailer, cursor)).fetchall()
         updates = [(sub, r["id"]) for r in rows
                    if (sub := subcategorize(retailer, r["title"]))]
         for i in range(0, len(updates), 1000):
@@ -236,4 +240,8 @@ def backfill_subcategories(conn) -> int:
                              updates[i:i + 1000])
             conn.commit()
         total += len(updates)
+        next_cursor = rows[-1]['id'] if rows else 0
+        conn.execute("INSERT INTO kv(k,v) VALUES (?,?) "
+                     "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (key, str(next_cursor)))
+        conn.commit()
     return total

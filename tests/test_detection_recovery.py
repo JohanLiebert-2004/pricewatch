@@ -1,4 +1,5 @@
 import sqlite3
+import datetime as dt
 import unittest
 from unittest.mock import patch
 
@@ -67,6 +68,15 @@ class DetectionRecoveryTests(unittest.TestCase):
         self.conn.rollback()
         self.assertEqual(self.conn.execute(
             "SELECT v FROM kv WHERE k='anomaly_last_detect_at'").fetchone()[0], '2026-01-01')
+
+    def test_bounded_backlog_advances_without_skipping_later_changes(self):
+        start = dt.datetime(2026, 1, 2)
+        for i in range(1001):
+            self.add_products(1, date=(start+dt.timedelta(minutes=i)).isoformat(), start=i+1)
+        self.set_watermark()
+        self.assertEqual(len(anomaly.run(self.conn)), 1000)
+        self.assertEqual(len(anomaly.run(self.conn)), 1)
+        self.assertEqual(anomaly.run(self.conn), [])
 
 
 if __name__ == "__main__":

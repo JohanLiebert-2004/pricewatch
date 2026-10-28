@@ -293,8 +293,11 @@ def bulk_upsert(conn, recs: list) -> list:
         return []
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     changed = []
-    for i in range(0, len(recs), 400):
-        chunk = recs[i:i + 400]
+    # Keep write transactions bounded on the small OCI database. A 400-row
+    # batch can exceed the query timeout while updating several indexes.
+    chunk_size = 100 if DATABASE_URL else 400
+    for i in range(0, len(recs), chunk_size):
+        chunk = recs[i:i + chunk_size]
         # de-dupe within the chunk (same sku can appear in two listings)
         seen = {}
         for r in chunk:

@@ -23,7 +23,7 @@ def signature(brand: str | None, title: str) -> str:
     return f"{b}|{normalize_title(title)}" if b else normalize_title(title)
 
 
-def build_match_groups(conn) -> dict:
+def build_match_groups(conn, fresh_since=None) -> dict:
     """Return {group_key: [product_ids]} clustering the same item across retailers.
 
     Primary key: GTIN (high confidence). Fallback: brand+title signature
@@ -33,8 +33,12 @@ def build_match_groups(conn) -> dict:
     # delisted rows (current_price NULL) can't be deal candidates and never
     # contribute peer prices (_cross_peers only maps non-NULL prices), so
     # skip shipping them out of the DB at all
-    for p in conn.execute("SELECT id, retailer, gtin, brand, title "
-                          "FROM products WHERE current_price IS NOT NULL"):
+    sql = "SELECT id, retailer, gtin, brand, title FROM products WHERE current_price IS NOT NULL"
+    params = ()
+    if fresh_since:
+        sql += " AND current_price > 0 AND last_seen > ?"
+        params = (fresh_since,)
+    for p in conn.execute(sql, params):
         if p["gtin"]:
             gtin_map.setdefault(f"gtin:{p['gtin']}", []).append(p)
         else:

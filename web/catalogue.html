@@ -70,13 +70,26 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <button type="button" class="clear" id="pclear">Clear</button>
   </form>
   <div class="catalogue-sort">
-    <label for="sort"><strong>Sort products</strong><span>Choose cheapest or highest price</span></label>
-    <select id="sort" aria-label="Sort catalogue products">
+    <label for="freshness"><strong>Price freshness</strong><span>Choose when prices were last checked</span></label>
+    <select id="freshness" aria-label="Price freshness">
+      <option value="recent">Checked within 36 hours</option>
+      <option value="all">All tracked listings, including older prices</option>
+    </select>
+  </div>
+  <p class="note" id="freshness-note">Showing recently checked prices. Store and category counts include all tracked listings.</p>
+  <div class="catalogue-sort">
+    <label for="sort"><strong>Sort products</strong><span>Choose price, name or percentage discount</span></label>
+    <select id="sort" aria-label="Sort catalogue products" aria-describedby="discount-note">
+      <option value="recent">Recently checked</option>
+      <option value="retailer">Retailer</option>
       <option value="title">Name: A–Z</option>
       <option value="price_asc">Price: lowest first</option>
       <option value="price_desc">Price: highest first</option>
+      <option value="discount_desc">Discount: highest first</option>
+      <option value="discount_asc">Discount: lowest first</option>
     </select>
   </div>
+  <p class="note" id="discount-note">Discounts compare the current price with the listed RRP. Products without a valid discount appear last.</p>
   <div class="total" id="total"></div>
   <div id="list"><div class="empty">Curating the catalogue…</div></div>
   <button class="more" id="more" hidden>Show 50 more</button>
@@ -100,7 +113,7 @@ const money = n => "$"+Number(n).toFixed(2);
 // Keep catalogue responses small: these are the only product_search fields
 // rendered below. Smaller payloads make filter changes noticeably snappier on
 // mobile connections.
-const CATALOGUE_FIELDS = "retailer,sku,title,brand,category,subcategory,url,image_url,is_marketplace,current_price,current_rrp";
+const CATALOGUE_FIELDS = "retailer,sku,title,brand,category,subcategory,url,image_url,is_marketplace,current_price,current_rrp,discount_pct,last_seen";
 const RETAILER_LABEL = {kmart:"Kmart",bigw:"Big W",officeworks:"Officeworks",
   target:"Target",jbhifi:"JB Hi-Fi",goodguys:"The Good Guys",myer:"Myer",
   supercheap:"Supercheap Auto",sephora:"Sephora",
@@ -119,8 +132,8 @@ const CATS = [["all","All"],["tech","Tech"],["home","Home"],["kitchen","Kitchen"
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const fmtN = n => Number(n).toLocaleString("en-AU");
-const IMG_PROXY = "/img";  // same-origin OCI image cache
+const fmtN = n => n === null ? "—" : Number(n).toLocaleString("en-AU");
+const IMG_PROXY = "https://159-13-59-184.sslip.io/img";  // direct OCI image cache avoids Vercel CDN requests
 function thumbSrc(u){
   if(u.includes("cdn.shopify.com")) u = u + (u.includes("?")?"&":"?") + "width=200";
   else if(u.includes("JPEG_1000x1000")) u = u.replace("JPEG_1000x1000","JPEG_300x300");
@@ -133,8 +146,18 @@ let SUBSTATS = {};        // retailer -> [{subcategory, items}] desc (per-store 
 let selRetailers = new Set(), selCats = new Set(), selSubcats = new Set(), offset = 0;
 let pmin = null, pmax = null;   // price filter ($)
 let q = "";                     // text filter (name/SKU)
-let sort = "title";             // title | price_asc | price_desc
-const SORT_ORDER = {title:"title.asc", price_asc:"current_price.asc,title.asc", price_desc:"current_price.desc,title.asc"};
+let sort = "recent";
+let onlyRecent = true;
+const recentCutoff = () => new Date(Date.now() - 36 * 3600000).toISOString();
+let freshnessCutoff = recentCutoff();
+function checkLabel(value){
+  const stamp = Date.parse(value), age = Date.now() - stamp;
+  if(!Number.isFinite(stamp) || age < -60000) return 'Check date unknown · price may have changed';
+  const hours = Math.max(0, Math.floor(age / 3600000));
+  const time = hours < 1 ? 'less than an hour ago' : hours < 48 ? `${hours}h ago` : `${Math.floor(hours / 24)} days ago`;
+  return `Last checked ${time}${age > 36 * 3600000 ? ' · older price, verify with retailer' : ''}`;
+}
+const SORT_ORDER = {recent:"last_seen.desc,retailer.asc,sku.asc", retailer:"retailer.asc,sku.asc", title:"title.asc", price_asc:"current_price.asc,title.asc", price_desc:"current_price.desc,title.asc", discount_desc:"discount_pct.desc.nullslast,retailer.asc,sku.asc", discount_asc:"discount_pct.asc.nullslast,retailer.asc,sku.asc"};
 const PAGE = 50;
 let requestSerial = 0;
 let pageRequest = null;
@@ -142,7 +165,9 @@ let pageRequest = null;
 const matchRet = r => selRetailers.size===0 || selRetailers.has(r);
 const matchCat = c => selCats.size===0 || selCats.has(c);
 
+let statsReady = false;
 function count(r, c){
+  if(!statsReady) return null;
   // r/c may be "all" (wildcard for that dimension) or a specific key
   return STATS.filter(s =>
     (r==="all" ? matchRet(s.retailer) : s.retailer===r) &&
@@ -151,6 +176,7 @@ function count(r, c){
 }
 
 function retailerFilterCount(members){
+  if(!statsReady) return null;
   return STATS.filter(s =>
     (members.length===0 || members.includes(s.retailer)) && matchCat(s.category))
     .reduce((a,s)=>a+Number(s.items), 0);
@@ -200,12 +226,13 @@ function chips(){
     document.getElementById("total").innerHTML = `Filtered results <span>· ${label}</span>`;
   }else{
     document.getElementById("total").innerHTML =
-      `${fmtN(count("all", "all"))} items <span>· ${label}</span>`;
+      `${fmtN(count("all", "all"))} tracked items <span>· ${label} · ${onlyRecent ? 'showing checks from the last 36 hours' : 'including older prices'}</span>`;
   }
 }
 
 function filterUrl(){
-  let u = `${SUPABASE_URL}/rest/v1/product_search?select=${CATALOGUE_FIELDS}`;
+  let u = `${SUPABASE_URL}/rest/v1/product_search?select=${CATALOGUE_FIELDS}&current_price=gt.0`;
+  if(onlyRecent) u += `&last_seen=gte.${encodeURIComponent(freshnessCutoff)}`;
   if(selRetailers.size) u += `&retailer=in.(${[...selRetailers].map(encodeURIComponent).join(",")})`;
   if(selCats.size) u += `&category=in.(${[...selCats].map(encodeURIComponent).join(",")})`;
   if(selSubcats.size) u += `&subcategory=in.(${[...selSubcats]
@@ -221,9 +248,13 @@ function filterUrl(){
 }
 
 async function loadPage(reset){
+  if(reset) freshnessCutoff = recentCutoff();
   const serial = ++requestSerial;
   if(pageRequest) pageRequest.abort();
   pageRequest = new AbortController();
+  const request = pageRequest;
+  let timedOut = false;
+  const timeout = setTimeout(() => { timedOut = true; request.abort(); }, 30000);
   document.getElementById("catalogueError")?.remove();
   document.getElementById("more").hidden = true;
   if(reset){ offset = 0; document.getElementById("list").innerHTML =
@@ -231,12 +262,12 @@ async function loadPage(reset){
   const q = filterUrl() + `&order=${SORT_ORDER[sort]}&limit=${PAGE}&offset=${offset}`;
   let rows = [];
   try {
-    const r = await fetch(q, {headers:HDRS, signal:pageRequest.signal});
+    const r = await fetch(q, {headers:HDRS, signal:request.signal});
     if(!r.ok) throw new Error(`Catalogue request failed: ${r.status}`);
     rows = await r.json();
     if(!Array.isArray(rows)) throw new Error("Invalid catalogue response");
   } catch(err) {
-    if(err.name === "AbortError" || serial !== requestSerial) return;
+    if(serial !== requestSerial || (err.name === "AbortError" && !timedOut)) return;
     const list = document.getElementById("list");
     if(reset) list.innerHTML = "";
     const error = document.createElement("div");
@@ -247,7 +278,7 @@ async function loadPage(reset){
     error.querySelector("button").addEventListener("click", () => loadPage(reset));
     list.append(error);
     return;
-  }
+  } finally { clearTimeout(timeout); }
   // A slower response for an earlier filter must never replace newer results.
   if(serial !== requestSerial) return;
   const html = rows.map((p,i)=>`<div class="row plain media" style="animation-delay:${Math.min(i*30,300)}ms">
@@ -262,20 +293,23 @@ async function loadPage(reset){
         <span class="pill">${RETAILER_LABEL[p.retailer]||esc(p.retailer)}</span>
         <span class="pill">${esc(p.subcategory||p.category||"other")}</span>
         <span>SKU ${esc(p.sku)}</span>
+        <span class="price-check">${esc(checkLabel(p.last_seen))}</span>
         ${p.brand?`<span>${esc(p.brand)}</span>`:''}
         ${p.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
       </div>
     </div>
     <div class="price">
       <div class="now">${money(p.current_price)}</div>
+      ${Number(p.discount_pct) > 0 ? `<div class="pill">${Number(p.discount_pct) < 0.1 ? "&lt;0.1" : Number(p.discount_pct).toFixed(1)}% off RRP</div>` : ''}
       ${p.current_rrp && Number(p.current_rrp) > Number(p.current_price)
         ? `<div class="was">${money(p.current_rrp)}</div>` : ''}
     </div>
   </div>`).join("");
   const list = document.getElementById("list");
   if(reset) list.innerHTML = html ||
-    `<div class="empty">Nothing here yet for this retailer/category
-     combination.<br>Try a broader filter or check again later.</div>`;
+    `<div class="empty">${onlyRecent
+      ? 'No recently checked prices match this selection. Choose “All tracked listings” above to see older prices, or try a broader filter.'
+      : 'No tracked listings match this selection. Try a broader filter.'}</div>`;
   else list.insertAdjacentHTML("beforeend", html);
   offset += rows.length;
   const more = document.getElementById("more");
@@ -309,7 +343,14 @@ document.getElementById("cats").addEventListener("click", e=>{
 });
 document.getElementById("more").addEventListener("click", ()=>loadPage(false));
 document.getElementById("sort").addEventListener("change", e=>{
-  sort = SORT_ORDER[e.target.value] ? e.target.value : "title";
+  sort = SORT_ORDER[e.target.value] ? e.target.value : "recent";
+  loadPage(true);
+});
+document.getElementById("freshness").addEventListener("change", e=>{
+  onlyRecent = e.target.value !== 'all';
+  document.getElementById('freshness-note').textContent = onlyRecent
+    ? 'Showing recently checked prices. Store and category counts include all tracked listings.'
+    : 'Older prices are included and may have changed. Check the retailer before buying.';
   loadPage(true);
 });
 
@@ -342,24 +383,24 @@ document.getElementById("qclear").addEventListener("click", ()=>{
   loadPage(true);
 });
 
-Promise.all([
-  fetch(`${SUPABASE_URL}/rest/v1/catalogue_stats?select=*`, {headers:HDRS})
-    .then(r=>r.json()),
-  fetch(`${SUPABASE_URL}/rest/v1/subcategory_stats?select=*&order=items.desc`,
-        {headers:HDRS}).then(r=>r.json()).catch(()=>[]),
-])
-  .then(([s, subs])=>{
-    STATS = s;
-    for(const row of subs){
-      // cap the chip row - a store's long tail isn't a useful filter
+// Product results must not wait for optional filter statistics.
+chips();
+loadPage(true);
+fetch(`${SUPABASE_URL}/rest/v1/catalogue_stats?select=*`, {headers:HDRS, signal:AbortSignal.timeout(15000)})
+  .then(r=>{ if(!r.ok) throw new Error("Stats unavailable"); return r.json(); })
+  .then(rows=>{ if(!Array.isArray(rows)) return; STATS = rows; statsReady = true; chips(); })
+  .catch(()=>{});
+fetch(`${SUPABASE_URL}/rest/v1/subcategory_stats?select=*&order=items.desc`, {headers:HDRS, signal:AbortSignal.timeout(15000)})
+  .then(r=>{ if(!r.ok) throw new Error("Stats unavailable"); return r.json(); })
+  .then(rows=>{
+    if(!Array.isArray(rows)) return;
+    for(const row of rows){
       if((SUBSTATS[row.retailer] = SUBSTATS[row.retailer] || []).length < 12)
         SUBSTATS[row.retailer].push(row);
     }
     chips();
-    return loadPage(true);
-  })
-  .catch(()=>{document.getElementById("list").innerHTML =
-    `<div class="empty">We couldn't load the catalogue — please try again shortly.</div>`;});
+  }).catch(()=>{});
+
 </script>
 <nav class="mobile-nav" aria-label="Quick navigation"><a href="/index.html"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</a><a href="/catalogue.html" class="active" aria-current="page"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Catalogue</a><a href="/clearance.html"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>Clearance</a><a href="/search.html"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>Search</a><a href="/alerts.html"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Alerts</a></nav></body>
 </html>

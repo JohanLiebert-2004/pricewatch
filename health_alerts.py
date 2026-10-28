@@ -141,6 +141,16 @@ def _send(subject, body, plain):
 
 
 def _retailer_rows(conn):
+    if isinstance(conn, db._PgShim):
+        # Counts can use the published summary; liveness must use current
+        # observations. Thirteen indexed probes avoid a full product scan.
+        rows = conn.execute(
+            "SELECT f.retailer,f.products AS listings,p.last_seen "
+            "FROM retailer_freshness f LEFT JOIN LATERAL "
+            "(SELECT last_seen FROM products WHERE retailer=f.retailer "
+            "AND current_price IS NOT NULL AND last_seen IS NOT NULL "
+            "ORDER BY last_seen DESC LIMIT 1) p ON true").fetchall()
+        return {r['retailer']: r for r in rows}
     rows = conn.execute(
         """SELECT retailer, count(*) filter (where current_price is not null) AS listings,
                   max(last_seen) AS last_seen
@@ -152,6 +162,8 @@ def _problem(conn, retailer, row):
     health = _kv_get(conn, f"scraper_health:{retailer}") or {}
     if health.get("status") == "blocked":
         return "blocked", html.escape(health.get("detail") or "retailer bot protection blocked the crawler")
+    if health.get("status") in {"error", "empty", "budget_exhausted"}:
+        return health["status"], html.escape(health.get("detail") or "Crawler collected no usable products")
     attempted, stored = health.get("attempted") or 0, health.get("stored") or 0
     if attempted >= MIN_ATTEMPTED_FOR_EMPTY_BATCH_ALERT and stored == 0:
         # Not Blocked (that's handled above) and not a small tail batch -

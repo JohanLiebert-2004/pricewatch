@@ -6,9 +6,10 @@ Signals:
   cross_retailer price is far below the median for the same GTIN elsewhere
 """
 import statistics
+import db
 
 from matching import build_match_groups
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 RRP_GAP_MIN = 0.50          # 50%+ off RRP gets recorded
 HISTORY_DROP_MIN = 0.50     # 50%+ below own recent median (needs >= 3 snapshots)
@@ -25,15 +26,6 @@ MIN_HISTORY = 3             # snapshots needed before history_drop can fire
 def run(conn) -> list[dict]:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     found = []
-    # Cross-retailer matching needs gtin/brand/title for every live product
-    # (~9MB out of Supabase per call) - the heaviest read left after the
-    # SELECT * fix. The signal compares slow-moving catalogue overlap, so
-    # computing it a few times a day loses nothing; rrp_gap/history_drop
-    # still run on every detect.
-    if datetime.now(timezone.utc).hour % 6 == 0:
-        cross_peers = _cross_peers(conn)
-    else:
-        cross_peers = {}
     # Incremental: a product whose price didn't move since the last detect
     # run can't newly trip rrp_gap/history_drop (both compare the CURRENT
     # price against a reference that also hasn't moved), so only products
@@ -49,26 +41,49 @@ def run(conn) -> list[dict]:
     # Keep the changed-product set in the database. Expanding a multi-day
     # backlog into one bound parameter per ID exceeds PostgreSQL's protocol
     # limit and prevents the detector from ever advancing its watermark.
-    changed_sql = "SELECT product_id FROM price_snapshots WHERE scraped_at > ?"
+    through = now
     if cutoff:
-        products = conn.execute(
-            f"SELECT id, retailer, title, url, is_marketplace, "
-            f"current_price, current_rrp FROM products WHERE id IN ({changed_sql})",
-            (cutoff,)).fetchall()
+        # Finish every timestamp group at the boundary so rows sharing a
+        # bulk-ingest timestamp cannot be skipped while draining a backlog.
+        window = conn.execute("SELECT scraped_at FROM price_snapshots WHERE scraped_at > ? "
+                              "AND scraped_at <= ? ORDER BY scraped_at LIMIT 1000", (cutoff, now)).fetchall()
+        if len(window) == 1000:
+            value = window[-1]['scraped_at']
+            through = value.isoformat() if hasattr(value, 'isoformat') else str(value)
+    changed_sql = "SELECT product_id FROM price_snapshots WHERE scraped_at > ? AND scraped_at <= ?"
+    scope = (cutoff, through)
+    if cutoff:
+        fields = 'id,retailer,title,url,is_marketplace,current_price,current_rrp,gtin,brand'
+        if isinstance(conn, db._PgShim):
+            products = conn.execute(
+                f"SELECT p.* FROM (SELECT DISTINCT product_id FROM price_snapshots "
+                f"WHERE scraped_at > ? AND scraped_at <= ?) changed CROSS JOIN LATERAL "
+                f"(SELECT {fields} FROM products WHERE id=changed.product_id OFFSET 0) p", scope).fetchall()
+        else:
+            products = conn.execute(f"SELECT {fields} FROM products WHERE id IN ({changed_sql})", scope).fetchall()
     else:
         # no marker yet (first run after this change) - one full pass, then
         # every run after this becomes incremental
         products = conn.execute(
             "SELECT id, retailer, title, url, is_marketplace, "
-            "current_price, current_rrp FROM products").fetchall()
+            "current_price, current_rrp,gtin,brand FROM products").fetchall()
+
+    cross_peers = _cross_peers(conn, products) if datetime.now(timezone.utc).hour % 6 == 0 and products else {}
 
     # one bulk pass instead of a per-product query: with change-only
     # snapshots the whole table stays small enough to group in memory
     history_by_pid = {}
-    if cutoff:
+    if cutoff and isinstance(conn, db._PgShim):
+        hist_rows = conn.execute(
+            f"SELECT h.product_id,h.price,h.rrp FROM "
+            f"(SELECT DISTINCT product_id FROM price_snapshots WHERE scraped_at > ? AND scraped_at <= ?) changed "
+            "CROSS JOIN LATERAL (SELECT product_id,price,rrp FROM price_snapshots "
+            "WHERE product_id=changed.product_id ORDER BY scraped_at DESC LIMIT 90) h",
+            scope)
+    elif cutoff:
         hist_rows = conn.execute(
             f"SELECT product_id, price, rrp FROM price_snapshots "
-            f"WHERE product_id IN ({changed_sql}) ORDER BY scraped_at DESC", (cutoff,))
+            f"WHERE product_id IN ({changed_sql}) ORDER BY scraped_at DESC", scope)
     else:
         hist_rows = conn.execute(
             "SELECT product_id, price, rrp FROM price_snapshots "
@@ -150,29 +165,49 @@ def run(conn) -> list[dict]:
     # simply picked up next cycle instead of risking a gap
     conn.execute(
         "INSERT INTO kv (k, v) VALUES ('anomaly_last_detect_at', ?) "
-        "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (now,))
+        "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (through,))
     conn.commit()
     return found
 
 
-def _cross_peers(conn) -> dict:
+def _cross_peers(conn, candidates=None) -> dict:
     """Map each product_id -> {confidence, prices:[(peer_id, latest_price)]}
     for OTHER retailers in the same match group."""
+    if candidates is not None:
+        candidates = [dict(p) for p in candidates]
+        # Anomaly alerts use exact barcode peers of changed products. Fuzzy
+        # product suggestions remain available separately on product pages.
+        gtins = sorted({str(p['gtin']) for p in candidates if p.get('gtin')
+                        and str(p['gtin']).isdigit() and len(str(p['gtin'])) in (8,12,13,14)
+                        and set(str(p['gtin'])) != {'0'}})
+        if not gtins:
+            return {}
+        cutoff = (datetime.now(timezone.utc)-timedelta(hours=36)).isoformat()
+        rows = conn.execute('SELECT id,retailer,gtin,current_price FROM products WHERE gtin IN (' +
+                            ','.join('?' for _ in gtins) + ') AND current_price>0 AND last_seen>?',
+                            (*gtins, cutoff)).fetchall()
+        groups = {}
+        for row in rows:
+            groups.setdefault(row['gtin'], []).append(row)
+        out = {}
+        for product in candidates:
+            peers = [(p['id'],float(p['current_price'])) for p in groups.get(product.get('gtin'), [])
+                     if p['id'] != product['id'] and p['retailer'] != product['retailer']]
+            if peers:
+                out[product['id']] = {'confidence':'high','prices':peers}
+        return out
     latest = {}
     retailer_of = {}
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=36)).isoformat()
     for p in conn.execute(
             "SELECT id, retailer, current_price FROM products "
-            "WHERE current_price IS NOT NULL"):
+            "WHERE current_price > 0 AND last_seen > ?", (cutoff,)):
         retailer_of[p["id"]] = p["retailer"]
         latest[p["id"]] = float(p["current_price"])
-    if not latest:  # legacy rows from before current_price existed
-        for r in conn.execute(
-            """SELECT product_id, price FROM price_snapshots ps WHERE id = (
-                 SELECT id FROM price_snapshots WHERE product_id=ps.product_id
-                 ORDER BY scraped_at DESC LIMIT 1)"""):
-            latest[r["product_id"]] = float(r["price"])
+    if not latest:
+        return {}
     out = {}
-    for g in build_match_groups(conn).values():
+    for g in build_match_groups(conn, fresh_since=cutoff).values():
         ids = g["product_ids"]
         for pid in ids:
             peers = [(o, latest[o]) for o in ids

@@ -63,20 +63,24 @@ def main():
         lines = open(LOG, encoding="utf-8", errors="replace").readlines()
         if len(lines) > LOG_KEEP_LINES:
             open(LOG, "w", encoding="utf-8").writelines(lines[-LOG_KEEP_LINES:])
+    success = False
     with open(LOG, "a", encoding="utf-8") as f:
         log(f, "=== sweep start ===")
         try:
             with db_tunnel.open_db_tunnel(TUNNEL_KEY) as endpoint:
                 env["DATABASE_URL"] = db_tunnel.tunneled_database_url(
                     env["DATABASE_URL"], endpoint)
-                _run_sweep(env, f)
+                success = _run_sweep(env, f)
         except Exception as e:
             log(f, f"tunnel: {type(e).__name__}: {e} - sweep skipped")
         log(f, "=== sweep end ===")
+    if not success:
+        raise SystemExit(1)
 
 
 def _run_sweep(env, f):
     refresh_ok = False
+    all_ok = True
     for name, cmd in (
             ("refresh", ["refresh", "bigw", "--budget", REFRESH_BUDGET]),
             ("crawl", ["crawl", "bigw", "--batch", CRAWL_BATCH])):
@@ -85,6 +89,7 @@ def _run_sweep(env, f):
                 [sys.executable, os.path.join(ROOT, "run.py"), *cmd],
                 cwd=ROOT, env=env, capture_output=True, text=True,
                 timeout=5400)
+            all_ok = all_ok and r.returncode == 0
             tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
             log(f, f"{name}: exit {r.returncode} | " + " / ".join(tail))
             if name == "refresh" and r.returncode == 0:
@@ -99,6 +104,7 @@ def _run_sweep(env, f):
                     log(f, "refresh saw no/too few listings - NOT writing "
                            "heartbeat; CI proxy fallback stays active")
         except Exception as e:
+            all_ok = False
             log(f, f"{name}: {type(e).__name__}: {e}")
     if refresh_ok:
         try:
@@ -113,6 +119,9 @@ def _run_sweep(env, f):
             log(f, f"heartbeat written: {now}")
         except Exception as e:
             log(f, f"heartbeat FAILED: {type(e).__name__}: {e}")
+            return False
+
+    return refresh_ok and all_ok
 
 
 if __name__ == "__main__":
