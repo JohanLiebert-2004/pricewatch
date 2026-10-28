@@ -93,8 +93,20 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             echo "JB Hi-Fi heartbeat is stale; running the CI fallback."
           fi
+      - name: Sephora local ownership gate
+        id: sephora_owner
+        shell: bash
+        run: |
+          if [[ "${{ matrix.retailer }}" != "sephora" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif python scripts/heartbeat_fresh.py sephora_local_running 3700 || python scripts/heartbeat_fresh.py sephora_local_heartbeat 14400; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "The laptop Sephora sweep owns refresh; skipping CI fallback."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Refresh ${{ matrix.retailer }}
-        if: (matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true') && (matrix.retailer != 'kmart' || steps.kmart_cadence.outputs.run == 'true') && (matrix.retailer != 'jbhifi' || steps.jbhifi_cadence.outputs.run == 'true')
+        if: (matrix.retailer != 'bigw' || steps.bigw_cadence.outputs.run == 'true') && (matrix.retailer != 'kmart' || steps.kmart_cadence.outputs.run == 'true') && (matrix.retailer != 'jbhifi' || steps.jbhifi_cadence.outputs.run == 'true') && (matrix.retailer != 'sephora' || steps.sephora_owner.outputs.run == 'true')
         run: python run.py refresh ${{ matrix.retailer }} --budget ${{ matrix.budget }}
 
   # Keep optional embedding writes behind the price publication path on

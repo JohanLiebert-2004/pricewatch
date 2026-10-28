@@ -1,5 +1,26 @@
 # Pricewatch — shared agent state
 
+## 28 October 2026 — Sephora Firefox laptop collection
+
+- Owner: Codex. Status: In progress.
+- Owner requests enabling Sephora after successful standard Firefox test.
+  Scope: Firefox same-origin AU API transport, Sephora scraper, bounded
+  laptop wrapper/service/timer, CI ownership gate, focused tests and live
+  catalogue/database verification. Preserve existing country headers,
+  serial requests/delays, direct connection and refusal handling. No stealth
+  or challenge bypass; preserve existing Big W transport and other jobs.
+- Added opt-in Sephora Firefox transport using same-origin browser API fetch
+  with the existing AU headers; Firefox host checks still isolate each
+  retailer. A live 500-item page parsed all 500 products, 11 reference prices,
+  and reported 15 total catalogue pages. No production feed enabled yet.
+- Added bounded local wrapper/user units, file lock, short-lived running
+  ownership marker, full-success-only heartbeat and hourly CI ownership gate.
+  Also propagate refusal from the shared live-price verification helper so
+  deeply discounted listings cannot cause continued requests after a block.
+- All 93 local Python tests pass, compilation and workflow YAML parse pass.
+  Seven Firefox transport and ten Sephora-specific laptop tests passed before
+  the shared verification-helper change; final deployed checks pending.
+
 ## 28 October 2026 — standard Firefox comparison
 
 - Owner: Codex. Status: Done — Big W enabled; other blocked-retailer checks complete.

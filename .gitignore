@@ -19,3 +19,5 @@ infra/oci/*tfplan*
 local_bigw.log
 local_chemistwarehouse.log
 local_jbhifi.log
+local_sephora.log
+local_sephora.lock

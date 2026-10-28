@@ -17,6 +17,7 @@ and Philippine-peso catalogues on list endpoints - so a missing header
 poisons prices without any error. Prices are integer cents.
 """
 import json
+import os
 import re
 
 from db import ProductRecord
@@ -42,8 +43,28 @@ class SephoraScraper(BaseScraper):
     # Explicit country headers keep every request on the AU price book.
     _COUNTRY_HEADERS = {"X-Platform": "Web", "X-Site-Country": "AU"}
 
+    def __init__(self):
+        mode = os.environ.get('SEPHORA_BROWSER', '').strip().lower()
+        self._firefox = mode == 'firefox'
+        if not mode:
+            super().__init__()
+        elif self._firefox:
+            if os.environ.get('PROXY_URL'):
+                raise ValueError('Sephora Firefox mode requires direct local collection')
+            from .firefox import FirefoxSession
+            self.session = FirefoxSession(host='www.sephora.com.au')
+            self._cffi = False
+            self._warmed = False
+        else:
+            raise ValueError('Unknown SEPHORA_BROWSER mode')
+
     def _request(self, url):
-        if self._cffi:
+        if getattr(self, '_firefox', False):
+            if url.startswith(API + '?') or url.startswith(API + '/'):
+                r = self.session.fetch(url, headers=self._COUNTRY_HEADERS)
+            else:
+                r = self.session.get(url)
+        elif self._cffi:
             r = self.session.get(url, timeout=25, allow_redirects=True,
                                  headers=self._COUNTRY_HEADERS)
         else:
@@ -66,10 +87,14 @@ class SephoraScraper(BaseScraper):
                 rec = self._record_from_api(item, brands)
                 if rec:
                     yield rec
-            total_pages = (d.get("meta") or {}).get("total-pages") or 0
-            if not data or page >= total_pages:
-                break
+            total_pages = int((d.get("meta") or {}).get("total-pages") or 0)
+            if not data or total_pages <= 0:
+                raise RuntimeError('Sephora catalogue page is empty or has no page count')
+            if page >= total_pages:
+                print(f"Sephora catalogue complete: {page} pages", flush=True)
+                return
             page += 1
+        raise RuntimeError('Sephora catalogue budget exhausted before completion')
 
     def _record_from_api(self, item, brands=None) -> ProductRecord | None:
         a = item.get("attributes") or {}

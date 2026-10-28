@@ -14,6 +14,7 @@ class FirefoxTransportTests(unittest.TestCase):
     def session(self, status=200, text='<html>product</html>'):
         session = FirefoxSession.__new__(FirefoxSession)
         session._session = 'test'
+        session._host = 'www.bigw.com.au'
         session._process = None
         session._command = MagicMock(side_effect=[None, URL, text, status])
         return session

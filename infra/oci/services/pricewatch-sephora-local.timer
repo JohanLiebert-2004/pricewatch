@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Sephora AU every three hours using Firefox
+
+[Timer]
+OnCalendar=*-*-* 1/3:35:00
+Persistent=true
+RandomizedDelaySec=120
+Unit=pricewatch-sephora.service
+
+[Install]
+WantedBy=timers.target

@@ -302,6 +302,10 @@ def verify_price(scraper: "BaseScraper", url: str, claimed_price: float) -> floa
     """
     try:
         rec = scraper.parse_product(url, scraper.get(url))
+    except Blocked:
+        # A refusal is a stop signal for the collector, including live-price
+        # checks during refresh. Do not continue the feed after it.
+        raise
     except Exception:
         return None
     if rec is None or rec.price is None:

@@ -50,6 +50,23 @@ class CrawlerOutcomeTests(unittest.TestCase):
             self.refresh([], ConnectionError('unavailable'))
         self.assertEqual(self.health()['status'], 'error')
 
+    def test_live_discount_verification_refusal_stops_feed(self):
+        calls = []
+        class Scraper:
+            def refresh_listings(self, **kwargs):
+                for sku in ('1', '2'):
+                    yield db.ProductRecord('kmart', sku, 'Product', 'https://example.org', 10, rrp=100)
+            def get(self, url):
+                calls.append(url)
+                raise Blocked('HTTP 403')
+            def parse_product(self, url, raw):
+                raise AssertionError('refused page must not be parsed')
+        with patch.dict(run.REGISTRY, {'kmart': Scraper}), self.assertRaises(RuntimeError):
+            run.cmd_refresh(argparse.Namespace(retailer='kmart', budget=2))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.health()['status'], 'blocked')
+        self.assertEqual(self.conn.execute('SELECT count(*) FROM products').fetchone()[0], 0)
+
     def test_empty_listing_feed_fails(self):
         with self.assertRaises(RuntimeError):
             self.refresh([])

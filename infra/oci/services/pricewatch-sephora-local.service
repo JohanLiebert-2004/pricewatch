@@ -1,0 +1,10 @@
+[Unit]
+Description=Dealwatch Sephora AU Firefox catalogue sweep
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/pricewatch
+Environment=TUNNEL_SSH_KEY=%h/.ssh/pricewatch_tunnel_ubuntu_ed25519
+ExecStart=%h/pricewatch/.venv/bin/python3 %h/pricewatch/local_sephora_sweep.py
+TimeoutStartSec=3700
+KillMode=control-group

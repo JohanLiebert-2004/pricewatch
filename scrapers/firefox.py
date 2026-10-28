@@ -1,4 +1,4 @@
-"""Standard Firefox WebDriver transport for the opt-in local Big W collector.
+"""Standard Firefox WebDriver transport for opt-in local retail collectors.
 
 Uses a disposable profile, default browser identity and ordinary headless
 WebDriver. No browser cookies are imported or exported and refusals are not
@@ -30,7 +30,10 @@ class BrowserResponse:
 
 
 class FirefoxSession:
-    def __init__(self):
+    def __init__(self, host='www.bigw.com.au'):
+        if host not in ('www.bigw.com.au', 'www.sephora.com.au'):
+            raise ValueError('Unsupported Firefox collector host')
+        self._host = host
         self._process = None
         self._session = None
         self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -67,7 +70,7 @@ class FirefoxSession:
                 'moz:firefoxOptions': options}}})
             self._session = result['sessionId']
             self._command('POST', '/timeouts',
-                          {'pageLoad': 45000, 'script': 10000, 'implicit': 0})
+                          {'pageLoad': 45000, 'script': 30000, 'implicit': 0})
         except Exception:
             self.close()
             raise
@@ -89,12 +92,38 @@ class FirefoxSession:
     def _command(self, method, path, payload=None, timeout=55):
         return self._call(method, '/session/' + self._session + path, payload, timeout)
 
-    @staticmethod
-    def _check_url(url):
+    def _check_url(self, url):
         parsed = urllib.parse.urlsplit(url)
-        if (parsed.scheme != 'https' or parsed.hostname != 'www.bigw.com.au'
+        if (parsed.scheme != 'https' or parsed.hostname != self._host
                 or parsed.port not in (None, 443) or parsed.username or parsed.password):
-            raise ValueError('Firefox collector only supports HTTPS Big W pages')
+            raise ValueError('Firefox collector only supports its configured HTTPS host')
+
+    @staticmethod
+    def _response(status, text, headers=None):
+        if not isinstance(status, int) or status < 100 or status > 599:
+            raise RuntimeError('Firefox did not report a valid navigation HTTP status')
+        return BrowserResponse(status, text, headers or {})
+
+    def fetch(self, url, headers):
+        """Read a same-origin API through the browser after normal warm-up."""
+        self._check_url(url)
+        if not self._session:
+            raise RuntimeError('Firefox session is closed')
+        if any(key not in ('X-Platform', 'X-Site-Country') for key in headers):
+            raise ValueError('Unsupported browser API header')
+        self._check_url(self._command('GET', '/url'))
+        result = self._command('POST', '/execute/async', {
+            'script': '''const done = arguments[arguments.length - 1];
+                fetch(arguments[0], {headers: arguments[1], redirect: 'error'})
+                .then(async r => done({status: r.status, text: await r.text(),
+                    headers: {server: r.headers.get('server') || '',
+                              'retry-after': r.headers.get('retry-after') || ''}}))
+                .catch(() => done({error: true}));''',
+            'args': [url, headers]})
+        if result.get('error'):
+            raise RuntimeError('Firefox same-origin API request failed')
+        return self._response(result.get('status'), result.get('text', ''),
+                              result.get('headers'))
 
     def get(self, url):
         self._check_url(url)
@@ -108,9 +137,7 @@ class FirefoxSession:
         status = self._command('POST', '/execute/sync', {
             'script': 'return performance.getEntriesByType("navigation")[0]?.responseStatus ?? null;',
             'args': []})
-        if not isinstance(status, int) or status < 100 or status > 599:
-            raise RuntimeError('Firefox did not report a valid navigation HTTP status')
-        return BrowserResponse(status, raw)
+        return self._response(status, raw)
 
     def close(self):
         if self._session:
