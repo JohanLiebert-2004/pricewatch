@@ -2,7 +2,7 @@
 
 ## 28 October 2026 — collector block diagnostics
 
-- Owner: Codex. Status: Diagnostics deployed; exact browser-working URL requested.
+- Owner: Codex. Status: Diagnostics deployed; current-product browser comparison pending.
 - Investigate request identity and refusal handling. Big W does not use the
   Chemist Warehouse DealwatchBot header. Scope: accurate refusal diagnostics,
   stop on blocked warm-up, remove fresh-session block retries, focused tests
@@ -25,6 +25,19 @@
 - Asked owner for a specific Big W product URL that opens in their browser
   to compare the identical resource. Homepage/browser differences alone
   cannot conclusively rule out an old or resource-specific product URL issue.
+- Owner reports the tested Levede table displays "temporarily out of stock
+  or discontinued" in the browser. It is therefore not a valid live-product
+  comparison; do not treat that browser response as proof of product access.
+- Follow-up read-only laptop probe used the unchanged client and delays,
+  no proxy and no refusal retries, for a Big W-listed LEGO Mini Orchid,
+  /product/lego-botanicals-mini-orchid-plant-gift-10343/p/28069. Logged warm-up
+  HTTP 200 followed by product HTTP 403 with access-denied text (no
+  unavailability text, server or Retry-After). No database writes. A currently
+  listed resource is also refused, so the stale table alone does not explain
+  collection failures. Exact same-page browser comparison remains pending;
+  the private blocking rule is still unknown. Existing HTTP 404 handling
+  distinguishes confirmed missing listings from refusals; do not mark a
+  403 product discontinued or infer permanent removal from temporary stock.
 
 ## 28 October 2026 — move blocked collectors to laptop
 
