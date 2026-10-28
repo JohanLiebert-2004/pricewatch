@@ -227,6 +227,7 @@ class BigWScraper(BaseScraper):
         amount = ((derived.get("priceRange") or {}).get("min") or {}).get("amount")
         if not code or amount is None:
             return None
+        price = float(amount) / 100.0
         idents = item.get("identifiers") or {}
         return ProductRecord(
             retailer=self.name,
@@ -236,14 +237,17 @@ class BigWScraper(BaseScraper):
             brand=info.get("brand"),
             subcategory=subcat,
             url=f"https://www.bigw.com.au/product/p/{code}",
-            price=float(amount) / 100.0,
-            rrp=None,
+            price=price,
+            # A listing can carry the same cents-based wasPrice as the
+            # product page. Keep it when supplied; never infer an RRP from
+            # the title or invent one for listings without a reference price.
+            rrp=self._was_price(json.dumps(item), price, json_only=True),
             in_stock=not derived.get("soldOut", False),
             is_marketplace=bool(derived.get("marketplaceProduct")),
         )
 
     @staticmethod
-    def _was_price(text, price):
+    def _was_price(text, price, json_only=False):
         pats = (
             r"[Ww]as\s*\$\s*([\d,]+\.?\d*)",
             r'was[-_]?price[^$]{0,200}?\$([\d,]+\.?\d*)',
@@ -251,6 +255,8 @@ class BigWScraper(BaseScraper):
             r'"wasPrice"\s*:\s*"?([\d.]+)"?',
         )
         for i, pat in enumerate(pats):
+            if json_only and i < 2:
+                continue
             for m in re.finditer(pat, text, re.I):
                 try:
                     v = float(m.group(1).replace(",", ""))
