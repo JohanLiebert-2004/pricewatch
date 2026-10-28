@@ -1,8 +1,36 @@
 # Pricewatch — shared agent state
 
+## 28 October 2026 — restore Big W laptop collection
+
+- Owner: Codex. Status: Job fix deployed; collection still blocked externally.
+- Owner confirms the same LEGO Mini Orchid URL opens normally in the laptop
+  browser and requests a fix. Inspect installed client, scheduling and
+  supported standard-browser collection options. Scope: Big W transport and
+  local scheduling only, focused tests and verification. Preserve serial
+  requests/delays; no stealth, challenge bypass or user-session cookie export.
+- Tested the same LEGO URL once in standard installed Chromium headless
+  (HTTP/2 protocol error) and once in standard headed Chromium (HTTP 403,
+  Access Denied). Both used fresh isolated contexts, unchanged browser defaults,
+  no user cookies, custom identity or stealth options; browsers closed after
+  each test and headed test stopped immediately on refusal. No browser
+  transport enabled in production. Temporary Playwright diagnostic packages
+  removed after tests.
+- Fixed local_bigw_sweep.py to skip the separate product crawl after failed,
+  timed-out, insufficient or legacy partially blocked refreshes. Failed
+  refreshes leave the success heartbeat unchanged. Existing next scheduled
+  run uses the updated wrapper; no extra full sweep triggered after refusals.
+  Backup: ~/pricewatch-block-diagnostics-backup/local_bigw_sweep.py.
+- Verified 75 local Python tests; five wrapper tests cover refresh failure,
+  timeout, insufficient coverage, legacy partial block and successful
+  refresh/crawl/heartbeat. Deployed wrapper and focused tests to the laptop.
+- Big W prices are NOT restored. Asked whether owner has affiliate/product
+  feed access. A working approved source or retailer-side access is still
+  required; exact blocking rule remains undisclosed. Takeads lists an active
+  Big W affiliate programme, but product-feed availability was not verified.
+
 ## 28 October 2026 — collector block diagnostics
 
-- Owner: Codex. Status: Diagnostics deployed; current-product browser comparison pending.
+- Owner: Codex. Status: Diagnostics deployed; same-page browser comparison confirmed.
 - Investigate request identity and refusal handling. Big W does not use the
   Chemist Warehouse DealwatchBot header. Scope: accurate refusal diagnostics,
   stop on blocked warm-up, remove fresh-session block retries, focused tests
@@ -34,8 +62,8 @@
   HTTP 200 followed by product HTTP 403 with access-denied text (no
   unavailability text, server or Retry-After). No database writes. A currently
   listed resource is also refused, so the stale table alone does not explain
-  collection failures. Exact same-page browser comparison remains pending;
-  the private blocking rule is still unknown. Existing HTTP 404 handling
+  collection failures. Owner confirmed that exact LEGO page opens normally
+  in the laptop browser; the private blocking rule is still unknown. Existing HTTP 404 handling
   distinguishes confirmed missing listings from refusals; do not mark a
   403 product discontinued or infer permanent removal from temporary stock.
 

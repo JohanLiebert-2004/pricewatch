@@ -92,20 +92,28 @@ def _run_sweep(env, f):
             all_ok = all_ok and r.returncode == 0
             tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
             log(f, f"{name}: exit {r.returncode} | " + " / ".join(tail))
+            failed_refresh = r.returncode != 0 or any(
+                marker in r.stdout for marker in
+                ("BLOCKED mid-refresh", "refresh error after"))
+            if name == "refresh" and failed_refresh:
+                log(f, "refresh failed - skipping product crawl; heartbeat unchanged")
+                return False
             if name == "refresh" and r.returncode == 0:
-                # Exit 0 alone is NOT success: a fully-blocked sweep also
-                # exits 0 ("BLOCKED mid-refresh (keeping what we got)").
-                # Only claim the Big W lane - and silence the CI proxy
-                # fallback - when real listings actually came back.
+                # Also guard older collector versions that exited 0 on
+                # partial/blocked refreshes: require real listing coverage.
                 m = __import__("re").search(
                     r"-> (\d+) listings seen", r.stdout)
                 refresh_ok = bool(m) and int(m.group(1)) >= 144
                 if not refresh_ok:
                     log(f, "refresh saw no/too few listings - NOT writing "
-                           "heartbeat; CI proxy fallback stays active")
+                           "heartbeat; product crawl skipped")
+                    return False
         except Exception as e:
             all_ok = False
             log(f, f"{name}: {type(e).__name__}: {e}")
+            if name == "refresh":
+                log(f, "refresh did not complete - skipping product crawl")
+                return False
     if refresh_ok:
         try:
             import psycopg
