@@ -6,7 +6,7 @@ SELECT 'DROP INDEX CONCURRENTLY ' || quote_ident(c.relname) || ';'
 FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid
 WHERE NOT i.indisvalid AND c.relname IN
 ('idx_products_retailer_seen','idx_products_missing_subcategory',
- 'idx_products_missing_category','idx_snapshots_scraped_product')
+ 'idx_products_missing_category','idx_snapshots_scraped_product','idx_products_book_review')
 AND NOT EXISTS (SELECT 1 FROM pg_stat_progress_create_index p WHERE p.index_relid=c.oid)
 \gexec
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_retailer_seen

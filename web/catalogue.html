@@ -70,17 +70,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <button type="button" class="clear" id="pclear">Clear</button>
   </form>
   <div class="catalogue-sort">
-    <label for="freshness"><strong>Price freshness</strong><span>Choose when prices were last checked</span></label>
-    <select id="freshness" aria-label="Price freshness">
-      <option value="recent">Checked within 36 hours</option>
-      <option value="all">All tracked listings, including older prices</option>
-    </select>
-  </div>
-  <p class="note" id="freshness-note">Showing recently checked prices. Store and category counts include all tracked listings.</p>
-  <div class="catalogue-sort">
     <label for="sort"><strong>Sort products</strong><span>Choose price, name or percentage discount</span></label>
     <select id="sort" aria-label="Sort catalogue products" aria-describedby="discount-note">
-      <option value="recent">Recently checked</option>
       <option value="retailer">Retailer</option>
       <option value="title">Name: A–Z</option>
       <option value="price_asc">Price: lowest first</option>
@@ -113,7 +104,7 @@ const money = n => "$"+Number(n).toFixed(2);
 // Keep catalogue responses small: these are the only product_search fields
 // rendered below. Smaller payloads make filter changes noticeably snappier on
 // mobile connections.
-const CATALOGUE_FIELDS = "retailer,sku,title,brand,category,subcategory,url,image_url,is_marketplace,current_price,current_rrp,discount_pct,last_seen";
+const CATALOGUE_FIELDS = "retailer,sku,title,brand,category,subcategory,url,image_url,is_marketplace,current_price,current_rrp,discount_pct";
 const RETAILER_LABEL = {kmart:"Kmart",bigw:"Big W",officeworks:"Officeworks",
   target:"Target",jbhifi:"JB Hi-Fi",goodguys:"The Good Guys",myer:"Myer",
   supercheap:"Supercheap Auto",sephora:"Sephora",
@@ -146,18 +137,8 @@ let SUBSTATS = {};        // retailer -> [{subcategory, items}] desc (per-store 
 let selRetailers = new Set(), selCats = new Set(), selSubcats = new Set(), offset = 0;
 let pmin = null, pmax = null;   // price filter ($)
 let q = "";                     // text filter (name/SKU)
-let sort = "recent";
-let onlyRecent = true;
-const recentCutoff = () => new Date(Date.now() - 36 * 3600000).toISOString();
-let freshnessCutoff = recentCutoff();
-function checkLabel(value){
-  const stamp = Date.parse(value), age = Date.now() - stamp;
-  if(!Number.isFinite(stamp) || age < -60000) return 'Check date unknown · price may have changed';
-  const hours = Math.max(0, Math.floor(age / 3600000));
-  const time = hours < 1 ? 'less than an hour ago' : hours < 48 ? `${hours}h ago` : `${Math.floor(hours / 24)} days ago`;
-  return `Last checked ${time}${age > 36 * 3600000 ? ' · older price, verify with retailer' : ''}`;
-}
-const SORT_ORDER = {recent:"last_seen.desc,retailer.asc,sku.asc", retailer:"retailer.asc,sku.asc", title:"title.asc", price_asc:"current_price.asc,title.asc", price_desc:"current_price.desc,title.asc", discount_desc:"discount_pct.desc.nullslast,retailer.asc,sku.asc", discount_asc:"discount_pct.asc.nullslast,retailer.asc,sku.asc"};
+let sort = "retailer";          // indexed default; other sorts are optional
+const SORT_ORDER = {retailer:"retailer.asc,sku.asc", title:"title.asc", price_asc:"current_price.asc,title.asc", price_desc:"current_price.desc,title.asc", discount_desc:"discount_pct.desc.nullslast,retailer.asc,sku.asc", discount_asc:"discount_pct.asc.nullslast,retailer.asc,sku.asc"};
 const PAGE = 50;
 let requestSerial = 0;
 let pageRequest = null;
@@ -226,13 +207,12 @@ function chips(){
     document.getElementById("total").innerHTML = `Filtered results <span>· ${label}</span>`;
   }else{
     document.getElementById("total").innerHTML =
-      `${fmtN(count("all", "all"))} tracked items <span>· ${label} · ${onlyRecent ? 'showing checks from the last 36 hours' : 'including older prices'}</span>`;
+      `${fmtN(count("all", "all"))} items <span>· ${label}</span>`;
   }
 }
 
 function filterUrl(){
-  let u = `${SUPABASE_URL}/rest/v1/product_search?select=${CATALOGUE_FIELDS}&current_price=gt.0`;
-  if(onlyRecent) u += `&last_seen=gte.${encodeURIComponent(freshnessCutoff)}`;
+  let u = `${SUPABASE_URL}/rest/v1/product_search?select=${CATALOGUE_FIELDS}`;
   if(selRetailers.size) u += `&retailer=in.(${[...selRetailers].map(encodeURIComponent).join(",")})`;
   if(selCats.size) u += `&category=in.(${[...selCats].map(encodeURIComponent).join(",")})`;
   if(selSubcats.size) u += `&subcategory=in.(${[...selSubcats]
@@ -248,7 +228,6 @@ function filterUrl(){
 }
 
 async function loadPage(reset){
-  if(reset) freshnessCutoff = recentCutoff();
   const serial = ++requestSerial;
   if(pageRequest) pageRequest.abort();
   pageRequest = new AbortController();
@@ -293,7 +272,6 @@ async function loadPage(reset){
         <span class="pill">${RETAILER_LABEL[p.retailer]||esc(p.retailer)}</span>
         <span class="pill">${esc(p.subcategory||p.category||"other")}</span>
         <span>SKU ${esc(p.sku)}</span>
-        <span class="price-check">${esc(checkLabel(p.last_seen))}</span>
         ${p.brand?`<span>${esc(p.brand)}</span>`:''}
         ${p.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
       </div>
@@ -307,9 +285,8 @@ async function loadPage(reset){
   </div>`).join("");
   const list = document.getElementById("list");
   if(reset) list.innerHTML = html ||
-    `<div class="empty">${onlyRecent
-      ? 'No recently checked prices match this selection. Choose “All tracked listings” above to see older prices, or try a broader filter.'
-      : 'No tracked listings match this selection. Try a broader filter.'}</div>`;
+    `<div class="empty">Nothing here yet for this retailer/category
+     combination.<br>Try a broader filter or check again later.</div>`;
   else list.insertAdjacentHTML("beforeend", html);
   offset += rows.length;
   const more = document.getElementById("more");
@@ -343,14 +320,7 @@ document.getElementById("cats").addEventListener("click", e=>{
 });
 document.getElementById("more").addEventListener("click", ()=>loadPage(false));
 document.getElementById("sort").addEventListener("change", e=>{
-  sort = SORT_ORDER[e.target.value] ? e.target.value : "recent";
-  loadPage(true);
-});
-document.getElementById("freshness").addEventListener("change", e=>{
-  onlyRecent = e.target.value !== 'all';
-  document.getElementById('freshness-note').textContent = onlyRecent
-    ? 'Showing recently checked prices. Store and category counts include all tracked listings.'
-    : 'Older prices are included and may have changed. Check the retailer before buying.';
+  sort = SORT_ORDER[e.target.value] ? e.target.value : "retailer";
   loadPage(true);
 });
 

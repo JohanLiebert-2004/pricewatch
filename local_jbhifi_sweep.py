@@ -18,15 +18,11 @@ Coordination with CI (one crawler per retailer at a time, always):
   younger than 90 minutes, and automatically resumes trying if this
   machine stays off.
 
-A full JB Hi-Fi sweep is ~18 minutes in practice (verified 22 July 2026):
-100 requests at ~1.25s delay each, but the window is fully saturated at
-25,000 listings every run (Shopify's page*limit cap), and ~16,750 of
-those are worth keeping - that's ~42 bulk_upsert commits over the double-
-hop SSH tunnel, plus up to MISSING_CHECK_BUDGET individual product-page
-fetches for delisting checks. Still comfortably inside the 30-minute
-timer cadence and the 90-minute CI gate threshold, matching the same
-runtime/cadence ratio already proven safe by
-local_chemistwarehouse_sweep.py.
+The former full 100-page pass began hitting its 30-minute deadline under
+database load. Each pass now covers at most 10 pages (2,500 source listings)
+and saves a page cursor only after pending product writes commit. Subsequent
+passes resume there and wrap after the source's 100-page window. Existing
+request delays, timer cadence and the 90-minute CI ownership gate remain.
 
 Logs append to local_jbhifi.log next to this file (gitignored,
 self-trimmed). Uses scripts/db_tunnel.py exactly like the other two local
@@ -45,8 +41,8 @@ import db_tunnel  # noqa: E402
 
 LOG = os.path.join(ROOT, "local_jbhifi.log")
 LOG_KEEP_LINES = 2000
-REFRESH_BUDGET = "100"   # matches MAX_PAGES in scrapers/jbhifi.py - Shopify
-                         # caps page*limit at 25,000 regardless of budget
+REFRESH_BUDGET = "10"    # bounded rolling pages; committed cursor resumes
+                         # instead of restarting page 1 after a timed-out sweep
 TUNNEL_KEY = os.environ.get(
     "TUNNEL_SSH_KEY",
     os.path.expanduser("~/.ssh/pricewatch_tunnel_ubuntu_ed25519"))

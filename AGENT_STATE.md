@@ -1,5 +1,524 @@
 # Pricewatch — shared agent state
 
+## 28 October 2026 — session summary (latest owner preferences)
+
+- Catalogue: highest/lowest percentage-discount sorting is live. At the
+  owner's request, removed the new price-freshness selector, per-row freshness
+  labels/warnings, recently-checked default sort and 36-hour filtering. The
+  catalogue again includes all tracked prices. GA4 remains installed.
+  Current release: catalogue-20261028T064742Z; rollback release:
+  freshness-20261028T062137Z. Verified both discount directions return 50
+  sorted rows; no freshness controls/labels remain; products and GA4 load.
+- Google Analytics: G-3V1XFPB2L7 installed across all 13 templates and SSR
+  templates. Verified collection requests; owner subsequently confirmed it
+  appears to work. Sensitive token/email URLs skip collection, page/referrer
+  queries are stripped, advertising signals are disabled. Private server-log
+  country/IP reports remain available, but their counts are estimates and
+  should not be presented as verified people or substituted for GA4 users.
+- Oracle: no new VM created; earlier live Singapore and Sydney checks lacked
+  free capacity. Existing Singapore retry worker remains the provisioning path.
+- Collector fixes deployed to both /opt/pricewatch and ~/pricewatch on the
+  laptop: removed full-retailer preload/sort; cheap products are checked for
+  existing tracking in batches; PostgreSQL writes commit at 100 rows; read
+  transactions close before retailer requests. Blocked/empty/network-failed
+  jobs exit nonzero while preserving committed progress. Store-wide blocks
+  no longer consume a product URL's permanent failure budget. Local wrappers
+  propagate failures instead of reporting a successful timer run.
+- JB Hi-Fi's full 100-page sweep still hit its 30-minute wrapper timeout
+  during recovery. Added a persisted page cursor and a 10-page local budget
+  so subsequent completed sweeps rotate through the feed rather than keep
+  restarting page 1. The cursor is saved only after pending records commit;
+  blocks do not advance the failed page. Local and laptop tests pass. An
+  already-running old process keeps its original budget; next invocation
+  uses the new cursor/budget. A complete new rolling cycle is not yet verified.
+- Supporting database indexes are valid for oldest-product probes, missing
+  category/subcategory work, snapshot-time ranges and queued crawl order.
+  Discount indexes now include last_seen and replace the prior two indexes.
+  Category work is bounded and cursor-based. Detection drains snapshot
+  timestamp groups in bounded windows without skipping equal timestamps;
+  history queries take at most 90 rows per changed product. Cross-retailer
+  anomaly alerts use fresh barcode peers; fuzzy suggestions on product pages
+  remain separate. Health monitoring uses indexed latest-observation probes.
+- Workflow: at most two refresh jobs run together; embedding waits until
+  price publication finishes. Obsolete workflows 40644188448 and 40640699476
+  are confirmed cancelled, so their old workload no longer competes.
+  All four collector timers (web Kmart; laptop Big W/JB Hi-Fi/Chemist Warehouse)
+  were re-enabled after deployment. Backups: /opt/pricewatch-freshness-backup-
+  20261028T062137Z and ~/pricewatch-freshness-backup-20261028T062152Z.
+- Verification: 65 Python tests pass, analytics checks pass, the existing
+  website browser suite passed, and live catalogue/homepage/product/sitemap/
+  bootstrap checks pass. Live detection completed in 127.95 seconds; a bounded
+  Officeworks run stored 22 listings and nine changed-price snapshots in
+  80.21 seconds. Outbound notifications were disabled during those manual
+  verification runs. Source recovery commit: 573b637; follow-up includes the
+  requested UI removal and this summary. All five public feeds were rebuilt
+  successfully in 338.12 seconds: retailer_freshness, catalogue_stats,
+  discount_feed, growth_daily and subcategory_stats.
+- Collection is NOT fully recovered: refreshed summary shows 38,224 of
+  967,750 priced listings checked within 36 hours (about 4%). QBD's latest
+  observation remains 21 October and Sephora's 20 October; source HTTP 403
+  blocks persist. Big W only partially resumed; its proxy fallback also
+  encountered HTTP 407. Several collectors are still running and the small
+  database remains I/O constrained. Do not claim all catalogue prices are
+  fresh. Approved bulk feeds/retailer access and sustained successful passes
+  are still needed for broad coverage; no block bypass or paid resource used.
+
+## 28 October 2026 — retailer freshness recovery
+
+- Owner: Codex. Status: Source fixes deployed; collection coverage still degraded.
+- Owner authorized fixing audit findings. Scope: crawler queries and failure
+  reporting, supporting indexes, workflow load limits, catalogue freshness
+  labels/filter, deployment and real collector verification across retailers.
+- Owner subsequently requested removing the website freshness UI/filter;
+  removal is live. See the session summary above for the final state.
+
+## 28 October 2026 — catalogue freshness audit and priorities
+
+- Owner: Codex. Status: Read-only audit complete.
+- Direct products aggregation around 05:52 UTC: 967,653 priced listings;
+  37,129 (3.8%) observed within 36h; 114,274 (11.8%) within seven days.
+  Base rows, not cached retailer_freshness, are the current evidence.
+- Fresh 36h counts: Big W 232/401,465; Chemist Warehouse 70/23,292 (sweep
+  still running); QBD 0/38,461 (latest 21 Oct); Sephora 0/5,549 (20 Oct).
+  Good Guys 4,516/8,597; Supercheap 4,997/17,330; JB Hi-Fi 7,297/45,319;
+  Kmart 8,133/124,828; Myer 4,859/149,891; Officeworks 3,040/16,509;
+  Target 1,329/14,303; IKEA 1,756/22,170; Booktopia 900/99,939.
+- Cached freshness still showed Big W/Chemist Warehouse at 1 Oct while
+  laptop writes resumed today. Do not describe the cached table as fully
+  current. Big W observed 595 listings / 464 retained appearances / 190
+  snapshots before blocking; appearances are not unique fresh products.
+- Latest hourly run 40611463237: Kmart, Target, Officeworks and JB Hi-Fi
+  refresh jobs plus detect failed with DB statement timeouts; publish succeeded.
+  Big W job exited successfully despite zero collected / proxy HTTP 407;
+  Sephora similarly exited successfully after HTTP 403. QBD's latest
+  enrichment job exited successfully with zero products after HTTP 403.
+- Recommended priority: restore trustworthy refresh coverage and surface
+  collector failures; catalogue last-observed timestamps and stale-price
+  controls; distinguish last checked from last price change. No features,
+  crawling limits or production configuration changed by this audit.
+
+## 28 October 2026 — GA4 installation
+
+- Owner: Codex. Status: Done and deployed.
+- Owner supplied G-3V1XFPB2L7 and authorized installation. Scope: shared
+  browser analytics script, all page templates, privacy policy, focused
+  collection/privacy checks and atomic OCI deployment. Preserve dirty work.
+- Added /analytics.js to all 13 HTML templates, including SSR product and
+  landing templates. Direct Google tag, single config/page_view, no duplicate
+  GA4 tag in existing GTM (public container rechecked before deployment).
+  Sanitizes page/referrer queries and fragments; entirely skips sensitive
+  parameter/email query URLs; disables signals and ad personalization.
+  Updated privacy copy for GA4/cookies and current OCI hosting.
+- Static release ga4-20261028T053404Z is live. Previous release:
+  discount-sort-20261028. SSR template backups and release metadata:
+  /var/backups/dealwatch/ga4-20261028T053432Z. No backend restart or nginx
+  changes required; asset is public 200, service remains active.
+- LIVE Chromium: Google accepted exactly one page_view with HTTP 204 each
+  for /, catalogue with query, /p/myer/275544580 and /retailers/kmart.
+  All event page/referrer URLs omit query data. Test token URL sends no
+  GA4 pageview and loads no GA4 script. No CSP or browser JavaScript errors.
+  This verifies collection endpoint receipt, not processed report contents.
+- Tests: node tests/analytics.cjs passes (all templates, duplicate init,
+  sanitized URLs and sensitive links); all 53 Python tests pass. Compilation,
+  Terraform fmt/validate and diff whitespace checks pass. Published focused
+  GitHub commit dce8421, applying only GA4 changes to remote page versions;
+  preserved unrelated dirty local/live page changes during deployment.
+  See infra/oci/GOOGLE-ANALYTICS.md for ongoing configuration and validation.
+
+## 28 October 2026 — Google Analytics request
+
+- Owner: Codex. Status: Resolved by GA4 installation above.
+- User prefers Google Analytics after questioning server-log visitor counts.
+  Public GTM-MF4PFW6M script returns 200 but contains no G- measurement IDs
+  or visible GA4 tag. Existing GTM snippets already cover the site/templates.
+- No connected Analytics tool or available CUA browser (Chrome and in-app
+  browser unavailable). Asked owner for the G- Measurement ID from GA4
+  Admin > Data streams, or whether a property still needs to be created.
+  No GA4 configuration deployed, no collection claimed. Avoid duplicate
+  pageviews; protect alert-token/query data when adding browser analytics.
+
+## 28 October 2026 — Big W missing RRP investigation
+
+- Owner: Codex. Status: Diagnosis and importer fix complete; source blocks remain.
+- Scope: Big W listing importer reference-price handling, focused regression
+  tests, current data/freshness checks. Preserve unrelated crawler changes.
+- Confirmed 402,788 base products, only four with an RRP/discount; published
+  retailer_freshness had zero fresh products and latest observation 1 Oct.
+  Owner confirmed collector laptop had been shut down and restarted now.
+- Laptop booted 28 Oct 13:15 Perth; its existing persistent timer started a
+  sweep at 13:16. Completed 05:19 UTC with 595 listings seen, 464 retained,
+  190 snapshots written, updated heartbeat. Partial collection resumed;
+  category requests and product enrichment still hit explicit HTTP 403.
+  No bypass, lowered delays, parallel sweep or extra paid proxy usage added.
+- Importer previously discarded every listing RRP. Reuses the existing
+  cents-aware wasPrice parser for explicit listing JSON, excluding title
+  text and invalid/non-discounted values. Four tests pass locally and on the
+  laptop; all 53 local tests pass. Deployed after the active sweep completed,
+  preserving ~/bigw.py.before-rrp-20261028; GitHub commit c9be9ce published
+  only scraper and its test after confirming remote matched laptop source.
+  Next sweep uses fix. No missing RRP was invented or backfilled; live
+  extraction remains unverified because ordinary source requests failed.
+
+## 28 October 2026 — country and IP visitor breakdown
+
+- Owner: Codex. Status: Done and deployed.
+- Scope: local GeoIP database for private GoAccess country and IP panels,
+  overview support, documentation, focused tests and production verification.
+- Installed October 2026 DB-IP Lite country database locally and monthly
+  refresh service/timer. No visitor IP transmission to lookup services.
+  Enabled GoAccess geolocation and hosts panels; overview flattens country
+  rows, lists top 366 IPs with country, counts, and searchable filtering.
+  Attribution and accuracy/identity caveats appear in both report formats.
+- Verified synthetic AU lookup, live six continent groups / 366 host rows,
+  successful scheduled report, private viewer downloads and browser rendering
+  and country search. Kept root:ubuntu 0640 reports. Manual root regeneration
+  temporarily created root-only overview; corrected ownership and verified
+  viewer again. Six visitor tests pass including nested country parsing and
+  escaped host/country output. Server-log counts remain estimates, not people.
+
+## 28 October 2026 — detailed visitor checker and catalogue discount sorting
+
+- Owner: Codex. Status: Done and deployed.
+- Scope: private analytics dashboard/viewer, catalogue percentage-discount
+  sorting and minimal database migration/index; deploy and verify both.
+- Installed visitor_dashboard.py alongside the existing reporter. Private
+  searchable overview covers daily/hourly activity, pages, referrers,
+  browsers and OS; links to full GoAccess analytics. Updated viewer downloads
+  both reports, and workspace-root Check Visitors.cmd refreshes then opens it.
+  Verified installed report generation/timer, private downloads, browser
+  rendering/search, and successful local viewer launch. No public endpoint.
+- Added discount_pct to product_search with CREATE OR REPLACE VIEW and two
+  concurrent expression indexes for ascending/descending nulls-last orders.
+  Percentage compares current price to valid higher RRP; unknown/non-discounted
+  products sort last. Deterministic retailer/SKU ties and existing filters
+  remain. Initial unindexed API timed out; indexed calls returned 200 in
+  1.12s descending / 0.80s ascending. Migration/rebuild SQL saved in scripts/.
+- Published only catalogue.html atop a copy of the current live static release:
+  discount-sort-20261028. Rollback: count-fix-20261025T0620.
+- Verified both LIVE dropdown options render 50 globally sorted rows and
+  percentage badges with no browser JavaScript errors; reviewed mobile image.
+  Homepage, robots, sitemap and homepage_bootstrap return 200. All 48 Python
+  tests pass, including five visitor tests; mocked browser sort/reset/badge
+  checks, JS syntax, Python compilation, Terraform fmt/validate and scoped
+  whitespace checks pass. Preserved unrelated dirty work; no Git push.
+
+## 28 October 2026 — visitor count and free VM retry
+
+- Owner: Codex. Status: Done; new VM remains capacity-limited.
+- Scope: read-only visitor summary and OCI inventory/capacity checks; trigger
+  the existing Singapore free-only retry worker. Record results here only.
+- Refreshed private analytics successfully at 04:55:33 UTC / 12:55 Perth:
+  today 86 estimated visitors / 96 page views; yesterday 629 / 1,489.
+  Since 13 October: 15,272 cumulative daily visitor estimates / 21,374 views.
+  Daily estimates are not deduplicated people across the reporting period;
+  bot filtering is imperfect, and 18 October contributes 11,646 estimates.
+- Independent OCI API inventory: Singapore has zero instances and zero GB
+  block storage; A1.Flex 1 OCPU / 6 GB and E2.1.Micro both report
+  OUT_OF_HOST_CAPACITY. Sydney retains two RUNNING E2.1.Micro instances and
+  94 GB boot storage; A1.Flex 1 OCPU / 6 GB also lacks capacity.
+- Manually triggered existing Singapore retry worker; successful check at
+  04:55 UTC confirms both shapes unavailable. No new VM created. Existing
+  30-minute timer remains active; next check 05:24 UTC / 13:24 Perth.
+- No production configuration changes, Terraform apply, or paid fallback.
+
+## 25 October 2026 — homepage catalogue count recovery
+
+- Owner: Codex. Status: Done and deployed.
+- Scope: web/index.html and focused browser regression; preserve existing dirty work.
+- Confirmed homepage catalogue count remains a dash while combined bootstrap
+  waits on optional data; separate lightweight catalogue statistics request.
+- Deployed count-fix-20261025T0620, preserving the previous static release.
+- Verified live Chromium: 963,266 appears in 694ms normally and 556ms with
+  bootstrap blocked; 24 deal cards render in both cases, no JavaScript errors.
+- Focused count tests pass (stalled bootstrap, retry, zero, late response);
+  existing website browser checks pass including filters and request timeouts.
+
+## 13 October 2026 — private visitor analytics
+
+- Owner: Codex. Status: Done and deployed.
+- Scope: dedicated nginx page-access logs, scheduled private GoAccess reports,
+  local report viewer and deployment documentation under infra/oci.
+- Existing shared logs cannot reliably attribute historical traffic to the
+  apex website. Site-specific collection starts with this deployment.
+- Installed at 14:36 UTC / 22:36 Perth. Timer refreshes a private rolling
+  30-day report every 15 minutes; no new VM or public endpoint. Initial
+  report has zero qualifying requests, not a historical traffic total.
+- Verified three filtering tests, real GoAccess integration (two views,
+  one visitor, bot excluded), nginx validation, timer/service, logrotate
+  dry run. See infra/oci/VISITOR-ANALYTICS.md and scripts/view-visitors.ps1.
+- Private report download and viewer syntax verified. VM-side TLS checks:
+  homepage, catalogue, sitemap, robots and www redirect pass. Homepage
+  bootstrap API returned 504 twice; analytics only added access_log directives
+  and did not change upstream routing. Separate API investigation remains.
+
+## 13 October 2026 — Singapore free VM retry worker
+
+- At the user's request, deployed an OCI capacity retry worker on the existing
+  Sydney `pricewatch-runner` VM (`159.13.59.184`). It checks Singapore every
+  30 minutes and launches only `VM.Standard.A1.Flex` instances at 1 OCPU / 6 GB
+  and `VM.Standard.E2.1.Micro` instances, stopping at 2 of each and 200 GB
+  combined block storage. Each boot volume is requested at 47 GB.
+- Added `infra/oci/scripts/free_vm_capacity_retry.py` and systemd units
+  `oci-free-retry.service` / `oci-free-retry.timer`. The Singapore API key is
+  stored on the worker root-owned mode 0600 at `/etc/oci-free-retry/`.
+  SSH ingress for retry-created VMs is restricted to the Sydney worker's
+  public IP; the worker's existing SSH public key is installed on new VMs.
+- Created Singapore VCN `free-vm-retry-vcn`, internet gateway, route table,
+  SSH-restricted security list, and public subnet. These are free networking
+  resources; no compute VM or paid resource was created.
+- Enabled and ran the worker successfully. First current check found both
+  A1 1/6 and E2 Micro still `OUT_OF_HOST_CAPACITY`. Timer's next check was
+  scheduled 30 minutes later. Confirm status/logs with
+  `systemctl list-timers oci-free-retry.timer` and
+  `sudo tail /var/log/oci-free-retry.log` on the Sydney worker.
+
+## 13 October 2026 — Singapore free VM capacity retry
+
+- User created a second OCI Free Tier tenancy with Singapore (`ap-singapore-1`)
+  as its home region. Local `[SINGAPORE]` OCI CLI profile is configured in
+  `C:/Users/tarun/.oci/config`; key fingerprint verified and OCI API
+  authentication confirmed. Private key stays local.
+- User requested the maximum number of Always Free VMs. Published target is
+  up to 2 E2.1.Micro plus up to 2 A1.Flex (1 OCPU / 6 GB each), subject to
+  combined 200 GB block storage and actual capacity. Trial quota numbers do
+  not increase Always Free limits.
+- Initial inventory showed no instances or volumes in the Singapore tenancy.
+  Retried Compute Capacity Report 13 Oct: Singapore AD-1 reports
+  `OUT_OF_HOST_CAPACITY` for both E2.1.Micro and A1.Flex (1 OCPU / 6 GB).
+  Also checked all three fault domains; all six shape/domain combinations
+  report `OUT_OF_HOST_CAPACITY`.
+- No VM or other resource was created. Retry when regional capacity changes.
+- User asked to save progress and retry provisioning; latest retry completed.
+
+## 12 October 2026 — Anker checkout watcher deployed on existing web VM
+
+- Owner requested C800 Plus + 100W solar bundle monitoring with Telegram
+  alerts under A$200, checkout verification, and 15-minute intervals.
+- Standalone source: `../anker_price_hunter/`; deployment archive:
+  `../anker_price_hunter_reviewed.zip`. Original supplied ZIP unchanged.
+- Owner deployed via `anker_price_hunter/deploy.ps1` to
+  `ubuntu@159.13.59.184:~/anker_price_hunter`. No new VM provisioned.
+- User systemd units: `anker-watcher.timer` / `anker-watcher.service`.
+  Calendar schedule :00/:15/:30/:45; lingering enabled by installer.
+  Existing Pricewatch bot/chat reused via private
+  `~/.config/anker-watcher.env`; existing Pricewatch services unchanged.
+- Owner pasted successful VM install output: 19 tests passed; seven live
+  checkout checks completed with zero issues at 12:42:19 UTC. Lowest total
+  A$848 with WSTDPXOWQ. AFFALL15OFF and SOLIX6OFF gave higher totals alone;
+  both rejected when paired with WSTDPXOWQ. Requests spaced 12 seconds apart;
+  full run took about 3m19s. Telegram setup test delivered.
+- Subsequent owner-run status check confirmed next run 12:45 UTC / 20:45
+  Perth. LAST empty and journal had no entries because the first scheduled
+  run had not begun. First AUTOMATIC completed run remains unverified;
+  do not confuse successful installation dry run with scheduled execution.
+- Uses isolated anonymous Shopify cart and actual checkout summary; checks
+  bundle/quantity/currency, tests published codes and pairs, clears cart,
+  never submits orders. Total checked before delivery address/payment.
+- State: `~/anker_price_hunter/state.json`; latest scheduled results:
+  `~/anker_price_hunter/last_checkout_run.json`. Re-arms returning deals,
+  retries failed alerts, stops on 403/429 with a persistent cooldown.
+- Verify using `systemctl --user list-timers anker-watcher.timer --no-pager`
+  and `journalctl --user -u anker-watcher.service -n 20 --no-pager`.
+- Current Codex sandbox cannot read owner's SSH key/known_hosts; owner ran
+  commands in normal PowerShell. Do not weaken SSH ACLs or host verification.
+  User asked about future no-prompt sessions; permission settings unchanged.
+- Keep lightweight single-bundle watcher on existing VM for now; reconsider
+  separate hosting if measured load or browser-heavy monitors warrant it.
+  Current CPU/RAM headroom has not been measured.
+
+## 11 October 2026 — website moved from Vercel to Oracle
+
+- Current hosting/deployment documentation updated in README.md, DEPLOY.md,
+  CLAUDE.md, infra/oci/README.md, and WEBSITE-MIGRATION.md. Historical logs
+  retain their original Vercel references. Documentation whitespace checks pass.
+- Owner requested a new VM. OCI API credentials work in this session even
+  though SSH credentials are unreadable. Live Sydney capacity reports return
+  OUT_OF_HOST_CAPACITY for A1.Flex at 1 OCPU with 1, 4, and 6 GB RAM. Existing
+  web and DB E2.1.Micro instances remain RUNNING, with 47-GB boot volumes each.
+  No launch/apply was submitted, no new VM created, and no paid fallback used.
+  VM purpose was asked but not yet specified; provisioning awaits capacity
+  and selection of the appropriate role. No database migration was performed.
+- Vercel returned 402 DEPLOYMENT_DISABLED. Owner migrated frontend using
+  infra/oci/scripts/migrate-website.ps1 recover from their normal terminal;
+  sandbox cannot read their SSH private key or known_hosts.
+- VentraIP DNS apex and www now point to 159.13.59.184. Separate nginx
+  dealwatch vhost serves /var/www/dealwatch/current and proxies SSR locally
+  and /rest/v1 to the existing database HTTPS host. Existing sslip.io endpoints
+  remain in place. TLS verification stays enabled with chain depth 5.
+- Certbot issued apex/www certificate expiring 2027-01-09 and installed
+  scheduled renewal. Renewal dry-run completion is not yet confirmed.
+- Public HTTPS checks: homepage, catalogue, search, product, sitemap, robots,
+  and homepage API POST all 200; www redirects 301 to apex. Browser rendered
+  24 cards, loaded images, no page errors, correct static/SW caching.
+- Frontend changes must now be deployed to Oracle; Vercel deployment does
+  not update the live site. Do not rerun prepare/recover over the enabled TLS
+  vhost. Preserve existing dirty work. See infra/oci/WEBSITE-MIGRATION.md.
+
+## 6 October 2026 — website loading repair
+
+- Owner: Codex. Status: Done and deployed.
+- Scope: catalogue/clearance independent loading, bounded requests and retry;
+  browser regression fixtures for existing hourly homepage rotation.
+- Live homepage/search images work; catalogue and clearance eventually load
+  but wait on optional statistics. Clearance hides HTTP failures as empty data.
+- Fixed: independent product/statistics requests, 30-second product timeout,
+  explicit Retry on clearance errors with preserved products/pagination, unknown
+  counts shown as a dash. Catalogue defaults to retailer/sku ordering: live full
+  50-product query took 599ms; title/price queries exceeded 15s. Optional name
+  and price sorting can remain slow; database indexes were not changed.
+- Fixed homepage rotation wraparound to fill pages and a personalization crash
+  when search preferences exist without a recently viewed product.
+- Updated browser mocks for retailer-specific rotated requests and verified
+  uniqueness/exhaustion; added stalled-statistics, timeout and retry coverage.
+- Verified: entire website_browser.cjs suite and cdn_requests.cjs pass; diff
+  whitespace and JS syntax checks pass. Final live Chromium: catalogue and
+  clearance render 50 products each; homepage 24 -> 48 with no duplicate product
+  links or JS errors. Previous image/CDN changes retained.
+- Production: dpl_D9bQavo7RrMwdg5EJNcgEup7gUJS, https://dealwatch.com.au.
+  No Git push; unrelated dirty files preserved.
+
+
+## 6 October 2026 — reduce Vercel CDN requests
+
+- Owner: Codex. Status: Done and deployed.
+- Scope: web image URLs, sw.js, pwa.js, vercel.json and request regression tests.
+- Preserve existing uncommitted work. Direct OCI image verified HTTP 200 with
+  image/jpeg and 30-day caching. Git fetch blocked by Windows TLS credentials.
+- Deployed dpl_GGmhUbxLYCEjx7SVFHWAMQGWdmvN to https://dealwatch.com.au.
+- Listing images now use the existing OCI HTTPS image cache directly. Static
+  assets cache in browsers for one hour; sw.js remains revalidated. Removed
+  SW page precaching, duplicate update checks and first-install page reload.
+- Verified: targeted CDN regression tests, JS syntax and diff whitespace pass.
+  Live Chromium: 24 cards with direct OCI image URLs, a successfully rendered
+  image, zero Vercel image requests, one homepage request, no unused-page
+  prefetches, no page errors. Live CSS/JS and SW cache headers confirmed.
+- Existing browser suite passes initial camera/search/layout checks but fails
+  old pagination offset assertion (52 vs 24); current live homepage already
+  rotates/mixes retailers. No feed logic changed in this task.
+- Existing local homepage/privacy changes matched production before deployment.
+  No git commit/push; unrelated dirty work preserved. Total traffic reduction
+  not yet measured. OCI-rendered pages and API calls retain their Vercel routes.
+
+
+## 2 October 2026 — homepage and Telegram recovery
+
+- Live recovery COMPLETE for homepage feeds: Actions 37013016733 succeeded;
+  retailer_freshness/catalogue_stats/discount_feed/growth_daily/subcategory_stats
+  refreshed in 59.6/56.4/140.7/138.7/62.9 seconds. Live Chromium verification:
+  5,528 recent discounted items, 24 first-page cards, first price checked 2h ago.
+  Source feed now returns October 2 timestamps. Scheduled publication fixes live.
+- Read-only diagnostics workflows (910e17f, f6f2124) show heavy disk I/O and no
+  blocked locks; 4.8GB products relation. Do not infer collection is fully healthy.
+- Telegram server config remains blocked by local SSH access. Prepared
+  ../.qa-tools/repair-telegram.ps1 for the owner's terminal: verifies the current
+  database/sample listing/subscription table before installing an env-only systemd
+  drop-in and restarting the bot. Preserves host Python path and existing unit;
+  creates backup of any preexisting drop-in. Not executed by this session.
+- Script follow-up: diagnosed the Windows OpenSSH failure from the user's output.
+  Updated the repair script to remove only the sandbox user's SSH-key ACL and
+  verified the SID against Get-Acl. The bot repair script has not been rerun yet.
+- User ran repair-telegram.ps1 successfully. Production catalogue and Telegram
+  subscription table verified before installing the service drop-in; the bot
+  is active with /etc/pricewatch-kmart.env loaded after its base environment.
+- User request: rotate homepage deals hourly and lower book priority. Deployed
+  through Vercel and GitHub API (remote commit e22d0afa); default feed excludes
+  books but keeps explicit Books category/book-store selections. It HEAD-counts
+  the current filtered results, advances 24 pages per hour modulo the count,
+  continues pagination through wraparound, and refreshes at each hour boundary.
+  Verified production browser: 5,140 qualifying items, first page 24, HEAD count
+  followed by safe offset 2076; API filter category=neq.books. A DB-view attempt
+  was rejected by the restricted pricewatch role; that failed workflow was
+  removed and no DB schema change remains.
+
+- Recovery resumed: GitHub device login succeeded with session config under
+  ../.qa-tools/github-auth (private credentials; never commit). Native Git push
+  crashed; published the four committed changes through GitHub CLI Git Data API,
+  checking each tree matches local content. Remote master is 30fd8cb; API commit
+  metadata normalization changed hashes. Fetched and merged identical trees
+  locally without changing existing work. Publication run 37013016733 connected
+  to production and is running. OCI SSH host verification still unavailable.
+
+- Follow-up: user reported the contradictory stale 2,333-deal headline above an
+  empty recent feed. Replaced bootstrap deal count with the actual filtered feed
+  total, labelled catalogue counts accurately, and changed update frequency to
+  scheduled checks. Added a site-wide delayed-feed notice for old freshness
+  reports. GitHub auth remains invalid and publish.yml is still absent remotely.
+- Follow-up deployed: fd1c3f8, Vercel web-b7p5b2his-trest2.vercel.app aliased
+  to dealwatch.com.au. Browser suite passes, including zero/error headline counts
+  and delayed-feed notice; production HTML verified without the old live-deal
+  claim. Feed recovery and Telegram server deployment remain outstanding.
+
+- Owner: Codex. Status: Website deployed; feed and bot recovery blocked on credentials.
+- Scope: verify/deploy existing homepage freshness work; Telegram service database
+  configuration, registration guards, product deep links, regression tests and deployment notes.
+- Initial evidence: homepage fix remains recorded as undeployed; bot unit loads
+  only /opt/pricewatch.env, whose DATABASE_URL is documented as retired.
+- Live evidence: public discount_feed newest price_updated_at is September 13;
+  retailer_freshness also reports September 10–13. October 2 Actions run
+  36974006641 fails detection on literal SQL percent placeholder parsing;
+  several retailer refreshes and embedding writes also hit statement timeouts.
+  Do not claim all underlying product rows are stale based on materialized views.
+- Fixed in commit 3c748f8: no-parameter PostgreSQL queries no longer interpret
+  literal LIKE percents as placeholders; manual notification-free publish workflow;
+  bot uses mandatory current database override and rejects retired Supabase URLs;
+  Telegram payload length validation; existing homepage freshness work committed.
+- Deployed Vercel web-8vfswzqe6-trest2.vercel.app to dealwatch.com.au. Verified
+  live homepage contains freshness cutoff/newest-first ordering; bootstrap,
+  robots, sitemap and sample product return 200. Current seven-day feed is empty
+  until publication recovers. No claim that collection or Telegram is repaired live.
+- Verified: all 43 Python tests, Python compilation, workflow YAML parsing,
+  homepage/search/catalogue browser suite, and git diff whitespace checks pass.
+- Blocked: gh auth status reports invalid token; push interrupted without any
+  remote update (master remains d75924b). SSH known_hosts read denied, so no OCI
+  deployment or service restart attempted. User asked to restore credentials.
+- Next: fetch/push master (includes c21cfa3 pipeline recovery), dispatch publish.yml,
+  check its logs/public freshness, then deploy bot code/unit per DEPLOY.md.
+  Investigate remaining collection timeouts with production query/lock evidence.
+
+## 26 September 2026 — homepage freshness
+
+- Owner: Codex. Status: Done locally; not deployed.
+- Scope: web/index.html, web/sw.js, tests/website_browser.cjs. Show recently
+  updated prices first and exclude updates older than seven days from homepage
+  feeds. Preserve existing SEO and schema work.
+- Result: default/reset/quick-filter ordering uses latest price updates, with
+  a seven-day API cutoff preserved across pagination and other sorts. Personal
+  deal suggestions use the same cutoff; undated/stale trending and similar
+  suggestions are hidden. Saved browsing history no longer shows cached prices.
+  Fixed Load more visibility for empty/exhausted results and bumped SW cache.
+- Verified: tests/website_browser.cjs passes in Chromium, including stale and
+  undated fixtures, newest-first pagination, resets, quick filters, stale-only
+  empty state, API errors, and mobile/desktop layout. Search/catalogue checks pass.
+- Next: deploy web/ to Vercel and verify the production feed. Git fetch dry-run
+  failed because the sandbox has no usable HTTPS credentials; no remote changes.
+
+## 23 September 2026 — technical SEO deployed
+
+- Owner: Codex. Status: Done; deployed and live-verified.
+- Scope: SSR product metadata/errors, sitemap snapshot builder and systemd timer,
+  regression tests and deployment documentation. Existing schema.sql edit preserved.
+- Product markup no longer infers stock from recency; malformed/unreachable product
+  data returns 503; product names containing backslashes render correctly.
+- Product sitemap generation now streams one read-only database query into an
+  atomic snapshot. Index counts are exact; failed builds keep the last good snapshot.
+  The daily pricewatch-sitemaps.timer is enabled. First snapshot: 354,942 product
+  URLs in 355 files. Cached public first/middle/last files return 200 in ~0.2s.
+- Verified: 36 Python tests; all 29 static sitemap URLs return 200 with exactly one
+  title/description/H1 and matching canonical. Product structured data verified live.
+  Vercel CDN cache purged successfully; canonical /sitemap.xml now lists 355 product
+  sitemaps. Backup: /var/backups/preview_app.pre-seo-20260923.py on OCI web host.
+- Current production DB is pricewatch at 10.42.1.9 via /etc/pricewatch-kmart.env.
+  /opt/pricewatch.env DATABASE_URL still points to retired Supabase; an index
+  accidentally created there during investigation was removed. Production's existing
+  sitemap index is valid. Standard VACUUM ANALYZE was attempted; later checks show
+  no remaining maintenance query. The request timeout experiment was reverted;
+  snapshots solve the deep OFFSET request timeouts instead.
+- Search Console submission/indexing and rankings remain unverified.
+- Temporary key cleanup was rejected by automatic approval review ("blocked by
+  policy"). Restricted copy remains at %TEMP%/dealwatch-seo-deploy-20260923/deploy_key.
+  No key contents logged. Production service has no dependency on this local file.
+
+
 ## 19 September 2026 — SEO improvements
 
 - OCI deployment completed: SSH access was granted to the session, a temporary
@@ -1632,3 +2151,19 @@ again is safe to re-run, `INSERT OR IGNORE` dedupes).
   scripts/index_product_search.sql. Query plan scans retailer partitions of
   a 1,975 MB products heap; missing title/SKU trigram indexes. Use concurrent
   partial GIN indexes and leave the unrelated schema.sql changes intact.
+
+## 22 October 2026 — outage investigation and Singapore retry
+
+- Owner: Codex. Status: Done; recovery verified, VM retry remains capacity-limited.
+- Scope: production API query congestion, bounded API queries, analytics log permissions; Singapore free VM retry. Preserve unrelated dirty files.
+- Initial checks: HTML 200; homepage bootstrap 29.5s; DB has nine product_search API SELECTs reading disk for up to 54 minutes. Singapore has zero VMs and both eligible shapes lack capacity.
+
+- Result: Done. Cancelled eight abandoned product_search API SELECTs (oldest ~54 minutes). API login authenticator had no statement timeout; set its pricewatch-database default to 20s and restarted only pricewatch-postgrest to reconnect. Verified persisted setting and zero active API queries beyond timeout. Slow queries now fail rather than monopolizing disk indefinitely; no schema or data changes.
+- Verified after recovery: homepage_bootstrap 200 / 1.09s; actual discount_feed select=* 200 / 0.28s. Headless Chromium rendered homepage products/images and pencil search results without page errors. Existing unused Vercel insights script returns 404.
+- Fixed nginx analytics directory traversal: /var/log/dealwatch-analytics group changed adm -> www-data, retaining mode 0750. Confirmed nginx worker can write access.log and nginx -t passes. Updated installer to preserve fix; Python AST validation and scoped diff check pass.
+- Singapore manual worker run 02:01 UTC: zero instances/volumes, A1 1 OCPU/6GB and E2 Micro both OUT_OF_HOST_CAPACITY. Independent local OCI API confirms; no new VM created. Existing 30-minute retry timer remains enabled.
+- Existing pricewatch-backup service failures observed on both hosts; backup diagnosis outside this outage repair remains outstanding.
+
+- Final checks: catalogue rendered products in Chromium; clearance API returned HTTP 200 in 8.94s (slower than homepage). Some Big W catalogue images had not loaded at the six-second browser snapshot; not verified as an image outage.
+- Resume here: inspect failed backup units on both hosts; investigate expensive product_search query plans/indexes if slow-query errors recur. Keep the API timeout and enabled Singapore retry timer. Do not rerun website migration or terraform apply over existing production.
+- Progress saved locally at user request; existing unrelated working-tree changes preserved. No Git commit or push made.

@@ -247,10 +247,11 @@ def cmd_refresh(args):
             kwargs["skus"] = sorted(skus)
             print(f"  {len(skus)} SKUs to refresh")
         cat_state = None
-        if name == "bigw":
+        state_key = 'bigw_cat_state' if name == 'bigw' else 'jbhifi_refresh_state'
+        if name in {"bigw", "jbhifi"}:
             # stalest-categories-first sweep order, persisted across runs
             row = conn.execute("SELECT v FROM kv WHERE k=?",
-                               ("bigw_cat_state",)).fetchone()
+                               (state_key,)).fetchone()
             cat_state = json.loads(row["v"]) if row else {}
             kwargs["state"] = cat_state
         conn.commit()  # Preload reads must not remain open during network I/O.
@@ -320,9 +321,9 @@ def cmd_refresh(args):
         flush_pending()
         if cat_state is not None:
             conn.execute("INSERT OR IGNORE INTO kv (k, v) VALUES (?,?)",
-                         ("bigw_cat_state", "{}"))
+                         (state_key, "{}"))
             conn.execute("UPDATE kv SET v=? WHERE k=?",
-                         (json.dumps(cat_state), "bigw_cat_state"))
+                         (json.dumps(cat_state), state_key))
             conn.commit()
         print(f"  -> {seen} listings seen, {kept} kept (>= ${MIN_KEEP_PRICE:.0f} "
               f"or already tracked), {snaps} snapshots written")

@@ -52,9 +52,11 @@ class JBHiFiScraper(BaseScraper):
     delay = 1.0
 
     # -- fast listing refresh ------------------------------------------------
-    def refresh_listings(self, budget: int = 120):
+    def refresh_listings(self, budget: int = 120, state=None):
+        state = state if state is not None else {}
+        page = max(1, min(MAX_PAGES, int(state.get('page', 1))))
         pages = min(budget, MAX_PAGES)
-        for page in range(1, pages + 1):
+        for _ in range(pages):
             raw = self.get(f"https://www.jbhifi.com.au/products.json"
                            f"?limit={PAGE_SIZE}&page={page}")
             products = json.loads(raw).get("products") or []
@@ -62,8 +64,11 @@ class JBHiFiScraper(BaseScraper):
                 rec = self._record_from_listing(item)
                 if rec:
                     yield rec
-            if len(products) < PAGE_SIZE:
+            finished = len(products) < PAGE_SIZE or page >= MAX_PAGES
+            state['page'] = 1 if finished else page + 1
+            if finished:
                 break
+            page += 1
 
     def _record_from_listing(self, item) -> ProductRecord | None:
         variants = item.get("variants") or []
