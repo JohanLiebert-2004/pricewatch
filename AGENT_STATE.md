@@ -1,5 +1,28 @@
 # Pricewatch — shared agent state
 
+## 28 October 2026 — move blocked collectors to laptop
+
+- Owner: Codex. Status: Assessed; relocation alone does not resolve access.
+- User authorized moving blocked retailer collection to the existing Ubuntu
+  laptop. Scope: QBD and Sephora local ownership, bounded scheduled jobs,
+  CI handoff gates, tests and live verification. Preserve existing collectors,
+  serial retailer access and current request delays; stop on retailer blocks.
+- Big W, JB Hi-Fi and Chemist Warehouse already run on the laptop. Latest
+  Big W run at 07:00–07:01 UTC failed with HTTP 403; its last earlier sweep
+  only partially collected data. Do not describe Big W as fully working.
+- Verified local wrapper strips PROXY_URL, imports do not reload .env, and
+  laptop shell/base scraper proxy configuration is absent. Current Big W
+  delay is unchanged at 2.5s. Laptop has ~12 GB available RAM and low CPU load.
+- Made one bounded direct request each from the laptop, explicitly removing
+  proxy environment variables: QBD product page HTTP 403; Sephora AU API HTTP
+  403. No repeated requests, new proxy, stealth changes or challenge bypass.
+- Owner confirms normal Big W product pages open in the laptop browser.
+  This supports a client/session-specific refusal rather than a blanket
+  connection failure; HTTP 403 does not disclose the exact blocking rule.
+- No new collector timers enabled and no CI ownership gates changed: moving
+  those same blocked requests would not restore collection. Existing jobs
+  remain in place. Approved retailer feeds/access remain the next dependency.
+
 ## 28 October 2026 — session summary (latest owner preferences)
 
 - Catalogue: highest/lowest percentage-discount sorting is live. At the
