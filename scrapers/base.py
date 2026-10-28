@@ -87,37 +87,42 @@ class BaseScraper:
         self._warmed = False
 
     # -- HTTP helpers ------------------------------------------------------
+    def _remember_response_headers(self, response):
+        # Never store cookies, authorization headers or the response body.
+        self._response_headers = {
+            name: re.sub(r'[\r\n]', '', str(response.headers.get(name, '')))[:120]
+            for name in ('server', 'retry-after')
+        }
+
+    def _check_refusal(self, status, text, url, phase):
+        challenge = _is_challenge_page(text)
+        if status not in (403, 429, 503) and not challenge:
+            return
+        kind = ('browser-challenge page' if challenge else
+                'access-denied page' if 'access denied' in text[:10000].lower() else
+                'HTTP refusal')
+        headers = getattr(self, '_response_headers', {})
+        detail = f"server={headers.get('server') or 'unspecified'}"
+        if headers.get('retry-after'):
+            detail += f"; Retry-After={headers['retry-after']}"
+        raise Blocked(f"{self.name}: HTTP {status}; phase={phase}; response={kind}; "
+                      f"{detail}; stopping. URL={url}")
+
     def get(self, url: str) -> str:
         if self.warmup_url and not self._warmed:
             self._warmed = True
             try:
-                self._request(self.warmup_url)   # collect cookies like a browser
-                time.sleep(self.delay)
+                status, text = self._request(self.warmup_url)
+            except Blocked:
+                raise
             except Exception:
                 pass
+            else:
+                self._check_refusal(status, text, self.warmup_url, 'warm-up')
+                time.sleep(self.delay)
         time.sleep(self.delay + random.uniform(0, 0.5))
         status, text = self._request(url)
-        blocked = status in (403, 429, 503) or _is_challenge_page(text)
-        if blocked and self._cffi:
-            # Akamai blocks are often session-scoped: retry once fresh
-            from curl_cffi import requests as _cr
-            time.sleep(5 + self.delay)
-            proxies = {"http": PROXY_URL, "https": PROXY_URL} \
-                if (self.use_proxy and PROXY_URL) else None
-            self.session = _cr.Session(impersonate=self.impersonate, proxies=proxies)
-            if self.warmup_url:
-                try:
-                    self._request(self.warmup_url)
-                    time.sleep(self.delay)
-                except Exception:
-                    pass
-            status, text = self._request(url)
-            blocked = status in (403, 429, 503) or _is_challenge_page(text)
-        if blocked:
-            hint = "" if (self._cffi or not self.needs_impersonation) else \
-                " Install curl_cffi (`pip install curl_cffi`) and retry."
-            raise Blocked(f"{self.name}: HTTP {status} for {url} - bot protection."
-                          f"{hint} Otherwise lower the rate or use an official feed.")
+        self._check_refusal(status, text, url, 'requested page')
         if status == 404:
             raise NotFound(url)
         if status >= 400:
@@ -127,8 +132,9 @@ class BaseScraper:
     def _request(self, url: str):
         if self._cffi:
             r = self.session.get(url, timeout=25, allow_redirects=True)
-            return r.status_code, r.text
-        r = self.session.get(url)
+        else:
+            r = self.session.get(url)
+        self._remember_response_headers(r)
         return r.status_code, r.text
 
     def get_bytes(self, url: str) -> bytes:
@@ -139,15 +145,18 @@ class BaseScraper:
         if self.warmup_url and not self._warmed:
             self._warmed = True
             try:
-                self._request(self.warmup_url)
-                time.sleep(self.delay)
+                status, text = self._request(self.warmup_url)
+            except Blocked:
+                raise
             except Exception:
                 pass
+            else:
+                self._check_refusal(status, text, self.warmup_url, 'warm-up')
+                time.sleep(self.delay)
         time.sleep(self.delay + random.uniform(0, 0.5))
         status, content = self._request_bytes(url)
-        if status in (403, 429, 503):
-            raise Blocked(f"{self.name}: HTTP {status} for {url} - bot protection. "
-                           "Otherwise lower the rate or use an official feed.")
+        self._check_refusal(status, content[:10000].decode('utf-8', errors='ignore'),
+                            url, 'requested bytes')
         if status == 404:
             raise NotFound(url)
         if status >= 400:
@@ -157,8 +166,9 @@ class BaseScraper:
     def _request_bytes(self, url: str):
         if self._cffi:
             r = self.session.get(url, timeout=25, allow_redirects=True)
-            return r.status_code, r.content
-        r = self.session.get(url)
+        else:
+            r = self.session.get(url)
+        self._remember_response_headers(r)
         return r.status_code, r.content
 
     # -- Discovery ---------------------------------------------------------

@@ -39,9 +39,7 @@ class SephoraScraper(BaseScraper):
                         # bandwidth is reserved for bigw, which is fully
                         # blocked without it.
 
-    # per-request rather than session headers: base.get() replaces the whole
-    # session on a blocked-retry, and losing X-Site-Country wouldn't error -
-    # it would silently switch to the wrong price book
+    # Explicit country headers keep every request on the AU price book.
     _COUNTRY_HEADERS = {"X-Platform": "Web", "X-Site-Country": "AU"}
 
     def _request(self, url):
@@ -50,6 +48,7 @@ class SephoraScraper(BaseScraper):
                                  headers=self._COUNTRY_HEADERS)
         else:
             r = self.session.get(url, headers=self._COUNTRY_HEADERS)
+        self._remember_response_headers(r)
         return r.status_code, r.text
 
     # -- fast listing refresh ------------------------------------------------

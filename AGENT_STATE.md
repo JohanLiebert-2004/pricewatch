@@ -1,5 +1,31 @@
 # Pricewatch — shared agent state
 
+## 28 October 2026 — collector block diagnostics
+
+- Owner: Codex. Status: Diagnostics deployed; exact browser-working URL requested.
+- Investigate request identity and refusal handling. Big W does not use the
+  Chemist Warehouse DealwatchBot header. Scope: accurate refusal diagnostics,
+  stop on blocked warm-up, remove fresh-session block retries, focused tests
+  and deployment. No identity disguise or challenge bypass.
+- Checked the installed laptop client and source: Big W does not configure
+  DealwatchBot; that explicit identification belongs to Chemist Warehouse.
+  Removing a bot label would not change Big W's configured requests.
+- Fixed the shared request flow to stop on a refused warm-up and removed
+  automatic fresh-session retries after refusals. Diagnostics distinguish
+  a known browser challenge, an access-denied page and a generic HTTP refusal;
+  they retain only server/Retry-After headers, never cookies or response bodies.
+  Updated Sephora's override to preserve the same safe diagnostic fields.
+- Deployed to laptop and web-host source, preserving scraper backups in
+  ~/pricewatch-block-diagnostics-backup and /opt/pricewatch-block-diagnostics-
+  backup. All 70 local Python tests and five laptop diagnostic tests pass.
+- One bounded laptop diagnostic attempt to the previously failing Big W
+  product URL returned HTTP 403, phase=requested page, access-denied response,
+  no server header and no Retry-After. It stopped without retrying. This
+  establishes the refusal stage, not the retailer's private detection rule.
+- Asked owner for a specific Big W product URL that opens in their browser
+  to compare the identical resource. Homepage/browser differences alone
+  cannot conclusively rule out an old or resource-specific product URL issue.
+
 ## 28 October 2026 — move blocked collectors to laptop
 
 - Owner: Codex. Status: Assessed; relocation alone does not resolve access.
