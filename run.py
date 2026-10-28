@@ -247,8 +247,9 @@ def cmd_refresh(args):
             kwargs["skus"] = sorted(skus)
             print(f"  {len(skus)} SKUs to refresh")
         cat_state = None
-        state_key = 'bigw_cat_state' if name == 'bigw' else 'jbhifi_refresh_state'
-        if name in {"bigw", "jbhifi"}:
+        state_key = {'bigw': 'bigw_cat_state', 'jbhifi': 'jbhifi_refresh_state',
+                     'sephora': 'sephora_refresh_state'}.get(name)
+        if state_key:
             # stalest-categories-first sweep order, persisted across runs
             row = conn.execute("SELECT v FROM kv WHERE k=?",
                                (state_key,)).fetchone()
@@ -343,7 +344,9 @@ def cmd_refresh(args):
         # future sweep resumes the delist backlog. (Retailers whose refresh
         # lane is a legitimate no-op - Myer, Good Guys - are unaffected: they
         # end with seen=0 but no Blocked, and this stays their delist path.)
-        candidates = ([] if sweep_blocked or sweep_error else conn.execute(
+        partial_sephora = (name == 'sephora' and cat_state is not None
+                           and cat_state.get('next_page') != 1)
+        candidates = ([] if sweep_blocked or sweep_error or partial_sephora else conn.execute(
             "SELECT sku,url FROM products WHERE retailer=? AND current_price IS NOT NULL "
             "ORDER BY last_seen ASC,sku ASC LIMIT ?", (name, MISSING_CHECK_BUDGET * 10)).fetchall())
         conn.commit()

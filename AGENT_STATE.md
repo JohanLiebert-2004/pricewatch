@@ -20,6 +20,27 @@
 - All 93 local Python tests pass, compilation and workflow YAML parse pass.
   Seven Firefox transport and ten Sephora-specific laptop tests passed before
   the shared verification-helper change; final deployed checks pending.
+- Published implementation/CI ownership gate as
+  3bd767a74035368c173e240efa8de3fdec41a813. Installed laptop sources,
+  service/timer and ran ten Sephora-specific and seven crawler-outcome tests
+  successfully. User-unit validation passed (unrelated pre-existing desktop
+  spice-vdagent unit warning only). Shared live-price refusal propagation is
+  also deployed on the web host; source compiles there.
+- Enabled and started the three-hour timer; first full service started at
+  08:51:55 UTC. Running ownership marker confirmed, and fresh Sephora product
+  writes observed at 08:52:18 UTC. First verification run temporarily disables
+  Telegram notifications via a user-unit drop-in, which must be removed after
+  it exits. Completion/heartbeat and final website check pending.
+- Full initial recovery proved database-I/O-bound, so stopped that trial
+  while preserving committed records and switched to resumable two-page
+  windows every thirty minutes. Cursor saves follow product commits; failed
+  pages do not advance. Rotation wraps after 15 pages (eight windows, about
+  four hours). Delisting probes only run when a rotation wraps. Local heartbeat
+  now means a successfully committed window; CI skips while it is under 90
+  minutes old or a local run owns the short-lived marker. This supersedes the
+  initial full-sweep/three-hour design above. Added commit-failure/cursor tests;
+  all 96 local tests and workflow parsing pass. First one-page verification
+  will precede the normal two-page schedule.
 
 ## 28 October 2026 — standard Firefox comparison
 

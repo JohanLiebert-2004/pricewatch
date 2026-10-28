@@ -73,9 +73,10 @@ class SephoraScraper(BaseScraper):
         return r.status_code, r.text
 
     # -- fast listing refresh ------------------------------------------------
-    def refresh_listings(self, budget: int = 25):
-        page = 1
-        while page <= budget:
+    def refresh_listings(self, budget: int = 25, state=None):
+        page = max(1, int((state or {}).get('next_page', 1)))
+        processed = 0
+        while processed < budget:
             raw = self.get(f"{API}?page[size]={PAGE_SIZE}"
                            f"&page[number]={page}&include=brand")
             d = json.loads(raw)
@@ -88,12 +89,25 @@ class SephoraScraper(BaseScraper):
                 if rec:
                     yield rec
             total_pages = int((d.get("meta") or {}).get("total-pages") or 0)
+            if state is not None and total_pages > 0 and page > total_pages:
+                state['next_page'] = 1
+                raise RuntimeError('Sephora catalogue shortened; cursor reset')
             if not data or total_pages <= 0:
                 raise RuntimeError('Sephora catalogue page is empty or has no page count')
             if page >= total_pages:
+                if state is not None:
+                    state['next_page'] = 1
                 print(f"Sephora catalogue complete: {page} pages", flush=True)
+                if state is not None:
+                    print(f"Sephora catalogue window complete: {processed + 1} pages", flush=True)
                 return
             page += 1
+            processed += 1
+            if state is not None:
+                state['next_page'] = page
+        if state is not None and processed:
+            print(f"Sephora catalogue window complete: {processed} pages", flush=True)
+            return
         raise RuntimeError('Sephora catalogue budget exhausted before completion')
 
     def _record_from_api(self, item, brands=None) -> ProductRecord | None:

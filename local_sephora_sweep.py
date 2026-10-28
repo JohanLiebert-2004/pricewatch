@@ -11,7 +11,9 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 import db_tunnel  # noqa: E402
 
 LOG = ROOT / 'local_sephora.log'
-REFRESH_BUDGET = '25'
+# A one-page first verification can be selected without changing the normal
+# two-page schedule. Never let an environment override remove this bound.
+REFRESH_BUDGET = '1' if os.environ.get('SEPHORA_REFRESH_BUDGET') == '1' else '2'
 TUNNEL_KEY = os.environ.get(
     'TUNNEL_SSH_KEY', os.path.expanduser('~/.ssh/pricewatch_tunnel_ubuntu_ed25519'))
 
@@ -37,7 +39,7 @@ def _run_sweep(env, stream):
         for line in result.stdout.strip().splitlines()[-8:]:
             log(stream, line)
         count = re.search(r'-> (\d+) listings seen', result.stdout)
-        complete = re.search(r'Sephora catalogue complete: (\d+) pages', result.stdout)
+        complete = re.search(r'Sephora catalogue window complete: (\d+) pages', result.stdout)
         success = (result.returncode == 0 and bool(count) and int(count[1]) > 0
                    and bool(complete) and int(complete[1]) > 0)
         if success:
@@ -45,7 +47,7 @@ def _run_sweep(env, stream):
                 now = datetime.now(timezone.utc).isoformat(timespec='seconds')
                 conn.execute("INSERT INTO kv (k,v) VALUES ('sephora_local_heartbeat',%s) "
                              "ON CONFLICT (k) DO UPDATE SET v=excluded.v", (now,))
-            log(stream, 'complete catalogue committed; heartbeat written')
+            log(stream, 'catalogue window and cursor committed; heartbeat written')
         else:
             log(stream, 'refresh incomplete; success heartbeat unchanged')
     except Exception as exc:

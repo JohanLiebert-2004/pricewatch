@@ -20,13 +20,13 @@ class SephoraSweepTests(unittest.TestCase):
 
     def test_only_complete_committed_feed_writes_success_heartbeat(self):
         result = subprocess.CompletedProcess([], 0,
-            'Sephora catalogue complete: 16 pages\n-> 7600 listings seen', '')
+            'Sephora catalogue window complete: 2 pages\n-> 1000 listings seen', '')
         self.assertEqual(self.run_sweep(result), (True, True))
 
     def test_partial_or_failed_runs_release_lease_without_success_heartbeat(self):
         for code, output in ((1, '-> 500 listings seen'),
                              (0, '-> 500 listings seen'),
-                             (0, 'Sephora catalogue complete: 1 pages\n-> 0 listings seen')):
+                             (0, 'Sephora catalogue window complete: 1 pages\n-> 0 listings seen')):
             with self.subTest(code=code, output=output):
                 self.assertEqual(self.run_sweep(subprocess.CompletedProcess([], code, output, '')),
                                  (False, False))

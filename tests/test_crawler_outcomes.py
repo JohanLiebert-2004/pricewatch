@@ -72,6 +72,32 @@ class CrawlerOutcomeTests(unittest.TestCase):
             self.refresh([])
         self.assertEqual(self.health()['status'], 'error')
 
+    def test_sephora_cursor_is_not_saved_ahead_of_failed_product_writes(self):
+        self.conn.execute("INSERT INTO kv(k,v) VALUES ('sephora_refresh_state',?)",
+                          (json.dumps({'next_page': 1}),))
+        self.conn.commit()
+        class Scraper:
+            def refresh_listings(self, state, **kwargs):
+                yield db.ProductRecord('sephora', '1', 'Product', 'https://example.org', 117)
+                state['next_page'] = 2
+        with patch.dict(run.REGISTRY, {'sephora': Scraper}), \
+                patch.object(run.db, 'bulk_upsert', side_effect=RuntimeError('injected write failure')), \
+                self.assertRaises(RuntimeError):
+            run.cmd_refresh(argparse.Namespace(retailer='sephora', budget=1))
+        value = self.conn.execute("SELECT v FROM kv WHERE k='sephora_refresh_state'").fetchone()[0]
+        self.assertEqual(json.loads(value)['next_page'], 1)
+
+    def test_sephora_committed_window_saves_next_page(self):
+        class Scraper:
+            def refresh_listings(self, state, **kwargs):
+                yield db.ProductRecord('sephora', '1', 'Product', 'https://example.org', 117)
+                state['next_page'] = 2
+        with patch.dict(run.REGISTRY, {'sephora': Scraper}):
+            run.cmd_refresh(argparse.Namespace(retailer='sephora', budget=1))
+        value = self.conn.execute("SELECT v FROM kv WHERE k='sephora_refresh_state'").fetchone()[0]
+        self.assertEqual(json.loads(value)['next_page'], 2)
+        self.assertEqual(self.conn.execute("SELECT current_price FROM products WHERE retailer='sephora'").fetchone()[0], 117)
+
     def test_success_records_products(self):
         self.refresh([db.ProductRecord('kmart', '1', 'Product', 'https://example.org', 50)])
         self.assertEqual(self.health()['status'], 'ok')

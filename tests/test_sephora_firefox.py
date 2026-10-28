@@ -82,6 +82,20 @@ class SephoraFirefoxTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'empty'):
             list(scraper.refresh_listings(budget=2))
 
+    def test_windows_resume_and_wrap_without_skipping_failed_page(self):
+        scraper = self.scraper()
+        state = {}
+        scraper.get = MagicMock(return_value=self.page(1))
+        self.assertEqual(len(list(scraper.refresh_listings(budget=1, state=state))), 1)
+        self.assertEqual(state['next_page'], 2)
+        scraper.get = MagicMock(side_effect=Blocked('HTTP 403'))
+        with self.assertRaises(Blocked):
+            list(scraper.refresh_listings(budget=1, state=state))
+        self.assertEqual(state['next_page'], 2)
+        scraper.get = MagicMock(return_value=self.page(2))
+        list(scraper.refresh_listings(budget=1, state=state))
+        self.assertEqual(state['next_page'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()
