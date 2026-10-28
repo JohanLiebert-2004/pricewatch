@@ -1,5 +1,31 @@
 # Pricewatch — shared agent state
 
+## 28 October 2026 — save progress and monetization handoff
+
+- Owner: Codex. Status: Done — summary saved; public-source checkpoint recorded.
+- Owner requests saving all progress. Scope: current session summary,
+  monetization plan, live collector status and verification of published
+  source. Preserve unrelated working-tree changes and all private runtime
+  files; do not register affiliate accounts or enable advertising.
+- Added SESSION_SUMMARY.md with completed website/data work, latest verified
+  collector status, monetization recommendations and concrete next checks.
+- Latest Sephora run succeeded at 11:47:55 UTC: 1,000 observed, 812 retained,
+  111 snapshots, heartbeat 11:47:54 UTC, next_page=13 and no active lease.
+  Timer active/waiting. Full rotation remains unverified.
+- Big W's later scheduled refresh failed at 10:19:15 UTC, so its earlier
+  Firefox success must not be presented as sustained recovery. Recorded as
+  the next investigation; no new retailer requests made during this save.
+- Confirmed latest collector sources already published; 47 modified/new
+  public files matched GitHub. Preserve the additional local source/docs/UI
+  changes in a separate local Git checkpoint without changing the working
+  branch or index. No private runtime material is included in additions.
+- Monetization remains a recorded plan only; no applications or ads enabled.
+- Created local checkpoint branch checkpoint/progress-20261028, commit
+  28b2ff800bec885c50dc13585ccfa231c338a74a, saving 94 public working files.
+  Working branch remains master; default index and unrelated edits unchanged.
+  Current checkpoint differs from published master in additional earlier
+  source/docs/UI work; do not reset, pull over it, or blindly deploy it.
+
 ## 28 October 2026 — Sephora Firefox laptop collection
 
 - Owner: Codex. Status: Done — enabled and first rolling window verified.
