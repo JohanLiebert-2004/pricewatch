@@ -2,7 +2,7 @@
 
 ## 28 October 2026 — standard Firefox comparison
 
-- Owner: Codex. Status: Big W Firefox enabled; other failing retailers under assessment.
+- Owner: Codex. Status: Done — Big W enabled; other blocked-retailer checks complete.
 - Owner requests a standard Firefox test on the laptop. Scope: one bounded
   same-product browser test and diagnostic notes. Isolated profile, ordinary
   WebDriver settings, existing user browser untouched, stop on refusal.
@@ -28,10 +28,25 @@
 - Owner additionally requests Firefox tests for other failing retailers.
   Scope expanded to current health assessment and bounded serial standard-
   Firefox tests; only enable another transport after usable data is verified.
+- Current health records identify QBD and Sephora as the remaining blocked
+  retailers. JB Hi-Fi completed successfully at 08:22 UTC (2,500 observed,
+  1,582 retained); Chemist Warehouse has a successful 08:08 UTC observation
+  and is still collecting. No transport changes for those healthy retailers.
+- QBD: standard Firefox product navigation HTTP 200; existing parser produced
+  a $16.95 record (title Here Kitty for the previously tested good-dog URL;
+  product identity not verified). Its configured sitemap then returned HTTP
+  403. Stopped immediately and closed browser, no further QBD requests or
+  database writes. Do not claim full collection works or enable a new QBD job.
+- Sephora: standard Firefox homepage HTTP 200; one same-origin browser fetch
+  to the existing API with X-Platform: Web and X-Site-Country: AU returned
+  HTTP 200. One-product response parsed into one record ($117). No identity
+  overrides, retries or challenge handling. Browser closed. This is a bounded
+  API success, not a full sweep; Sephora transport/timers remain unchanged.
+- Source: Big W Firefox implementation published as d1fede46f7c628673b07e10d6f53865acf9f0abe.
 
 ## 28 October 2026 — restore Big W laptop collection
 
-- Owner: Codex. Status: Job fix deployed; collection still blocked externally.
+- Owner: Codex. Status: Job fix deployed; superseded by successful Firefox checks above.
 - Owner confirms the same LEGO Mini Orchid URL opens normally in the laptop
   browser and requests a fix. Inspect installed client, scheduling and
   supported standard-browser collection options. Scope: Big W transport and
