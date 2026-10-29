@@ -15,18 +15,20 @@
   }
 
   async function confirmWatch() {
-    if (!confirmation || !apiUrl || !anonKey) return;
+    if (!confirmation) return;
     try {
-      const response = await fetch(`${apiUrl}/rest/v1/rpc/confirm_watch`, {
+      const response = await fetch(`${apiUrl || ""}/rest/v1/rpc/confirm_watch`, {
         method: "POST",
-        headers: {apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json"},
+        headers: {"Content-Type": "application/json", ...(anonKey ? {apikey: anonKey, Authorization: `Bearer ${anonKey}`} : {})},
         body: JSON.stringify({p_token: confirmation})
       });
       const confirmed = response.ok && await response.json();
       showConfirmation(confirmed
         ? "Your price alert is confirmed. We’ll email you when the target price is reached."
         : "This confirmation link is no longer active. It may already be confirmed or cancelled.", confirmed);
-      history.replaceState({}, "", location.pathname);
+      const clean = new URL(location.href);
+      clean.searchParams.delete("confirm");
+      history.replaceState({}, "", clean.pathname + clean.search + clean.hash);
     } catch (_) {
       showConfirmation("We couldn’t confirm that alert. Please try the link again shortly.", false);
     }
@@ -38,7 +40,7 @@
     form.dataset.confirmationReady = "true";
     const button = form.querySelector("button[type=submit]");
     if (button) button.textContent = "Send confirmation email";
-    const note = form.nextElementSibling;
+    const note = form.parentElement.querySelector(".watchnote");
     if (note && note.classList.contains("watchnote")) {
       note.textContent = "Confirm the email we send before this alert activates. No account needed; unsubscribe any time.";
     }

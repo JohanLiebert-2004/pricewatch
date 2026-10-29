@@ -26,6 +26,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
 <script defer src="/_vercel/insights/script.js"></script>
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="theme-color" content="#ffffff"><script defer src="/pwa.js"></script>
+<link rel="stylesheet" href="/shopping.css">
+<script src="/shopping.js"></script>
 </head>
 <body>
 <!-- Google Tag Manager (noscript) -->
@@ -35,7 +37,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <nav class="topnav"><div class="wrap navrow">
   <a class="logo" href="index.html">Deal<em>watch</em></a>
-  <div class="navlinks">
+  <div class="navlinks"><a href="/alerts.html#shopping">My shopping</a>
     <a href="index.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.58a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.82Z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/></svg>Deals</a>
     <a href="catalogue.html" class="active"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Catalogue</a>
     <a href="clearance.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>Clearance</a>
@@ -50,6 +52,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </div></header>
 
 <main class="wrap">
+  <div class="shopping-tools"><a class="shopping-button" href="/alerts.html#shopping">My wishlist &amp; saved searches</a><a class="shopping-button" href="/alerts.html#keyword-tools">Create keyword alert</a></div>
   <div class="barlabel">Search the Catalogue</div>
   <form class="pricebar" id="qbar">
     <input type="search" id="q" placeholder="name or SKU — e.g. air fryer"
@@ -81,6 +84,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </select>
   </div>
   <p class="note" id="discount-note">Discounts compare the current price with the listed RRP. Products without a valid discount appear last.</p>
+  <div class="shopping-tools"><button type="button" class="shopping-button" id="save-search">Save these filters</button></div>
   <div class="total" id="total"></div>
   <div id="list"><div class="empty">Curating the catalogue…</div></div>
   <button class="more" id="more" hidden>Show 50 more</button>
@@ -275,6 +279,7 @@ async function loadPage(reset){
         ${p.brand?`<span>${esc(p.brand)}</span>`:''}
         ${p.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
       </div>
+      ${DealwatchShopping.button(p)}
     </div>
     <div class="price">
       <div class="now">${money(p.current_price)}</div>
@@ -351,6 +356,29 @@ document.getElementById("qclear").addEventListener("click", ()=>{
   document.getElementById("q").value = "";
   chips();
   loadPage(true);
+});
+
+// Restore saved filters before issuing the first product request.
+const savedParams=new URLSearchParams(location.search);
+q=(savedParams.get('q')||'').slice(0,100);
+selRetailers=new Set((savedParams.get('retailers')||'').split(',').filter(r=>Object.hasOwn(RETAILER_LABEL,r)));
+selCats=new Set((savedParams.get('cats')||'').split(',').filter(c=>CATS.some(x=>x[0]===c&&c!=='all')));
+try{selSubcats=new Set(JSON.parse(savedParams.get('subcats')||'[]').filter(c=>typeof c==='string').slice(0,20));}catch(_){selSubcats=new Set();}
+for(const key of ['pmin','pmax']){
+  const raw=savedParams.get(key),n=raw===null?null:Number(raw);
+  if(n!==null&&Number.isFinite(n)&&n>=0&&n<=100000){if(key==='pmin')pmin=n;else pmax=n;}
+}
+if(pmin!==null&&pmax!==null&&pmin>pmax)pmin=pmax=null;
+if(Object.hasOwn(SORT_ORDER,savedParams.get('sort')))sort=savedParams.get('sort');
+document.getElementById('q').value=q;
+document.getElementById('pmin').value=pmin??'';
+document.getElementById('pmax').value=pmax??'';
+document.getElementById('sort').value=sort;
+document.getElementById('save-search').addEventListener('click',()=>{
+  const params=new URLSearchParams({q,retailers:[...selRetailers].join(','),cats:[...selCats].join(','),subcats:JSON.stringify([...selSubcats]),sort});
+  if(pmin!==null)params.set('pmin',pmin);if(pmax!==null)params.set('pmax',pmax);
+  const label=[q||'Catalogue',selectedRetailerLabel(),[...selCats].join(', '),pmin!==null||pmax!==null?`$${pmin??0}–${pmax??'any'}`:''].filter(Boolean).join(' · ');
+  try{DealwatchShopping.saveSearch('/catalogue.html',params,label);}catch(error){alert(error.message);}
 });
 
 // Product results must not wait for optional filter statistics.

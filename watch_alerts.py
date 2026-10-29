@@ -78,6 +78,9 @@ def send_watch_alerts(conn) -> int:
     api_key, from_addr = _config()
     if not api_key or not from_addr:
         return 0
+    # Keyword subscriptions share the existing confirmed-email sender and schedule.
+    import keyword_alerts
+    _, keyword_sent = keyword_alerts.send_keyword_alerts(conn)
     confirmations = send_watch_confirmations(conn)
     if confirmations:
         print(f"resend: {confirmations} confirmation email(s) sent")
@@ -90,7 +93,7 @@ def send_watch_alerts(conn) -> int:
              AND p.current_price <= w.target_price
            ORDER BY w.created_at LIMIT 20""").fetchall()
     if not rows:
-        return 0
+        return keyword_sent
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     sent = 0
     with httpx.Client(timeout=15) as client:
@@ -116,7 +119,7 @@ def send_watch_alerts(conn) -> int:
             else:
                 print(f"  ! resend send failed ({response.status_code}): {response.text[:200]}")
                 break
-    return sent
+    return sent + keyword_sent
 
 
 def test_message(to_addr: str):

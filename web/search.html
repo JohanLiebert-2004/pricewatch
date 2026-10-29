@@ -26,6 +26,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
 <script defer src="/_vercel/insights/script.js"></script>
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="theme-color" content="#ffffff"><script defer src="/pwa.js"></script>
+<link rel="stylesheet" href="/shopping.css">
+<script src="/shopping.js"></script>
 </head>
 <body>
 <!-- Google Tag Manager (noscript) -->
@@ -35,7 +37,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <nav class="topnav"><div class="wrap navrow">
   <a class="logo" href="index.html">Deal<em>watch</em></a>
-  <div class="navlinks">
+  <div class="navlinks"><a href="/alerts.html#shopping">My shopping</a>
     <a href="index.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.58a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.82Z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/></svg>Deals</a>
     <a href="catalogue.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Catalogue</a>
     <a href="clearance.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>Clearance</a>
@@ -51,11 +53,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </div></header>
 
 <main class="wrap">
+  <div class="shopping-tools"><a class="shopping-button" href="/alerts.html#shopping">My wishlist &amp; saved searches</a><a class="shopping-button" href="/alerts.html#keyword-tools">Create keyword alert</a></div>
   <form class="search" id="f">
     <input type="search" id="q" placeholder="Product name or SKU — e.g. air fryer, 43549788"
            autocomplete="off" autofocus>
     <button class="go" type="submit">Search</button>
   </form>
+  <div class="shopping-tools"><button class="shopping-button" type="button" id="save-search">Save this search</button><a class="shopping-button" id="search-keyword-alert" href="/alerts.html#keyword-tools">Alert me about these keywords</a></div>
   <div class="hint">matches product titles, retailer SKUs and barcodes across the current catalogue</div>
   <div class="scan-tools"><button class="scan-btn" id="scan" type="button" aria-controls="scanner" aria-expanded="false">Scan barcode</button><span>Use your phone camera in-store, or enter the number below.</span></div>
   <div class="scanner" id="scanner" data-state="starting" hidden>
@@ -89,7 +93,7 @@ const money = n => "$"+Number(n).toFixed(2);
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse", booktopia:"Booktopia", qbd:"QBD Books", ikea:"IKEA"};
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const IMG_PROXY = "/img";  // same-origin OCI image cache
+const IMG_PROXY = "https://159-13-59-184.sslip.io/img";  // direct OCI image cache avoids Vercel CDN requests
 function thumbSrc(u){
   if(u.includes("cdn.shopify.com")) u = u + (u.includes("?")?"&":"?") + "width=200";
   else if(u.includes("JPEG_1000x1000")) u = u.replace("JPEG_1000x1000","JPEG_300x300");
@@ -113,6 +117,7 @@ async function search(q){
   const list = document.getElementById("list");
   list.innerHTML = skeletonHtml();
   // PostgREST or= syntax breaks on , ( ) — strip them; * are wildcards
+  document.getElementById("search-keyword-alert").href="/alerts.html?q="+encodeURIComponent(q)+"#keyword-tools";
   const safe = q.replace(/[,()*]/g, " ").trim();
   if(!safe){ list.innerHTML = `<div class="empty">Enter something to search.</div>`; return; }
   const pat = `*${safe.split(/\s+/).join("*")}*`;
@@ -156,6 +161,7 @@ async function search(q){
         ${p.brand?`<span>${esc(p.brand)}</span>`:''}
         ${p.is_marketplace?'<span class="pill mkt">marketplace</span>':''}
       </div>
+      ${DealwatchShopping.button(p)}
     </div>
     <div class="price">
       <div class="now">${money(p.current_price)}</div>
@@ -178,6 +184,12 @@ document.getElementById("f").addEventListener("submit", e=>{
       body: JSON.stringify({p_term: q.trim().slice(0,60)})
     }).catch(()=>{});
   }
+});
+
+document.getElementById("save-search").addEventListener("click",()=>{
+  const q=document.getElementById("q").value.trim();
+  if(!q){document.getElementById("q").focus();return;}
+  try{DealwatchShopping.saveSearch('/search.html',new URLSearchParams({q}),q);}catch(error){alert(error.message);}
 });
 
 let scanStream = null, scanFrame = null, zxingReader = null, zxingLoad = null;

@@ -1,0 +1,21 @@
+.shopping-button{font:inherit;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--hair);border-radius:9px;padding:9px 12px;background:var(--card);color:var(--ink);line-height:1.4;text-decoration:none;display:inline-block}
+.shopping-button:hover{border-color:var(--ink)}
+.shopping-button:focus-visible{outline:2px solid var(--flag);outline-offset:3px}
+.shopping-button[aria-pressed=true]{background:var(--soft);color:var(--deal)}
+.shopping-button:disabled{opacity:.6;cursor:default}
+.shopping-tools{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.shopping-section{margin:28px 0;padding:22px;background:var(--card);border:1px solid var(--hair);border-radius:16px}
+.shopping-section h2{margin-top:0;font-size:21px}
+.shopping-section p{line-height:1.7;color:var(--muted);font-size:13px}
+.shopping-row{display:flex;justify-content:space-between;gap:14px;align-items:center;border-top:1px solid var(--hair);padding:14px 0}
+.shopping-row>div{min-width:0;overflow-wrap:anywhere}
+.shopping-row a{font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.shopping-row p{margin:5px 0 0}.shopping-row button{flex-shrink:0}
+.shopping-form{max-width:720px}.shopping-form label{display:block;font-size:13px;font-weight:600}
+.shopping-form input:not([type=checkbox]){display:block;width:100%;box-sizing:border-box;font:inherit;padding:11px;border:1px solid var(--hair);border-radius:8px;background:var(--paper);color:var(--ink);margin:7px 0 14px}
+.shopping-form fieldset{border:1px solid var(--hair);border-radius:10px;padding:12px;margin:16px 0}.shopping-form legend{font-size:13px}
+.store-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px}.store-options label{font-weight:400}
+.shopping-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.shopping-notice{padding:14px;border:1px solid var(--hair);border-radius:9px;margin-bottom:16px}
+#shopping-status{font-size:13px;color:var(--ink);padding:10px 0}
+@media(max-width:540px){.shopping-section{padding:16px}.shopping-fields{grid-template-columns:1fr}.shopping-row{flex-wrap:wrap}.shopping-row>div{flex-basis:100%}}

@@ -81,6 +81,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .historytable table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px;text-align:left}
   .historytable th,.historytable td{padding:9px 6px;border-top:1px solid var(--hair)}
   .historytable th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .price-context{margin-top:16px;padding:16px 20px;background:var(--card);border:1px solid var(--hair);border-radius:16px;line-height:1.6}
+  .price-context p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .target-shortcuts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .target-shortcuts button{font:inherit;font-size:12px;cursor:pointer;padding:8px 12px;border:1px solid var(--hair);border-radius:999px;background:var(--card);color:var(--ink)}
   .watchpanel{
     background:var(--card);border:1px solid var(--hair);border-radius:16px;
     padding:18px 20px 20px;margin-top:16px;box-shadow:var(--shadow);
@@ -119,6 +123,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
   <script defer src="/_vercel/insights/script.js"></script>
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="theme-color" content="#ffffff"><script defer src="/pwa.js"></script>
+<link rel="stylesheet" href="/shopping.css">
+<script src="/shopping.js"></script>
 </head>
 <body>
 <!-- Google Tag Manager (noscript) -->
@@ -128,7 +134,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <nav class="topnav"><div class="wrap navrow">
   <a class="logo" href="index.html">Deal<em>watch</em></a>
-  <div class="navlinks">
+  <div class="navlinks"><a href="/alerts.html#shopping">My shopping</a>
     <a href="index.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.58a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.82Z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/></svg>Deals</a>
     <a href="catalogue.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Catalogue</a>
     <a href="clearance.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>Clearance</a>
@@ -167,7 +173,7 @@ const money = n => "$"+Number(n).toFixed(2);
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse", booktopia:"Booktopia", qbd:"QBD Books", ikea:"IKEA"};
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const IMG_PROXY = "/img";  // same-origin OCI image cache
+const IMG_PROXY = "https://159-13-59-184.sslip.io/img";  // direct OCI image cache avoids Vercel CDN requests
 function thumbSrc(u){
   if(u.includes("cdn.shopify.com")) u = u + (u.includes("?")?"&":"?") + "width=300";
   else if(u.includes("JPEG_1000x1000")) u = u.replace("JPEG_1000x1000","JPEG_300x300");
@@ -181,6 +187,50 @@ function asOf(iso){
   return d.toLocaleDateString("en-AU", {day:"numeric", month:"short", year:"numeric"});
 }
 
+
+// Use only available observations; a first sighting is not evidence of a bargain.
+function priceContext(rows, currentPrice){
+  const valid = rows.filter(row => row.price !== null && row.price !== "" &&
+    Number.isFinite(Number(row.price)) && Number(row.price) >= 0 &&
+    Number.isFinite(Date.parse(row.scraped_at)));
+  const current = currentPrice === null || currentPrice === "" ? NaN : Number(currentPrice);
+  if(!valid.length || !Number.isFinite(current) || current < 0) return null;
+  const low = Math.min(current, ...valid.map(row=>Number(row.price)));
+  const dates = new Set(valid.map(row=>new Date(row.scraped_at).toISOString().slice(0,10)));
+  const sufficient = dates.size >= 2;
+  const difference = Math.round((current-low)*100)/100;
+  return {low, sufficient, difference,
+    title: !sufficient ? "Still building price history" : difference === 0
+      ? "At the lowest price in available history"
+      : `${money(difference)} above the lowest price in available history`,
+    detail: !sufficient
+      ? "We need observations on more than one day before judging this price against its history."
+      : `Lowest observed: ${money(low)}. This compares recorded prices at this retailer, excluding delivery. Available history may not include every past price.`};
+}
+
+// A change-only history must carry the price active at the window boundary.
+function windowLow(rows, currentPrice, checkedAt, cutoff){
+  const points = rows.filter(row=>row.price !== null && row.price !== "" &&
+    Number.isFinite(Number(row.price)) && Number(row.price) >= 0 &&
+    Number.isFinite(Date.parse(row.scraped_at)))
+    .map(row=>({time:Date.parse(row.scraped_at),price:Number(row.price)}))
+    .sort((a,b)=>a.time-b.time);
+  const end = Date.parse(checkedAt);
+  if(!Number.isFinite(end) || end < cutoff) return null;
+  const observed = points.filter(point=>point.time <= end);
+  const boundary = observed.filter(point=>point.time <= cutoff).at(-1);
+  const prices = observed.filter(point=>point.time >= cutoff).map(point=>point.price);
+  if(boundary) prices.push(boundary.price);
+  if(currentPrice !== null && currentPrice !== "" && Number.isFinite(Number(currentPrice)) && Number(currentPrice) >= 0)
+    prices.push(Number(currentPrice));
+  return prices.length ? Math.min(...prices) : null;
+}
+
+function setWatchTarget(value){
+  const field = document.getElementById("wtarget");
+  field.value = Number(value).toFixed(2);
+  field.focus();
+}
 
 function rememberViewed(p){
   try{
@@ -345,7 +395,7 @@ async function cancelWatch(){
   }
 }
 
-function watchPanelHtml(p){
+function watchPanelHtml(p, context){
   const productId = p.product_id;
   if(cancelToken){
     return `<div class="watchpanel">
@@ -383,6 +433,10 @@ function watchPanelHtml(p){
       <input type="number" id="wtarget" placeholder="target $" min="0" step="0.01" required>
       <button type="submit" id="wbtn">Watch</button>
     </form>
+    <div class="target-shortcuts" role="group" aria-label="Suggested alert targets">
+      ${context && context.sufficient ? `<button type="button" onclick="setWatchTarget(${context.low})">Recorded low: ${money(context.low)}</button>` : ""}
+      ${Number(p.current_price) > 0 ? `<button type="button" onclick="setWatchTarget(${(Number(p.current_price)*0.9).toFixed(2)})">10% below current: ${money(Number(p.current_price)*0.9)}</button>` : ""}
+    </div>
     <div class="watchnote">One email, the first time the price drops to your target
       or below. No account needed — unsubscribe from the link in that email.</div>
     <div id="wresult"></div>
@@ -420,8 +474,9 @@ async function load(){
   const prices = rows.map(r=>r.price);
   const allLow = Math.min(...prices), allHigh = Math.max(...prices);
   const cutoff = Date.now() - 90*24*60*60*1000;
-  const recent = rows.filter(r=>new Date(r.scraped_at).getTime() >= cutoff).map(r=>r.price);
-  const ninetyLow = recent.length ? Math.min(...recent) : allLow;
+  const ninetyLow = windowLow(rows, p.current_price,
+    p.price_updated_at || p.scraped_at, cutoff);
+  const context = priceContext(rows, p.current_price);
   const store = RETAILER_LABEL[p.retailer] || p.retailer;
   const trackingSince = asOf(rows[0].scraped_at);
   const lastChecked = asOf(p.price_updated_at || rows[rows.length - 1].scraped_at);
@@ -474,6 +529,7 @@ async function load(){
           ? `<div class="was">${money(p.current_rrp)}</div>` : ""}
         <a href="${esc(p.url)}" target="_blank" rel="noopener">View at ${esc(store)}</a>
         <a class="reportlink" href="${reportHref}">Report an incorrect price</a>
+        ${DealwatchShopping.button(p)}
       </div>
     </div>
 
@@ -483,10 +539,11 @@ async function load(){
       <div class="stat"><b>${money(p.current_price)}</b><span>current price</span></div>
       <div class="stat"><b>${money(allLow)}</b><span>lowest recorded price</span></div>
       <div class="stat"><b>${money(allHigh)}</b><span>highest recorded price</span></div>
-      <div class="stat"><b>${money(ninetyLow)}</b><span>90-day low</span></div>
+      <div class="stat"><b>${ninetyLow === null ? "—" : money(ninetyLow)}</b><span>90-day low</span></div>
     </div>
 
-    ${watchPanelHtml(p)}
+    ${context ? `<aside class="price-context" aria-label="Price assessment"><strong>${esc(context.title)}</strong><p>${esc(context.detail)}</p></aside>` : ""}
+    ${watchPanelHtml(p, context)}
     <section class="related" id="related" hidden></section>
     <section class="hot-section" id="aiSimilar" aria-labelledby="ai-similar-title">
       <div class="hot-head"><div><h2 id="ai-similar-title">You might also like</h2><p>AI-suggested similar products. <a href="/how-it-works.html#ai-similar">How this works</a></p></div></div>

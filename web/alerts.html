@@ -11,7 +11,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <script defer src="/analytics.js"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>My Alerts — Dealwatch</title>
+<title>My Shopping &amp; Alerts — Dealwatch</title>
 <meta name="description" content="Price watches you've set on this device.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B7%3C/text%3E%3C/svg%3E">
@@ -35,6 +35,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
   <script defer src="/_vercel/insights/script.js"></script>
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="theme-color" content="#ffffff"><script defer src="/pwa.js"></script>
+<link rel="stylesheet" href="/shopping.css">
+<script src="/shopping.js"></script>
 </head>
 <body>
 <!-- Google Tag Manager (noscript) -->
@@ -44,7 +46,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <nav class="topnav"><div class="wrap navrow">
   <a class="logo" href="index.html">Deal<em>watch</em></a>
-  <div class="navlinks">
+  <div class="navlinks"><a href="/alerts.html#shopping">My shopping</a>
     <a href="index.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.58a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.82Z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/></svg>Deals</a>
     <a href="catalogue.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Catalogue</a>
     <a href="clearance.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>Clearance</a>
@@ -54,13 +56,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <header class="hero compact"><div class="wrap">
   <div class="eyebrow">🔔 price watches · this device only</div>
-  <h1 class="display">My <em>alerts</em></h1>
-  <p class="sub">Every price watch you've set from this browser. We only ever
-    email you once, the first time a price drops to your target — cancel any
-    time from here or from the email itself.</p>
+  <h1 class="display">My <em>shopping</em></h1>
+  <p class="sub">Your wishlist, saved searches and price alerts. Saved lists stay in this browser; confirmed email alerts keep running until cancelled.</p>
 </div></header>
 
 <main class="wrap">
+  <nav class="shopping-tools" aria-label="Shopping sections" id="shopping"><a class="shopping-button" href="#wishlist-items">Wishlist</a><a class="shopping-button" href="#saved-searches">Saved searches</a><a class="shopping-button" href="#keyword-tools">Keyword alerts</a><a class="shopping-button" href="#product-watches">Product watches</a></nav>
+  <section class="shopping-section" id="wishlist-items"></section>
+  <section class="shopping-section" id="saved-searches"></section>
+  <section class="shopping-section" id="keyword-tools"></section>
+  <h2 id="product-watches">Product price watches</h2>
   <div id="list"><div class="empty">Loading…</div></div>
 </main>
 
@@ -79,7 +84,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const money = n => "$"+Number(n).toFixed(2);
 const RETAILER_LABEL = {kmart:"Kmart", bigw:"Big W", officeworks:"Officeworks", target:"Target", jbhifi:"JB Hi-Fi", goodguys:"The Good Guys", myer:"Myer", supercheap:"Supercheap Auto", sephora:"Sephora", chemistwarehouse:"Chemist Warehouse", booktopia:"Booktopia", qbd:"QBD Books", ikea:"IKEA"};
-const IMG_PROXY = "/img";
+const IMG_PROXY = "https://159-13-59-184.sslip.io/img";
 function thumbSrc(u){
   if(u.includes("cdn.shopify.com")) u = u + (u.includes("?")?"&":"?") + "width=200";
   else if(u.includes("JPEG_1000x1000")) u = u.replace("JPEG_1000x1000","JPEG_300x300");
