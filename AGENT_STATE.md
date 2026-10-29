@@ -1,5 +1,38 @@
 # Pricewatch — shared agent state
 
+## 29 October 2026 — shopping tools
+
+- Owner: Codex. Status: Done — deployed and live checks passed.
+- Added keyword alerts (multiple stores, price range, minimum RRP discount,
+  excluded words), email confirmation/cancellation and per-product lower-price
+  deduplication. Reuses existing GitHub hourly detect job and Resend secrets;
+  credentials were not copied to another host and no new sender was created.
+- Added browser-local wishlists with current catalogue prices, saved searches
+  restoring catalogue filters/sorting, and My shopping entry points.
+- Deployed earlier price assessment/target shortcuts and fixed the existing
+  product confirmation enhancement for same-origin OCI API access.
+- Source: b12623d360f18418b7b53ee287c131184f2ec1f1, published to master using
+  an isolated worktree. Original working tree/branch/index preserved.
+- Additive scripts/shopping_features.sql applied as postgres; no public-feed
+  rebuild. Initial unnecessary FK waited on products; cancelled our DDL,
+  removed that dependency and applied with bounded lock/statement timeouts.
+- Website release: /var/www/dealwatch/releases/shopping-20261029T035052Z.
+  Previous release: /var/www/dealwatch/releases/catalogue-20261028T064742Z.
+  SSR template backup: /var/backups/dealwatch/shopping-20261029T035052Z.
+  Preserve this backup and prior release for rollback. Host manifest at
+  /var/tmp/dealwatch-shopping-release.json. Live homepage patched from the
+  current disk baseline; unrelated local homepage changes were not deployed.
+- Verified: 103 Python tests, shopping browser flow, price-context/analytics
+  checks, changed inline scripts, Python compilation and Terraform fmt/validate.
+  PostgreSQL anon lifecycle/private-table/input tests passed and rolled back.
+  Live actual product kmart/110069073 saved, fetched current price and removed;
+  keyword form/API validation, desktop/mobile overflow and no script errors.
+  Apex/www, scripts, robots, sitemap and homepage_bootstrap passed. The summary
+  API initially timed out under load and returned 200 on the final retry.
+- Hourly workflow run 40814475631 uses the new commit. No real subscriptions
+  were registered by QA; recipient inbox delivery was not tested.
+
+
 ## 28 October 2026 — save progress and monetization handoff
 
 - Owner: Codex. Status: Done — summary saved; public-source checkpoint recorded.
