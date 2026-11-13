@@ -53,7 +53,10 @@ LOG_KEEP_LINES = 2000
 # a 30min timer instead - same ~200 items/hour throughput, but each tunnel
 # session is open for a quarter of the time, cutting the exposure window
 # rather than trying to make one long-lived connection more resilient.
-CRAWL_BATCH = "100"
+# November repair: the current transport waits in both its retailer and base
+# layers. Actual 100-URL runs took 37-39 minutes, overrunning the 30-minute
+# timer. Keep all request delays and use a smaller, resumable queue window.
+CRAWL_BATCH = "50"
 TUNNEL_KEY = os.environ.get(
     "TUNNEL_SSH_KEY",
     os.path.expanduser("~/.ssh/pricewatch_tunnel_local_ed25519"))

@@ -2,7 +2,7 @@
 
 The Linux PC runs Big W, Chemist Warehouse, JB Hi-Fi and Sephora collectors,
 plus monitoring outside both Oracle VMs. The standalone daily database backup
-has its own runtime and credentials; see `LOCAL-BACKUP.md` in the main working copy.
+has its own runtime and credentials; see `infra/oci/LOCAL-BACKUP.md` in the main working copy.
 
 ## Runtime layout
 
@@ -75,15 +75,33 @@ two-page production run completed at 10:11:49 UTC: 1,000 listings, 18 changed
 price snapshots, committed cursor and fresh heartbeat. JB's bulk endpoint
 returned no listings, including at page one; a separate public product check
 returned HTTP 429. Further JB requests were stopped; no replacement identity,
-transport or synthetic success marker was used.
+transport or synthetic success marker was used. Re-enabling persistent timers
+caused an unintended catch-up run; both refused stores were stopped again.
+Their shared `collector_pause_until:<retailer>` keys now prevent requests on
+the PC and current CI code until 14 November at 10:20 UTC (18:20 Perth).
+Timers remain enabled; the guard fails visibly before creating a retailer
+client. The JB scheduled run at 12:16 UTC confirmed this in production.
 
 The watchdog check-only run detected the stale collection workflow and Kmart
 VM heartbeat while confirming the public service and both SSH endpoints. A
 read-only GitHub diagnostic run succeeded, proving Actions and the database
-tunnel still work; this does not prove the hourly scheduler has recovered.
+tunnel still work. Another scheduled collector workflow started at 10:24 UTC
+but was cancelled; the watchdog correctly continues to flag unsuccessful
+collection workflows and the stale Kmart VM heartbeat. Neither issue is
+claimed repaired by this PC runtime change.
 
 Big W resumed past the retired category and checked 1,440 listings, storing
 779 products and 563 changed-price snapshots, before an HTTP 403 at
 10:16:14 UTC. It stopped and skipped product enrichment; the success heartbeat
 was correctly left unchanged. This is partial data recovery, not a completed
 healthy sweep. JB and Big W access refusals remain external limitations.
+
+Chemist Warehouse completed three 100-URL batches at 10:42, 11:20 and 11:59
+UTC, storing 85, 85 and 88 products and updating its real success heartbeat.
+The runs took 37-39 minutes with the current two layers of request delays.
+Future batches use 50 URLs to fit the existing thirty-minute timer; all
+request delays are preserved. An already-running 100-URL batch is allowed to
+finish. Sephora continued succeeding through 12:10 UTC and persisted its
+page cursor. All five timers and the independent backup timer are enabled,
+with user lingering enabled. The standalone backup service retains its
+verified success and its next morning schedule.
