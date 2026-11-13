@@ -1,5 +1,55 @@
 # Pricewatch — shared agent state
 
+## 13 November 2026 — Linux PC collectors and watchdog repair
+
+- Owner: Codex. Status: Done for the missing-runtime repair. Big W and
+  JB Hi-Fi access remain blocked by their retailers; no healthy sweep is
+  claimed for those stores.
+- Restored source and a separate Python virtual environment under
+  ~/.local/share/pricewatch-runtime; private environment outside Git (0600),
+  existing forwarding-only key reused. ~/pricewatch links to durable source.
+  No private keys, dumps or environment contents copied into source control.
+- Installed five user service/timer pairs with valid paths, deadlines,
+  private files and process-group cleanup. All five timers plus the separate
+  backup timer are enabled; user lingering remains enabled. Original units
+  saved privately in repair-20261113T100417Z under the runtime state directory.
+- Shared PostgreSQL session locks prevent PC/CI overlap for the four locally
+  owned retailers. Real two-session exclusion/release verified. The shared
+  pause keys for Big W/JB prevent requests until 14 November 10:20 UTC
+  (18:20 Perth); real guard checks passed at 12:20 UTC. No false heartbeat.
+- Sephora's HTTP 422 identified an invalid Accept-Language header; explicit
+  en-AU fixes its AU API requests through ordinary Firefox. Real two-page
+  runs succeeded, including 1,000 listings/18 changed-price snapshots at
+  10:11 UTC; latest verified heartbeat 12:10:11 UTC, saved next_page=3.
+- Big W now skips retired-category 404s within the request budget. Its run
+  checked 1,440 listings, kept 779 products and saved 563 changed-price
+  snapshots before an HTTP 403. It stopped and skipped enrichment. JB's
+  page-one feed returned no listings and subsequent access returned 429/403.
+  An unintended persistent-timer catch-up was stopped; the shared pause now
+  prevents PC and current CI attempts before retailer client creation.
+- Chemist Warehouse completed three real 100-URL batches (85,85,88 stored),
+  with fresh heartbeats at 10:42,11:20,11:59 UTC. Observed 37-39 minute runs
+  overran the thirty-minute timer; future windows use 50 URLs with every
+  existing request delay retained. The active 100-URL run may finish normally.
+- Watchdog works independently of OCI, includes Sephora, checks crawl.yml,
+  both SSH endpoints and the public site/API. Check-only sends nothing;
+  scheduled delivery now acknowledges only Telegram-confirmed alerts and
+  retries failures. Repeated cancelled workflows are reported as unhealthy.
+- Known separate failures remain visible: Kmart VM sweeps time out / its
+  heartbeat is stale, and collector CI runs have been cancelled. A new
+  scheduled CI run appeared at 10:24 UTC but was cancelled. Read-only Actions
+  diagnostic 43407282087 succeeded; scheduler liveness alone is not freshness.
+- The standalone local backup is unchanged: verified 1,745,831,840-byte dump
+  still present, daily timer active and previous service result success.
+- Source published through c0f69b1 on origin/master via isolated worktree
+  .qa-tools/linux-pc-collectors-publish, branch fix/linux-pc-collectors.
+  Root branch/index and unrelated dirty work preserved; focused files mirrored.
+- Verified: isolated suite 108 tests, root suite 125 tests, Python compilation,
+  Terraform fmt/validate and installed systemd units. Private runtime evidence:
+  ~/.local/state/pricewatch-runtime/verification-20261113.json.
+- Details: infra/linux/README.md. Next: observe refused stores after the pause;
+  diagnose Kmart/CI collection failures separately without bypassing refusals.
+
 ## 13 November 2026 — Black Friday hub
 
 - Owner: Codex. Status: Done — deployed and live checks passed.
