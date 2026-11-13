@@ -23,7 +23,8 @@ class SephoraFirefoxTests(unittest.TestCase):
         url = API + '?page[size]=500'
         self.assertEqual(scraper._request(url), (200, '{}'))
         scraper.session.fetch.assert_called_once_with(
-            url, headers={'X-Platform': 'Web', 'X-Site-Country': 'AU'})
+            url, headers={'X-Platform': 'Web', 'X-Site-Country': 'AU',
+                          'Accept-Language': 'en-AU'})
         scraper.session.get.assert_not_called()
 
     def test_warmup_navigates_before_api_and_stops_on_refusal(self):

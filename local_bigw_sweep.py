@@ -90,8 +90,11 @@ def _run_sweep(env, f):
                 cwd=ROOT, env=env, capture_output=True, text=True,
                 timeout=5400)
             all_ok = all_ok and r.returncode == 0
-            tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
-            log(f, f"{name}: exit {r.returncode} | " + " / ".join(tail))
+            log(f, f"{name}: exit {r.returncode}")
+            for line in r.stdout.strip().splitlines()[-12:]:
+                log(f, line)
+            for line in r.stderr.strip().splitlines()[-2:]:
+                log(f, line)
             failed_refresh = r.returncode != 0 or any(
                 marker in r.stdout for marker in
                 ("BLOCKED mid-refresh", "refresh error after"))

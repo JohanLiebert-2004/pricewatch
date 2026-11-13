@@ -38,7 +38,8 @@ class SephoraScraper(BaseScraper):
     use_proxy = False  # local browser and legacy HTTP both use direct access
 
     # Explicit country headers keep every request on the AU price book.
-    _COUNTRY_HEADERS = {"X-Platform": "Web", "X-Site-Country": "AU"}
+    _COUNTRY_HEADERS = {"X-Platform": "Web", "X-Site-Country": "AU",
+                        "Accept-Language": "en-AU"}
 
     def __init__(self):
         mode = os.environ.get('SEPHORA_BROWSER', '').strip().lower()

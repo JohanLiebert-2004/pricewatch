@@ -19,7 +19,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from db import ProductRecord
-from .base import BaseScraper, Blocked
+from .base import BaseScraper, Blocked, NotFound
 
 # Direct (non-proxy) requests are blocked outright here, so ALL Big W traffic
 # - category listing pages AND product-page crawls - goes through the
@@ -211,12 +211,18 @@ class BigWScraper(BaseScraper):
                     return
                 url = (f"https://www.bigw.com.au{path}"
                        f"?page={page}&perPage={self.per_page}")
+                used += 1
                 try:
                     data = self._next_data(url)
+                except NotFound:
+                    # The published tree can retain a retired category. Do not
+                    # let its 404 permanently starve every category behind it.
+                    state[path] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                    print(f"  {self.name}: category returned 404, skipping {path}")
+                    break
                 except Blocked:
                     _sync()
                     raise
-                used += 1
                 org = (data["props"]["pageProps"].get("results") or {}) \
                     .get("organic") or {}
                 results = org.get("results") or []

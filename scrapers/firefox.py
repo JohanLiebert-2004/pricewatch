@@ -109,7 +109,7 @@ class FirefoxSession:
         self._check_url(url)
         if not self._session:
             raise RuntimeError('Firefox session is closed')
-        if any(key not in ('X-Platform', 'X-Site-Country') for key in headers):
+        if any(key not in ('X-Platform', 'X-Site-Country', 'Accept-Language') for key in headers):
             raise ValueError('Unsupported browser API header')
         self._check_url(self._command('GET', '/url'))
         result = self._command('POST', '/execute/async', {

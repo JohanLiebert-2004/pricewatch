@@ -88,8 +88,11 @@ def _run_sweep(env, f):
              "refresh", "jbhifi", "--budget", REFRESH_BUDGET],
             cwd=ROOT, env=env, capture_output=True, text=True,
             timeout=1800)
-        tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
-        log(f, f"refresh: exit {r.returncode} | " + " / ".join(tail))
+        log(f, f"refresh: exit {r.returncode}")
+        for line in r.stdout.strip().splitlines()[-12:]:
+            log(f, line)
+        for line in r.stderr.strip().splitlines()[-2:]:
+            log(f, line)
         # Exit 0 alone is NOT success: a fully-blocked sweep also exits 0
         # ("BLOCKED mid-refresh (keeping what we got)"). JB Hi-Fi's block
         # is all-or-nothing on request #1 (unlike Big W's Akamai block,

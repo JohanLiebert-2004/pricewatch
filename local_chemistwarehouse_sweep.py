@@ -98,8 +98,11 @@ def _run_sweep(env, f):
              "crawl", "chemistwarehouse", "--batch", CRAWL_BATCH],
             cwd=ROOT, env=env, capture_output=True, text=True,
             timeout=5400)
-        tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
-        log(f, f"crawl: exit {r.returncode} | " + " / ".join(tail))
+        log(f, f"crawl: exit {r.returncode}")
+        for line in r.stdout.strip().splitlines()[-12:]:
+            log(f, line)
+        for line in r.stderr.strip().splitlines()[-2:]:
+            log(f, line)
         # Exit 0 alone is NOT success: a blocked-on-request-#1 batch also
         # exits 0 ("batch done: 0/N products stored"). Only claim the
         # lane - and silence the CI fallback attempt - when real
