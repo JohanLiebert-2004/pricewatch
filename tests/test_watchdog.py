@@ -65,6 +65,18 @@ class WatchdogTests(unittest.TestCase):
             self.assertIsNotNone(watchdog.check_github_actions(io.StringIO()))
         self.assertTrue(get.call_args.args[0].endswith('/actions/workflows/crawl.yml/runs'))
 
+    def test_repeated_cancelled_runs_are_not_reported_healthy(self):
+        with patch.object(watchdog.httpx, 'get') as get:
+            get.return_value.json.return_value = {'workflow_runs': [{
+                'created_at': watchdog.datetime.now(watchdog.timezone.utc).isoformat(),
+                'conclusion': 'cancelled'}] * 5}
+            self.assertIn('did not complete successfully', watchdog.check_github_actions(io.StringIO()))
+
+    def test_empty_catalogue_is_unhealthy(self):
+        with patch.object(watchdog.httpx, 'get') as get:
+            get.return_value.json.return_value = []
+            self.assertIn('empty', watchdog.check_website(io.StringIO())[0])
+
 
 if __name__ == '__main__':
     unittest.main()

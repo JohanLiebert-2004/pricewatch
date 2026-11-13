@@ -103,8 +103,8 @@ def check_github_actions(f):
         if age > GH_STALE_AFTER:
             return f"latest workflow run is {age} old (expected hourly)"
         recent_conclusions = [r["conclusion"] for r in runs if r["conclusion"]]
-        if recent_conclusions and all(c not in ("success", "cancelled") for c in recent_conclusions):
-            return f"last {len(recent_conclusions)} runs all failed: {recent_conclusions}"
+        if recent_conclusions and all(c != "success" for c in recent_conclusions):
+            return f"last {len(recent_conclusions)} runs did not complete successfully: {recent_conclusions}"
         return None
     except Exception as e:
         log(f, f"  github check error: {type(e).__name__}: {e}")
@@ -132,7 +132,18 @@ def check_heartbeats(f):
                 ts = datetime.fromisoformat(row[0])
                 age = datetime.now(timezone.utc) - ts
                 if age > max_age:
-                    problems.append(f"{key}: {age} old (limit {max_age})")
+                    detail = ''
+                    retailer = key.removesuffix('_local_heartbeat').removesuffix('_vm_heartbeat')
+                    health = conn.execute("SELECT v FROM kv WHERE k=%s",
+                                          ('scraper_health:' + retailer,)).fetchone()
+                    if health:
+                        try:
+                            outcome = json.loads(health[0])
+                            if outcome.get('status') in ('blocked', 'error', 'empty'):
+                                detail = f"; last outcome {outcome['status']}: {outcome.get('detail', '')[:300]}"
+                        except (ValueError, TypeError):
+                            pass
+                    problems.append(f"{key}: {age} old (limit {max_age}){detail}")
             conn.close()
     except Exception as e:
         log(f, f"  heartbeat check error: {type(e).__name__}: {e}")
@@ -159,8 +170,10 @@ def check_website(f):
             response = httpx.get('https://dealwatch.com.au' + path, timeout=20,
                                  headers={'User-Agent': 'Dealwatch-Monitor/1.0'})
             response.raise_for_status()
-            if label == 'catalogue API' and not isinstance(response.json(), list):
-                problems.append('catalogue API returned an invalid response')
+            if label == 'catalogue API':
+                data = response.json()
+                if not isinstance(data, list) or not data:
+                    problems.append('catalogue API returned an empty or invalid response')
         except Exception as exc:
             problems.append(f'{label} unavailable: {type(exc).__name__}')
     return problems
