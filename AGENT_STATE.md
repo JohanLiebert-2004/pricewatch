@@ -1,5 +1,28 @@
 # Pricewatch — shared agent state
 
+## 13 November 2026 — Black Friday hub
+
+- Owner: Codex. Status: Done — deployed and live checks passed.
+- Added /black-friday.html with search/category/store/discount/budget/sort,
+  pagination, fresh price verification and failure recovery. Nine sourced
+  early product offers, four official promotions and 24 retailer links.
+- Tracked shortlist checks up to 12 candidates/store against current catalogue
+  price and 36-hour freshness, excludes marketplace and extreme >85% gaps.
+  Manual prices expire after 48 hours without review or their stated end.
+- Five main pages link to the hub; sitemap and service-worker version updated.
+  Existing user edits preserved; release built from the prior live baseline.
+- Verified: 103 Python tests; focused browser integration including stale and
+  mismatched prices, expiry, pagination, filters and API failure/recovery;
+  360/390/768/1440px layout, Python/JS compilation and Terraform fmt/validate.
+- Live 13 Nov 04:04 UTC: 103 offers; all 13 store API paths checked, no script
+  errors. Mobile/desktop, source images, filters, pagination, product history,
+  apex/www, extensionless route, image proxy, sitemap and homepage API passed.
+- Release: /var/www/dealwatch/releases/black-friday-20261113T040411Z.
+  Previous: /var/www/dealwatch/releases/shopping-20261029T035052Z.
+  Rollback manifest: /var/tmp/dealwatch-black-friday-release.json.
+- Maintenance/source notes: BLACK_FRIDAY.md. External manual offers require
+  a new official-source review to keep their prices visible beyond 48 hours.
+
 ## 29 October 2026 — shopping tools
 
 - Owner: Codex. Status: Done — deployed and live checks passed.

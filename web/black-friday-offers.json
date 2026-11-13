@@ -1,0 +1,262 @@
+{
+  "reviewed_at": "2026-11-13T03:50:00Z",
+  "products": [
+    {
+      "id": "dyson-v15-dok",
+      "retailer": "dyson",
+      "title": "Dyson V15 Detect Absolute vacuum + Dok",
+      "category": "home",
+      "price": 789,
+      "reference_price": 1299,
+      "reference_source": "Retailer was price",
+      "url": "https://www.dyson.com.au/dyson-v15-detect-absolute-dok-626412-01",
+      "source_url": "https://www.dyson.com.au/deals",
+      "image_url": "/black-friday-images/dyson-v15.jpg",
+      "terms": "Vacuum and Dok bundle. Confirm delivery and local availability."
+    },
+    {
+      "id": "dyson-airwrap-id",
+      "retailer": "dyson",
+      "title": "Dyson Airwrap i.d. — Ceramic Pink / Rose Gold",
+      "category": "beauty",
+      "price": 599,
+      "reference_price": 849,
+      "reference_source": "Retailer was price",
+      "url": "https://www.dyson.com.au/dyson-airwrap-i-d-tm-multi-styler-and-dryer-601887-01-ceramic-pink-rose-gold",
+      "source_url": "https://www.dyson.com.au/deals",
+      "image_url": "/black-friday-images/dyson-airwrap.jpg",
+      "terms": "Specified colour. Complimentary case personalisation and gift wrapping advertised."
+    },
+    {
+      "id": "jb-dyson-v8",
+      "retailer": "jbhifi",
+      "sku": "894720",
+      "title": "Dyson V8 Cyclone cordless vacuum",
+      "category": "home",
+      "price": 378,
+      "reference_price": 649,
+      "reference_source": "Previous ticket price",
+      "url": "https://jbhi.fi/894720",
+      "source_url": "https://catalogue.jbhifi.com.au/2026/11/12-11-bfb/index.html",
+      "expires_at": "2026-12-02T23:59:00+11:00",
+      "terms": "Teaser catalogue, 12 Nov–2 Dec. Previous ticket price may exceed earlier selling prices.",
+      "image_url": "/black-friday-images/jb-dyson-v8.jpg"
+    },
+    {
+      "id": "jb-beats-studio",
+      "retailer": "jbhifi",
+      "sku": "640446",
+      "title": "Beats Studio Pro ANC wireless headphones",
+      "category": "tech",
+      "price": 264,
+      "reference_price": 479,
+      "reference_source": "Previous ticket price",
+      "url": "https://jbhi.fi/640446",
+      "source_url": "https://catalogue.jbhifi.com.au/2026/11/12-11-bfb/index.html",
+      "expires_at": "2027-01-06T23:59:00+11:00",
+      "terms": "Advertised end date 6 January. Previous ticket price may exceed earlier selling prices."
+    },
+    {
+      "id": "jb-tapo-c410",
+      "retailer": "jbhifi",
+      "sku": "781477",
+      "title": "Tapo C410 2K wire-free security system — 4 pack",
+      "category": "tech",
+      "price": 168,
+      "reference_price": 479,
+      "reference_source": "Previous ticket price",
+      "url": "https://jbhi.fi/781477",
+      "source_url": "https://catalogue.jbhifi.com.au/2026/11/12-11-bfb/index.html",
+      "expires_at": "2026-12-02T23:59:00+11:00",
+      "terms": "Four-camera pack. Previous ticket price may exceed earlier selling prices."
+    },
+    {
+      "id": "jb-garmin-epix",
+      "retailer": "jbhifi",
+      "sku": "652374",
+      "title": "Garmin Epix Pro Gen 2 Sapphire — 42mm Gold",
+      "category": "tech",
+      "price": 677,
+      "reference_price": 1699,
+      "reference_source": "Previous ticket price",
+      "url": "https://jbhi.fi/652374",
+      "source_url": "https://catalogue.jbhifi.com.au/2026/11/12-11-bfb/index.html",
+      "expires_at": "2026-12-09T23:59:00+11:00",
+      "terms": "42mm Gold only. Ends 9 December. Previous ticket price may exceed earlier selling prices."
+    },
+    {
+      "id": "adidas-samba-jr1256",
+      "retailer": "adidas",
+      "title": "adidas Samba OG shoes — Brown, JR1256",
+      "category": "clothing",
+      "price": 120,
+      "reference_price": 200,
+      "reference_source": "Retailer original price",
+      "url": "https://www.adidas.com.au/samba-og-shoes/JR1256.html",
+      "source_url": "https://www.adidas.com.au/black_friday",
+      "image_url": "/black-friday-images/adidas-samba.jpg",
+      "terms": "Selected colour and sizes. Listed sale price; extra cart promotions are not included in this price."
+    },
+    {
+      "id": "adidas-spezial-jr3639",
+      "retailer": "adidas",
+      "title": "adidas Handball Spezial shoes — Blue, JR3639",
+      "category": "clothing",
+      "price": 102,
+      "reference_price": 170,
+      "reference_source": "Retailer original price",
+      "url": "https://www.adidas.com.au/handball-spezial-shoes/JR3639.html",
+      "source_url": "https://www.adidas.com.au/black_friday",
+      "image_url": "/black-friday-images/adidas-spezial.jpg",
+      "terms": "Selected colour and sizes. Listed sale price; extra cart promotions are not included in this price."
+    },
+    {
+      "id": "adidas-tee-gk9641",
+      "retailer": "adidas",
+      "title": "adidas Essentials Embroidered Small Logo Tee — Grey",
+      "category": "clothing",
+      "price": 26.25,
+      "reference_price": 35,
+      "reference_source": "Retailer original price",
+      "url": "https://www.adidas.com.au/essentials-embroidered-small-logo-tee/GK9641.html",
+      "source_url": "https://www.adidas.com.au/black_friday",
+      "image_url": "/black-friday-images/adidas-tee.jpg",
+      "terms": "Selected colour and sizes. Listed sale price; extra cart promotions are not included in this price."
+    }
+  ],
+  "stores": [
+    {
+      "id": "amazon",
+      "name": "Amazon AU",
+      "url": "https://www.amazon.com.au/blackfriday"
+    },
+    {
+      "id": "jbhifi",
+      "name": "JB Hi-Fi",
+      "url": "https://www.jbhifi.com.au/pages/black-friday-sale",
+      "tracked": true
+    },
+    {
+      "id": "goodguys",
+      "name": "The Good Guys",
+      "url": "https://www.thegoodguys.com.au/black-friday-sale",
+      "tracked": true
+    },
+    {
+      "id": "dyson",
+      "name": "Dyson",
+      "url": "https://www.dyson.com.au/deals"
+    },
+    {
+      "id": "samsung",
+      "name": "Samsung",
+      "url": "https://www.samsung.com/au/offer/"
+    },
+    {
+      "id": "lenovo",
+      "name": "Lenovo",
+      "url": "https://www.lenovo.com/au/en/d/deals/black-friday-sale/"
+    },
+    {
+      "id": "breville",
+      "name": "Breville",
+      "url": "https://www.breville.com/en-au"
+    },
+    {
+      "id": "adidas",
+      "name": "adidas",
+      "url": "https://www.adidas.com.au/black_friday"
+    },
+    {
+      "id": "bose",
+      "name": "Bose",
+      "url": "https://www.bose.com.au/c/black-friday-deals"
+    },
+    {
+      "id": "ikea",
+      "name": "IKEA",
+      "url": "https://www.ikea.com/au/en/offers/",
+      "tracked": true
+    },
+    {
+      "id": "bigw",
+      "name": "BIG W",
+      "url": "https://www.bigw.com.au/black-friday",
+      "tracked": true
+    },
+    {
+      "id": "kmart",
+      "name": "Kmart",
+      "url": "https://www.kmart.com.au/",
+      "tracked": true
+    },
+    {
+      "id": "target",
+      "name": "Target",
+      "url": "https://www.target.com.au/",
+      "tracked": true
+    },
+    {
+      "id": "myer",
+      "name": "Myer",
+      "url": "https://www.myer.com.au/c/offers",
+      "tracked": true
+    },
+    {
+      "id": "officeworks",
+      "name": "Officeworks",
+      "url": "https://www.officeworks.com.au/shop/officeworks/c/technology",
+      "tracked": true
+    },
+    {
+      "id": "sephora",
+      "name": "Sephora",
+      "url": "https://www.sephora.com.au/sale",
+      "tracked": true
+    },
+    {
+      "id": "chemistwarehouse",
+      "name": "Chemist Warehouse",
+      "url": "https://www.chemistwarehouse.com.au/",
+      "tracked": true
+    },
+    {
+      "id": "supercheap",
+      "name": "Supercheap Auto",
+      "url": "https://www.supercheapauto.com.au/",
+      "tracked": true
+    },
+    {
+      "id": "booktopia",
+      "name": "Booktopia",
+      "url": "https://www.booktopia.com.au/",
+      "tracked": true
+    },
+    {
+      "id": "qbd",
+      "name": "QBD Books",
+      "url": "https://www.qbd.com.au/",
+      "tracked": true
+    },
+    {
+      "id": "ebay",
+      "name": "eBay AU",
+      "url": "https://www.ebay.com.au/deals"
+    },
+    {
+      "id": "kogan",
+      "name": "Kogan",
+      "url": "https://www.kogan.com/au/black-friday/"
+    },
+    {
+      "id": "theiconic",
+      "name": "THE ICONIC",
+      "url": "https://www.theiconic.com.au/sale/"
+    },
+    {
+      "id": "davidjones",
+      "name": "David Jones",
+      "url": "https://www.davidjones.com/sale"
+    }
+  ]
+}
