@@ -1,11 +1,12 @@
 import argparse
 from contextlib import nullcontext
+from datetime import datetime, timedelta, timezone
 import sys
 import types
 import unittest
 from unittest.mock import MagicMock, patch
 
-from collector_lock import collector_lock
+from collector_lock import CollectorPaused, collector_lock
 import run
 
 
@@ -27,7 +28,7 @@ class CollectorLockTests(unittest.TestCase):
 
     def test_session_released_after_collector_error(self):
         conn = MagicMock()
-        conn.execute.return_value.fetchone.return_value = (True,)
+        conn.execute.return_value.fetchone.side_effect = [None, (True,)]
         with patch.dict(sys.modules, {'psycopg': types.SimpleNamespace(connect=lambda *a, **k: conn)}):
             with self.assertRaisesRegex(ValueError, 'collector failed'):
                 with collector_lock('postgresql://test', 'sephora') as acquired:
@@ -37,10 +38,30 @@ class CollectorLockTests(unittest.TestCase):
 
     def test_busy_session_is_closed(self):
         conn = MagicMock()
-        conn.execute.return_value.fetchone.return_value = (False,)
+        conn.execute.return_value.fetchone.side_effect = [None, (False,)]
         with patch.dict(sys.modules, {'psycopg': types.SimpleNamespace(connect=lambda *a, **k: conn)}):
             with collector_lock('postgresql://test', 'jbhifi') as acquired:
                 self.assertFalse(acquired)
+        conn.close.assert_called_once()
+
+    def test_shared_pause_stops_before_lock_or_collection(self):
+        conn = MagicMock()
+        until = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+        conn.execute.return_value.fetchone.return_value = (until,)
+        with patch.dict(sys.modules, {'psycopg': types.SimpleNamespace(connect=lambda *a, **k: conn)}):
+            with self.assertRaisesRegex(CollectorPaused, 'no retailer requests'):
+                with collector_lock('postgresql://test', 'bigw'):
+                    self.fail('paused collector was entered')
+        self.assertEqual(conn.execute.call_count, 2)
+        conn.close.assert_called_once()
+
+    def test_expired_pause_allows_normal_lock(self):
+        conn = MagicMock()
+        until = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        conn.execute.return_value.fetchone.side_effect = [(until,), (True,)]
+        with patch.dict(sys.modules, {'psycopg': types.SimpleNamespace(connect=lambda *a, **k: conn)}):
+            with collector_lock('postgresql://test', 'jbhifi') as acquired:
+                self.assertTrue(acquired)
         conn.close.assert_called_once()
 
 
