@@ -1,0 +1,11 @@
+[Unit]
+Description=Dealwatch JB Hi-Fi local catalogue window
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/.local/share/pricewatch-runtime/source
+EnvironmentFile=%h/.config/pricewatch-runtime/collector.env
+ExecStart=%h/.local/share/pricewatch-runtime/venv/bin/python3 %h/.local/share/pricewatch-runtime/source/local_jbhifi_sweep.py
+UMask=0077
+TimeoutStartSec=1900
+KillMode=control-group

@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh a rolling Sephora AU window every thirty minutes
+
+[Timer]
+OnCalendar=*-*-* *:08,38:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

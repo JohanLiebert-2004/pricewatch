@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh a rolling JB Hi-Fi window every thirty minutes
+
+[Timer]
+OnCalendar=*-*-* *:15/30
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

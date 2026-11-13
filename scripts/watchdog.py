@@ -19,6 +19,7 @@ Sends one Telegram alert on OK->BAD transitions and one recovery notice on
 BAD->OK, never repeats for an unchanged state (same debounce shape as
 health_alerts.py's kv-based approach, just local instead of DB-backed).
 """
+import argparse
 import json
 import os
 import socket
@@ -32,8 +33,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import db_tunnel  # noqa: E402
 
-LOG = os.path.join(ROOT, "watchdog.log")
-STATE_FILE = os.path.expanduser("~/pricewatch-watchdog-state.json")
+STATE_DIR = os.path.expanduser(os.environ.get('PRICEWATCH_STATE_DIR', '~/.local/state/pricewatch-runtime'))
+LOG = os.path.join(STATE_DIR, "watchdog.log")
+STATE_FILE = os.path.join(STATE_DIR, "watchdog-state.json")
 LOG_KEEP_LINES = 2000
 TUNNEL_KEY = os.environ.get(
     "TUNNEL_SSH_KEY", os.path.expanduser("~/.ssh/pricewatch_tunnel_ubuntu_ed25519"))
@@ -45,6 +47,7 @@ HEARTBEATS = {
     "bigw_local_heartbeat": timedelta(hours=30),        # 3h timer, 24h CI-gate window + slack
     "chemistwarehouse_local_heartbeat": timedelta(hours=8),  # 2h timer, 6h CI-gate window + slack
     "jbhifi_local_heartbeat": timedelta(minutes=150),   # 30min timer, 90min CI-gate window + slack
+    "sephora_local_heartbeat": timedelta(minutes=150),
 }
 OCI_HOSTS = {"web VM (159.13.59.184)": "159.13.59.184",
              "DB VM (192.9.163.208)": "192.9.163.208"}
@@ -65,7 +68,11 @@ def _load_state():
 
 
 def _save_state(state):
-    json.dump(state, open(STATE_FILE, "w"))
+    temporary = STATE_FILE + '.tmp'
+    with open(temporary, 'w') as stream:
+        json.dump(state, stream)
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, STATE_FILE)
 
 
 def _send_telegram(text):
@@ -73,15 +80,18 @@ def _send_telegram(text):
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
         return False
-    resp = httpx.post(f"https://api.telegram.org/bot{token}/sendMessage",
-                       json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
-                       timeout=15)
-    return resp.status_code == 200 and resp.json().get("ok")
+    try:
+        resp = httpx.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                         json={"chat_id": chat_id, "text": text}, timeout=15)
+        return resp.status_code == 200 and bool(resp.json().get("ok"))
+    except (httpx.HTTPError, ValueError):
+        # Exception text may contain the bot credential in its request URL.
+        return False
 
 
 def check_github_actions(f):
     try:
-        r = httpx.get(f"https://api.github.com/repos/{REPO}/actions/runs",
+        r = httpx.get(f"https://api.github.com/repos/{REPO}/actions/workflows/crawl.yml/runs",
                       params={"per_page": 5}, timeout=15)
         r.raise_for_status()
         runs = r.json().get("workflow_runs", [])
@@ -141,7 +151,28 @@ def check_oci_hosts(f):
     return problems
 
 
-def main():
+def check_website(f):
+    problems = []
+    for label, path in [('website', '/'),
+                        ('catalogue API', '/rest/v1/product_search?select=sku&retailer=eq.kmart&limit=1')]:
+        try:
+            response = httpx.get('https://dealwatch.com.au' + path, timeout=20,
+                                 headers={'User-Agent': 'Dealwatch-Monitor/1.0'})
+            response.raise_for_status()
+            if label == 'catalogue API' and not isinstance(response.json(), list):
+                problems.append('catalogue API returned an invalid response')
+        except Exception as exc:
+            problems.append(f'{label} unavailable: {type(exc).__name__}')
+    return problems
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check-only', action='store_true',
+                        help='report real health without notifications or notification-state changes')
+    args = parser.parse_args(argv)
+    os.umask(0o077)
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
     if os.path.exists(LOG):
         lines = open(LOG, encoding="utf-8", errors="replace").readlines()
         if len(lines) > LOG_KEEP_LINES:
@@ -154,9 +185,18 @@ def main():
             problems.append(f"GitHub Actions: {gh_problem}")
         problems += [f"Heartbeat: {p}" for p in check_heartbeats(f)]
         problems += [f"OCI: {p}" for p in check_oci_hosts(f)]
+        problems += [f"Public service: {p}" for p in check_website(f)]
+
+        if args.check_only:
+            print(json.dumps({'healthy': not bool(problems), 'problems': problems,
+                              'notification_configured': bool(os.environ.get('TELEGRAM_BOT_TOKEN') and
+                                                              os.environ.get('TELEGRAM_CHAT_ID')),
+                              'notifications_sent': False,
+                              'checked_at': datetime.now(timezone.utc).isoformat()}))
+            return 0
 
         state = _load_state()
-        was_bad = state.get("bad", False)
+        notified_bad = state.get('notified_bad', False)
         is_bad = bool(problems)
 
         if is_bad:
@@ -164,17 +204,22 @@ def main():
         else:
             log(f, "all checks OK")
 
-        if is_bad and not was_bad:
-            _send_telegram("Dealwatch watchdog: problem detected\n\n" + "\n".join(problems))
-            log(f, "alert sent (OK -> BAD)")
-        elif not is_bad and was_bad:
-            _send_telegram("Dealwatch watchdog: recovered, all checks OK now")
-            log(f, "recovery notice sent (BAD -> OK)")
+        if is_bad and not notified_bad:
+            sent = _send_telegram("Dealwatch watchdog: problem detected\n\n" + "\n".join(problems))
+            notified_bad = bool(sent)
+            log(f, 'alert sent (OK -> BAD)' if sent else 'alert not delivered; will retry next check')
+        elif not is_bad and notified_bad:
+            sent = _send_telegram("Dealwatch watchdog: recovered, all checks OK now")
+            if sent:
+                notified_bad = False
+            log(f, 'recovery notice sent (BAD -> OK)' if sent else 'recovery notice not delivered; will retry')
 
         _save_state({"bad": is_bad, "problems": problems,
+                     "notified_bad": notified_bad,
                      "checked_at": datetime.now(timezone.utc).isoformat()})
         log(f, "=== watchdog check end ===")
+        return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

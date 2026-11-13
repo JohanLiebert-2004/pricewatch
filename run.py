@@ -8,6 +8,7 @@
   python run.py deals                           show current deals
 """
 import argparse
+import copy
 from datetime import datetime, timedelta, timezone
 import json
 import os
@@ -22,6 +23,31 @@ from anomaly import BIG_DROP, run as detect
 from publication import refresh_public_views
 from scrapers import REGISTRY
 from scrapers.base import Blocked, NotFound, verify_price
+from collector_lock import collector_lock
+
+
+def execute(args):
+    """Keep the local-owned collection lanes serial across hosts and CI jobs."""
+    commands = {'scrape', 'index', 'crawl', 'refresh'}
+    if args.cmd not in commands:
+        return args.fn(args)
+    names = list(REGISTRY) if args.retailer == 'all' else [args.retailer]
+    failures = []
+    for name in names:
+        single = copy.copy(args)
+        single.retailer = name
+        try:
+            with collector_lock(db.DATABASE_URL, name) as acquired:
+                if not acquired:
+                    print(f'{name}: another collector owns this retailer; skipping without requests or a success heartbeat')
+                    continue
+                single.fn(single)
+        except Exception:
+            if len(names) == 1:
+                raise
+            failures.append(name)
+    if failures:
+        raise RuntimeError('Collection incomplete: ' + ', '.join(failures))
 
 
 def record_scraper_health(conn, retailer: str, status: str, *, stored: int = 0,
@@ -508,4 +534,4 @@ if __name__ == "__main__":
     sub.add_parser("publish").set_defaults(fn=cmd_publish)
     sub.add_parser("deals").set_defaults(fn=cmd_deals)
     a = ap.parse_args()
-    a.fn(a)
+    execute(a)

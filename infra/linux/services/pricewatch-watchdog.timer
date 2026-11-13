@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Dealwatch external health every thirty minutes
+
+[Timer]
+OnCalendar=*-*-* *:0/30
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

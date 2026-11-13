@@ -1,0 +1,11 @@
+[Unit]
+Description=Dealwatch Big W local catalogue and enrichment
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/.local/share/pricewatch-runtime/source
+EnvironmentFile=%h/.config/pricewatch-runtime/collector.env
+ExecStart=%h/.local/share/pricewatch-runtime/venv/bin/python3 %h/.local/share/pricewatch-runtime/source/local_bigw_sweep.py
+UMask=0077
+TimeoutStartSec=10900
+KillMode=control-group

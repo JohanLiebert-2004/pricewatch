@@ -1,0 +1,11 @@
+[Unit]
+Description=Dealwatch Sephora AU local Firefox catalogue window
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/.local/share/pricewatch-runtime/source
+EnvironmentFile=%h/.config/pricewatch-runtime/collector.env
+ExecStart=%h/.local/share/pricewatch-runtime/venv/bin/python3 %h/.local/share/pricewatch-runtime/source/local_sephora_sweep.py
+UMask=0077
+TimeoutStartSec=3700
+KillMode=control-group

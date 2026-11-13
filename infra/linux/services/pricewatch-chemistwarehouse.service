@@ -1,0 +1,11 @@
+[Unit]
+Description=Dealwatch Chemist Warehouse local product enrichment
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/.local/share/pricewatch-runtime/source
+EnvironmentFile=%h/.config/pricewatch-runtime/collector.env
+ExecStart=%h/.local/share/pricewatch-runtime/venv/bin/python3 %h/.local/share/pricewatch-runtime/source/local_chemistwarehouse_sweep.py
+UMask=0077
+TimeoutStartSec=5500
+KillMode=control-group
