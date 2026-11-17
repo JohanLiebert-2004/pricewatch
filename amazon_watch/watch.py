@@ -365,6 +365,12 @@ def generate_report(db, config):
     fleet = json.loads(fleet_path.read_text(encoding="utf-8")) if fleet_path.exists() else {"workers": {}}
     community_leads = [json.loads(r["payload"]) for r in db.execute("SELECT payload FROM leads")]
     payload = {"generated_at": iso(), "marketplace": "Amazon Australia", "currency": "AUD", "last_run": run, "products": rows, "events": events, "fleet": fleet, "community_leads": community_leads}
+    if __package__:
+        from .publication import public_snapshot, publish_snapshot
+    else:
+        from publication import public_snapshot, publish_snapshot
+    public = public_snapshot(payload)
+    payload.update(catalogue=public["catalogue"], coverage=public["coverage"])
     (DATA / "latest.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     cards = []
     for row in rows:
@@ -391,10 +397,6 @@ Generated {escape(payload['generated_at'])}. This report refreshes every minute;
         snapshot = json.dumps(payload).replace("</", "<\\/")
         report = template.read_text(encoding="utf-8").replace("</main><script>", '</main><script id="snapshot" type="application/json">' + snapshot + '</script><script>')
     (ROOT / "report.html").write_text(report, encoding="utf-8")
-    if __package__:
-        from .publication import publish_snapshot
-    else:
-        from publication import publish_snapshot
     publish_snapshot(payload, DATA, background=True)
     return payload
 

@@ -23,6 +23,9 @@ class AmazonIntegrationTests(unittest.TestCase):
         self.assertEqual(len(snapshot["products"]), 1)
         self.assertEqual(snapshot['coverage']['tracked_products'],3)
         self.assertEqual(snapshot['coverage']['priced_products'],1)
+        self.assertEqual(len(snapshot['catalogue']),3)
+        self.assertIsNone(snapshot['catalogue'][1]['cents'])
+        self.assertEqual(snapshot['catalogue'][0]['advertised_discount_percent'],50)
         encoded = json.dumps(snapshot)
         for forbidden in ["DO NOT PUBLISH", "private host", "private job", "seller_key", "fleet", "last_run"]:
             self.assertNotIn(forbidden, encoded)
@@ -33,6 +36,20 @@ class AmazonIntegrationTests(unittest.TestCase):
             publish_snapshot({"generated_at": "2026-11-17T00:00:00+00:00", "products": []}, data)
             self.assertEqual(json.loads((data / "amazon-public.json").read_text())["currency"], "AUD")
             self.assertFalse((data / "publication.lock").exists())
+
+    def test_every_tracked_product_is_browseable_without_inventing_a_price(self):
+        base={'asin':'B0DGWTGZQH','title':'Camera','observations':2,'delivery_country':'AU','delivery_postcode':'6000','observed':'2026-11-17T00:00:00+00:00'}
+        snapshot=public_snapshot({'generated_at':base['observed'],'products':[
+            {**base,'cents':10000},
+            {**base,'asin':'B000000001','cents':None,'unavailable':True},
+            {'asin':'B000000002','title':'B000000002','observations':0},
+            {**base,'asin':'B000000003','cents':5000,'delivery_country':'IN'},
+        ]})
+        self.assertEqual(len(snapshot['catalogue']),4)
+        self.assertEqual(snapshot['coverage']['tracked_products'],4)
+        self.assertEqual([x['status'] for x in snapshot['catalogue']],['priced','unavailable','awaiting_check','awaiting_au_check'])
+        self.assertEqual([x['cents'] for x in snapshot['catalogue']],[10000,None,None,None])
+        self.assertEqual(len(snapshot['products']),1)
 
     def test_one_ssh_connection_transmits_only_the_sanitized_snapshot(self):
         with tempfile.TemporaryDirectory() as temporary:

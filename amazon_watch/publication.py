@@ -16,11 +16,28 @@ _publisher_busy = threading.Lock()
 
 def public_snapshot(payload):
     products = []
+    catalogue = []
+    checked = 0
     fields = ("asin", "title", "cents", "reference_cents", "advertised_discount_percent",
               "observed", "baseline_cents", "historical_drop_percent", "signals", "double_checked")
     for product in payload.get("products", []):
         if not re.fullmatch(r"[A-Z0-9]{10}", product.get("asin", "")):
             continue
+        checked += bool(product.get("observations"))
+        au = product.get("delivery_country") == "AU" and product.get("delivery_postcode") == "6000" and not product.get("excluded_from_ranking")
+        priced = au and type(product.get("cents")) is int and product["cents"] > 0
+        title = product.get("title")
+        if not title or title == product["asin"]:
+            title = next((lead.get("title") for lead in product.get("leads", []) if lead.get("title")), None) or "Amazon item " + product["asin"]
+        entry = {name: product.get(name) if au else None for name in fields}
+        entry.update(asin=product["asin"], title=title,
+                     status="priced" if priced else "unavailable" if au and product.get("unavailable") else "price_unconfirmed" if au else "awaiting_check" if not product.get("observations") else "awaiting_au_check")
+        if not priced:
+            entry.update(cents=None, reference_cents=None, advertised_discount_percent=None,
+                         baseline_cents=None, historical_drop_percent=None, signals=[], double_checked=False)
+        elif type(product.get("reference_cents")) is int and product["reference_cents"] > product["cents"]:
+            entry["advertised_discount_percent"] = round(100 * (product["reference_cents"] - product["cents"]) / product["reference_cents"], 1)
+        catalogue.append(entry)
         if product.get("delivery_country") != "AU" or product.get("delivery_postcode") != "6000":
             continue
         if product.get("excluded_from_ranking") or type(product.get("cents")) is not int or product["cents"] <= 0:
@@ -31,9 +48,9 @@ def public_snapshot(payload):
               if re.fullmatch(r"[A-Z0-9]{10}", lead.get("asin", "")) and not lead.get("expired")
               and type(lead.get("quoted_cents")) is int and lead["quoted_cents"] > 0]
     return {"schema_version": 1, "generated_at": payload["generated_at"], "currency": "AUD",
-            "freshness_minutes": 15, "products": products, "community_leads": quotes,
-            "coverage": {"tracked_products": len(payload.get("products", [])),
-                         "checked_products": sum(bool(x.get("observations")) for x in payload.get("products", [])),
+            "freshness_minutes": 15, "products": products, "catalogue": catalogue, "community_leads": quotes,
+            "coverage": {"tracked_products": len(catalogue),
+                         "checked_products": checked,
                          "priced_products": len(products)}}
 
 

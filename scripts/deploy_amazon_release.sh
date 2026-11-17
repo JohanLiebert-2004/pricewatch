@@ -20,7 +20,7 @@ python3 - "$stage/amazon-public.json" <<'PY'
 import json,sys
 data=json.load(open(sys.argv[1]))
 assert data['schema_version']==1 and data['currency']=='AUD'
-assert set(data)=={'schema_version','generated_at','currency','freshness_minutes','products','community_leads','coverage'}
+assert set(data)=={'schema_version','generated_at','currency','freshness_minutes','products','catalogue','community_leads','coverage'}
 assert all('worker' not in item and 'job_id' not in item for item in data['products'])
 PY
 public=/var/lib/dealwatch-amazon/public

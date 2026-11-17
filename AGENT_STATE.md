@@ -1,5 +1,14 @@
 # Pricewatch — shared agent state
 
+## 17 November 2026 — Browse the complete Amazon catalogue
+
+- Owner: Codex. Status: Done.
+- Scope: public catalogue allowlist, Amazon pagination/views/URL state, matching tests and deployment. Make every tracked ASIN browseable without inventing prices for unchecked or unavailable listings; preserve three columns, filters and existing runtime data.
+- Deployed atomic release amazon-20261117T063006Z. Default All tracked products view includes 498 unique ASINs across 10 pages at 50 rows; supports 25/50/100, Previous/Next, numbered pages, direct URLs and browser back navigation. Filters/sorting run before pagination; refresh preserves the selected page.
+- Pending/unavailable products have no invented price; older AU prices carry age labels. Recent prices remains fresh-only. Public catalogue uses explicit allowlisted fields, and private runtime data/history and unrelated checkout edits are preserved.
+- Verified 27 focused tests, 115 repository unittests, Python compilation, JavaScript syntax, Terraform fmt/validate, public HTTP/assets/feed and Node pagination tests proving every live ASIN is reachable once. Browser visual QA was unavailable; no confirmed pricing error or Oracle price checks are claimed.
+
+
 ## 17 November 2026 — Amazon sweep throughput and coverage
 
 - Owner: Codex. Status: Done.
