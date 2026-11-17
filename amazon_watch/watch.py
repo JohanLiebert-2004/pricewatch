@@ -248,6 +248,9 @@ def connect(path=None):
         CREATE TABLE IF NOT EXISTS runs(id INTEGER PRIMARY KEY, started TEXT, finished TEXT, payload TEXT);
         CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, detected TEXT, asin TEXT, payload TEXT);
         CREATE TABLE IF NOT EXISTS alert_state(asin TEXT PRIMARY KEY, signature TEXT);
+        CREATE TABLE IF NOT EXISTS attempts(job_id TEXT, asin TEXT, attempted TEXT, status TEXT,
+          retry_after TEXT, error TEXT, PRIMARY KEY(job_id,asin));
+        CREATE INDEX IF NOT EXISTS attempt_lookup ON attempts(asin,attempted);
     """)
     return db
 
@@ -392,7 +395,7 @@ Generated {escape(payload['generated_at'])}. This report refreshes every minute;
         from .publication import publish_snapshot
     else:
         from publication import publish_snapshot
-    publish_snapshot(payload, DATA)
+    publish_snapshot(payload, DATA, background=True)
     return payload
 
 

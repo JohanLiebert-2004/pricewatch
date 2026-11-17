@@ -1,5 +1,15 @@
 # Pricewatch — shared agent state
 
+## 17 November 2026 — Amazon sweep throughput and coverage
+
+- Owner: Codex. Status: Done.
+- The 32-row view was a 15-minute freshness filter, not catalogue coverage. Added explicit tracked/checked/recorded-price/refreshed/showing counters while retaining the compact three-column table and filtering stale prices out of current deals.
+- Removed the discovery-before-verification barrier. Community-only workers use HTTP with a 75-second process deadline and 90-second SSH deadline; their failures no longer hold up the concurrently dispatched Linux price sweep. Some Oracle discovery timeouts remain, without a claim of working Oracle Amazon price checks.
+- Assignment increased from 20 to up to 35 with a 240-second work budget and unchanged serial request delays. Added bounded Amazon deals and electronics/computers/kitchen/toys discovery. The first expanded live batch completed 34 product checks without errors and returned 168 discovered ASINs; known catalogue grew from 357 to 490.
+- Added private idempotent attempt records, six-hour identity-failure and thirty-minute other-failure backoffs. A technical browser failure permits one recovery for a later product; access refusals/challenges still stop the host. Existing history was preserved and attempts backfilled.
+- Public-only snapshots now use a checksum-verified single SSH connection on a background thread, with expired-lock recovery. Publication cannot block the scanner. The public snapshot adds numeric coverage aggregates without infrastructure details.
+- Deployed atomic release amazon-20261117T054042Z. Verified public coverage 490 tracked / 242 checked / 196 recorded prices / 47 refreshed in 15 minutes, plus page, versioned script, homepage and existing bootstrap API. No confirmed pricing error is asserted; this remains a bounded discovered-product scan.
+- Verified: 26 focused tests, 114 repository unittests, Python compilation, JavaScript syntax and coverage/filter rendering, Terraform fmt/validate, scoped diff checks. Visual browser QA was unavailable. Source mirrored narrowly into the original checkout; unrelated dirty work preserved.
 ## 17 November 2026 — Amazon tracker integration
 
 - Owner: Codex. Status: Done.

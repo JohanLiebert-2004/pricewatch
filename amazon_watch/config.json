@@ -14,5 +14,13 @@
   "history_minimum_samples": 3,
   "short_lived_hours": 6,
   "freshness_minutes": 15,
-  "fleet_batch_size": 16
+  "fleet_batch_size": 35,
+  "fleet_job_budget_seconds": 240,
+  "amazon_discovery_sources": [
+    "https://www.amazon.com.au/gp/goldbox",
+    "https://www.amazon.com.au/gp/bestsellers/electronics",
+    "https://www.amazon.com.au/gp/bestsellers/computers",
+    "https://www.amazon.com.au/gp/bestsellers/kitchen",
+    "https://www.amazon.com.au/gp/bestsellers/toys"
+  ]
 }

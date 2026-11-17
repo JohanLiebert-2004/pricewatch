@@ -8,7 +8,10 @@ import re
 import shlex
 import subprocess
 import time
+import threading
 import uuid
+
+_publisher_busy = threading.Lock()
 
 
 def public_snapshot(payload):
@@ -28,7 +31,10 @@ def public_snapshot(payload):
               if re.fullmatch(r"[A-Z0-9]{10}", lead.get("asin", "")) and not lead.get("expired")
               and type(lead.get("quoted_cents")) is int and lead["quoted_cents"] > 0]
     return {"schema_version": 1, "generated_at": payload["generated_at"], "currency": "AUD",
-            "freshness_minutes": 15, "products": products, "community_leads": quotes}
+            "freshness_minutes": 15, "products": products, "community_leads": quotes,
+            "coverage": {"tracked_products": len(payload.get("products", [])),
+                         "checked_products": sum(bool(x.get("observations")) for x in payload.get("products", [])),
+                         "priced_products": len(products)}}
 
 
 def write_json(path, payload):
@@ -37,11 +43,26 @@ def write_json(path, payload):
     temporary.replace(path)
 
 
-def publish_snapshot(payload, data):
+def publish_snapshot(payload, data, background=False):
     """Publication is opt-in. Failures are recorded privately and never break price collection."""
     data = Path(data)
     public_file = data / "amazon-public.json"
-    write_json(public_file, public_snapshot(payload))
+    snapshot = public_snapshot(payload)
+    write_json(public_file, snapshot)
+    if background:
+        if not _publisher_busy.acquire(blocking=False):
+            return
+        def run():
+            try:
+                _push_snapshot(snapshot, data)
+            finally:
+                _publisher_busy.release()
+        threading.Thread(target=run, name="amazon-publication", daemon=True).start()
+    else:
+        _push_snapshot(snapshot, data)
+
+
+def _push_snapshot(snapshot, data):
     settings_file = data / "publish-target.json"
     if not settings_file.exists():
         return
@@ -50,11 +71,15 @@ def publish_snapshot(payload, data):
     if time.time() - previous.get("last_attempt_epoch", 0) < 60:
         return
     lock = data / "publication.lock"
+    # A terminated coordinator must not leave publication locked forever.
+    if lock.exists() and time.time() - lock.stat().st_mtime > 120:
+        lock.unlink(missing_ok=True)
     try:
         fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
         return
-    os.close(fd)
+    with os.fdopen(fd, "w") as handle:
+        json.dump({"pid": os.getpid(), "started": time.time()}, handle)
     status = {**previous, "last_attempt_epoch": time.time()}
     try:
         settings = json.loads(settings_file.read_text(encoding="utf-8"))
@@ -66,22 +91,22 @@ def publish_snapshot(payload, data):
             raise ValueError("Unexpected public snapshot directory")
         options = ["-i", str(Path(settings["key"]).expanduser()), "-o", "BatchMode=yes",
                    "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=8"]
+        encoded = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        digest = hashlib.sha256(encoded).hexdigest()
         incoming = directory + "/.incoming-" + uuid.uuid4().hex + ".json"
-        result = subprocess.run(["scp", *options, str(public_file), host + ":" + incoming],
-                                capture_output=True, timeout=35)
-        if result.returncode:
-            raise RuntimeError("Public snapshot upload failed")
-        # Parse before an atomic rename. Only the sanitized snapshot is uploaded.
-        script = ("import json,os,sys; p=sys.argv[1]; d=sys.argv[2]; "
-                  "s=json.load(open(p)); assert s['schema_version']==1 and s['currency']=='AUD'; "
-                  "os.chmod(p,0o644); os.replace(p,d)")
+        script = ("import hashlib,json,os,sys; raw=sys.stdin.buffer.read(); s=json.loads(raw); "
+                  "assert s['schema_version']==1 and s['currency']=='AUD'; p=sys.argv[1]; "
+                  "f=open(p,'xb'); f.write(raw); f.close(); os.chmod(p,0o644); "
+                  "os.replace(p,sys.argv[2]); print(hashlib.sha256(raw).hexdigest())")
         remote = " ".join(shlex.quote(x) for x in ["python3", "-c", script, incoming, directory + "/amazon-deals.json"])
-        result = subprocess.run(["ssh", *options, host, remote], capture_output=True, timeout=25)
+        result = subprocess.run(["ssh", *options, host, remote], input=encoded, capture_output=True, timeout=25)
         if result.returncode:
             raise RuntimeError("Public snapshot atomic update failed")
+        lines = result.stdout.decode("utf-8", "replace").strip().splitlines()
+        if not lines or lines[-1] != digest:
+            raise RuntimeError("Public snapshot checksum did not match")
         status.update(last_success=datetime.now(timezone.utc).isoformat(),
-                      snapshot_generated_at=payload["generated_at"],
-                      sha256=hashlib.sha256(public_file.read_bytes()).hexdigest(), error=None)
+                      snapshot_generated_at=snapshot["generated_at"], sha256=digest, error=None)
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.TimeoutExpired) as exc:
         status["error"] = type(exc).__name__ + ": " + str(exc)[:150]
     finally:

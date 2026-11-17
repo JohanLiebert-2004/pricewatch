@@ -11,3 +11,11 @@ Publication is opt-in through a private `publish-target.json` in the runtime dir
 The static release's `amazon-deals.json` symlink points to that public snapshot, so future price changes need no site rebuild or nginx reload. `scripts/deploy_amazon_release.sh` copies the exact current public release, overlays the three Amazon assets, adds navigation/sitemap entries and bumps the service-worker cache. It preserves the TLS vhost, database and other collectors. It records the old release, atomically switches `current`, and restores it if its HTTP checks fail. Prior releases are retained.
 
 Verification: `python -m pytest amazon_watch/tests tests/test_amazon_publication.py`, the repository unittest suite, Python compilation, `node --check web/amazon.js`, Terraform fmt/validate, and public page/feed/navigation/API/image/product/sitemap checks. Browser QA depends on available browser control and must not be claimed from HTTP checks alone.
+
+## Sweep throughput and counts
+
+The counter distinguishes all tracked products, successfully checked products, recorded AU item prices and prices refreshed within 15 minutes. The table still shows recent prices only; the larger coverage figures do not claim current stock or confirmed pricing errors.
+
+Discovery and verification are dispatched together, so a slow community VM no longer delays the Linux price worker. Community-only jobs use HTTP and a 75-second process deadline; product jobs have a 240-second work budget and a 300-second process deadline. Product requests remain serial with the original delay. The default assignment is up to 35 products, with bounded Amazon deals/electronics/computers/kitchen/toys discovery every third cycle.
+
+Private attempt history backs off identity failures for six hours and other failed product checks for thirty minutes, instead of retrying the same unvisited ASIN every cycle. A failed browser can restart once for a later product; access refusals and verification challenges still stop that host. Publication uses one checksum-verified SSH connection on a background thread, with stale-lock recovery, so a slow publication host cannot block collection.

@@ -76,6 +76,7 @@ class FirefoxFetcher(Fetcher):
         time.sleep(max(0, self.delay - (time.monotonic() - self.last.get("www.amazon.com.au", 0))))
         self.last["www.amazon.com.au"] = time.monotonic()
         self.requests += 1
+        self.stage = "opening page"
         response = self.browser.get(url)
         lower = response.text.lower()
         if response.status_code in (403, 429, 503) or any(marker in lower for marker in (
@@ -86,6 +87,7 @@ class FirefoxFetcher(Fetcher):
             raise FetchError(f"Firefox navigation returned HTTP {response.status_code}")
         if not self.location_ready:
             self.set_location()
+            self.stage = "confirming Australian delivery"
             response = self.browser.get(url)
             lower = response.text.lower()
             if "validatecaptcha" in lower or "enter the characters you see below" in lower:
@@ -95,6 +97,7 @@ class FirefoxFetcher(Fetcher):
         location = BeautifulSoup(response.text, "html.parser").select_one("#glow-ingress-line2")
         if not location or not re.search(r'6000|Perth', location.get_text(" ", strip=True), re.I):
             raise RuntimeError("Australian delivery context not confirmed; no observation accepted")
+        self.stage = "reading product price"
         return response.text
 
     def close(self):
@@ -108,7 +111,20 @@ def execute(job, checkpoint=None):
     result = {"worker": worker, "job_id": job["job_id"], "started": started,
               "observations": [], "leads": [], "discovered": [], "errors": [], "blocked_hosts": []}
     fetcher = (FirefoxFetcher if job.get("browser") == "firefox" else Fetcher)(job.get("delay", 6))
+    deadline = time.monotonic() + job.get("budget_seconds", 240)
+    restarts = 0
+    def recover():
+        nonlocal restarts
+        if isinstance(fetcher, FirefoxFetcher) and restarts < 1 and "www.amazon.com.au" not in fetcher.blocked:
+            fetcher.close()
+            fetcher.browser = None
+            fetcher.location_ready = False
+            restarts += 1
+            return True
+        return False
     for url in job.get("sources", []):
+        if time.monotonic() >= deadline:
+            break
         try:
             text = fetcher.get(url)
             if "ozbargain.com.au/deals/" in url:
@@ -117,11 +133,15 @@ def execute(job, checkpoint=None):
                 result["discovered"].extend(x["asin"] for x in leads if not x["expired"])
             else:
                 result["discovered"].extend(discover_asins(text))
-        except (FetchError, ET.ParseError) as exc:
+        except (FetchError, ET.ParseError, RuntimeError, TimeoutError, urllib.error.URLError) as exc:
             result["errors"].append({"source": url, "message": str(exc)})
+            if not isinstance(exc, (FetchError, ET.ParseError)):
+                recover()
         if checkpoint:
             checkpoint({**result, "finished": iso(), "progress": True})
     for asin in job.get("asins", []):
+        if time.monotonic() >= deadline:
+            break
         if not re.fullmatch(r"[A-Z0-9]{10}", asin):
             continue
         if "www.amazon.com.au" in fetcher.blocked:
@@ -136,7 +156,9 @@ def execute(job, checkpoint=None):
                 checkpoint({**result, "finished": iso(), "progress": True})
         except (FetchError, RuntimeError, TimeoutError, urllib.error.URLError) as exc:
             result["errors"].append({"asin": asin, "message": str(exc) + (" at " + fetcher.stage if hasattr(fetcher, "stage") else "")})
-            if not isinstance(exc, FetchError):
+            if checkpoint:
+                checkpoint({**result, "finished": iso(), "progress": True})
+            if not isinstance(exc, FetchError) and not recover():
                 break
     if hasattr(fetcher, "close"):
         fetcher.close()

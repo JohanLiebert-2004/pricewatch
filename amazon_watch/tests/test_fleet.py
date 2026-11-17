@@ -73,3 +73,42 @@ def test_out_of_order_workers_preserve_latest_price_and_delivery_matching(tmp_pa
     assert report['products'][0]['matching_workers']==['Linux']
     assert not report['products'][0]['double_checked']
     db.close()
+
+
+def test_failed_identity_is_not_retried_at_the_front_of_every_sweep(tmp_path):
+    from amazon_watch.watch import now
+    db = connect(tmp_path / 'watch.sqlite3')
+    at = iso(now())
+    for asin in ['B000000001','B000000002']:
+        db.execute('INSERT INTO products VALUES(?,?,?)',(asin,asin,at))
+    result={'job_id':'failure-job','started':at,'finished':at,'discovered':[],'leads':[],
+            'observations':[], 'errors':[{'asin':'B000000001','message':'Product identity not confirmed'}]}
+    import_result(db,result)
+    import_result(db,result)
+    assert db.execute('SELECT COUNT(*) FROM attempts').fetchone()[0]==1
+    assert queues(db,[{'name':'Linux'}],20)['Linux']==['B000000002']
+    db.execute("UPDATE attempts SET retry_after='2020-01-01T00:00:00+00:00'")
+    db.commit()
+    assert queues(db,[{'name':'Linux'}],20)['Linux']==['B000000002','B000000001']
+    db.close()
+
+
+def test_discovery_and_price_jobs_share_one_concurrent_batch(tmp_path,monkeypatch):
+    import amazon_watch.fleet as fleet
+    from amazon_watch.watch import now
+    monkeypatch.setattr(fleet,'DATA',tmp_path)
+    db=connect(tmp_path/'watch.sqlite3')
+    db.execute('INSERT INTO products VALUES(?,?,?)',('B0DGWTGZQH','Camera',iso(now())))
+    db.commit()
+    (tmp_path/'latest.json').write_text('{"products":[]}')
+    calls=[]
+    monkeypatch.setattr(fleet,'run_batch',lambda db,config,nodes,jobs,status:calls.append(jobs))
+    monkeypatch.setattr(fleet,'generate_report',lambda *args:None)
+    nodes=[{'name':'Linux','browser':'firefox','delay':6,'sources':['https://www.amazon.com.au/gp/goldbox']},
+           {'name':'Oracle','browser':'firefox','delay':3,'can_verify':False,'sources':['https://www.ozbargain.com.au/deals/amazon.com.au']}]
+    fleet.cycle(db,{'fleet_batch_size':35},nodes,{'workers':{}},discover=True)
+    assert len(calls)==1
+    assert calls[0]['Linux']['asins']==['B0DGWTGZQH']
+    assert calls[0]['Linux']['sources']
+    assert calls[0]['Oracle']['browser']=='http'
+    db.close()

@@ -49,7 +49,7 @@ def provision(node):
     if node.get("local"):
         return
     # Idempotent source upload to our isolated directory; no existing service is modified.
-    command(["scp", *ssh_options(node), str(ROOT / "watch.py"), str(ROOT / "worker.py"), str(ROOT / "firefox_transport.py"), f'{node["host"]}:{REMOTE}/'], timeout=90)
+    command(["scp", *ssh_options(node), str(ROOT / "watch.py"), str(ROOT / "worker.py"), str(ROOT / "firefox_transport.py"), f'{node["host"]}:{REMOTE}/'], timeout=30)
 
 
 def remote_job(node, job):
@@ -61,8 +61,9 @@ def remote_job(node, job):
     remote_output = "result-" + job["job_id"] + ".json"
     save_json(job_path, job)
     command(["scp", *ssh_options(node), str(job_path), f'{node["host"]}:{REMOTE}/{remote_input}'], timeout=60)
-    remote_command = f"cd ~/{REMOTE} && nice -n 10 venv/bin/python worker.py {remote_input} {remote_output}"
-    if job.get("browser") == "firefox" and node.get("bounded_browser"):
+    seconds = 300 if job["asins"] else 75
+    remote_command = f"cd ~/{REMOTE} && timeout --signal=TERM --kill-after=5s {seconds}s nice -n 10 venv/bin/python worker.py {remote_input} {remote_output}"
+    if job.get("asins") and job.get("browser") == "firefox" and node.get("bounded_browser"):
         base = "/home/ubuntu/" + REMOTE
         environment = [f"{key}={value}" for key, value in node.get("firefox_env", {}).items()]
         arguments = ["systemd-run", "--user", "--wait", "--pipe", "--collect", "--unit=bfw-" + job["job_id"][:12],
@@ -70,7 +71,7 @@ def remote_job(node, job):
                      "/usr/bin/env", *environment, "/usr/bin/nice", "-n", "10", base + "/venv/bin/python",
                      base + "/worker.py", base + "/" + remote_input, base + "/" + remote_output]
         remote_command = " ".join(shlex.quote(x) for x in arguments)
-    command(["ssh", *ssh_options(node), node["host"], remote_command], timeout=420)
+    command(["ssh", *ssh_options(node), node["host"], remote_command], timeout=420 if job["asins"] else 90)
     command(["scp", *ssh_options(node), f'{node["host"]}:{REMOTE}/{remote_output}', str(result_path)], timeout=60)
     result = json.loads(result_path.read_text(encoding="utf-8"))
     if result.get("job_id") != job["job_id"] or result.get("worker") != node["name"]:
@@ -87,6 +88,9 @@ def import_result(db, result):
         db.execute("INSERT OR REPLACE INTO leads VALUES(?,?,?,?)", (lead["asin"], lead["source_url"], json.dumps(lead), result["finished"]))
     for observation in result["observations"]:
         asin = observation["asin"]
+        job_id = observation.get("job_id") or result.get("job_id") or "import-" + observation["observed"]
+        db.execute("INSERT OR IGNORE INTO attempts VALUES(?,?,?,?,?,?)",
+                   (job_id, asin, observation["observed"], "ok", None, None))
         duplicate = db.execute("SELECT 1 FROM observations WHERE asin=? AND observed=?", (asin, observation["observed"])).fetchone()
         if duplicate:
             continue
@@ -94,6 +98,14 @@ def import_result(db, result):
         db.execute("UPDATE products SET title=? WHERE asin=?", (observation["title"], asin))
         db.execute("INSERT INTO observations(asin,observed,cents,seller_key,payload) VALUES(?,?,?,?,?)",
                    (asin, observation["observed"], observation["cents"], observation["seller_key"], json.dumps(observation)))
+    for failure in result.get("errors", []):
+        if not failure.get("asin") or not result.get("job_id"):
+            continue
+        attempted = date(result["finished"]) or now()
+        hours = 6 if "identity not confirmed" in failure.get("message", "").lower() else 0.5
+        db.execute("INSERT OR IGNORE INTO attempts VALUES(?,?,?,?,?,?)",
+                   (result["job_id"], failure["asin"], iso(attempted), "failed",
+                    iso(attempted + timedelta(hours=hours)), failure.get("message", "")))
     db.commit()
 
 
@@ -103,6 +115,14 @@ def shard(asin, nodes):
 
 def queues(db, nodes, size):
     products = [dict(r) for r in db.execute("SELECT p.asin,MAX(o.observed) AS checked FROM products p LEFT JOIN observations o ON p.asin=o.asin GROUP BY p.asin")]
+    attempts = {}
+    for row in db.execute("SELECT asin,attempted,retry_after FROM attempts ORDER BY attempted"):
+        attempts[row["asin"]] = dict(row)
+    products = [x for x in products if not (date(attempts.get(x["asin"], {}).get("retry_after"))
+                and date(attempts[x["asin"]]["retry_after"]) > now()
+                and (not x["checked"] or attempts[x["asin"]]["attempted"] >= x["checked"]))]
+    for product in products:
+        product["checked"] = max(attempts.get(product["asin"], {}).get("attempted") or "", product["checked"] or "")
     urgent = set()
     expired_status = {}
     for row in db.execute("SELECT asin,payload FROM leads"):
@@ -158,13 +178,16 @@ def run_batch(db, config, nodes, jobs, status):
                     if node.get("local"):
                         continue
                     job = jobs[node["name"]]
+                    if not job["asins"]:
+                        continue
                     progress_path = DATA / "jobs" / (job["job_id"] + "-progress.json")
                     try:
                         command(["scp", *ssh_options(node), node["host"] + ":" + REMOTE + "/result-" + job["job_id"] + ".json", str(progress_path)], timeout=12)
                         partial = json.loads(progress_path.read_text(encoding="utf-8"))
                         if partial.get("job_id") == job["job_id"]:
                             import_result(db, partial)
-                            status["workers"][node["name"]].update(checked=len(partial["observations"]), last_progress=iso())
+                            status["workers"][node["name"]].update(checked=len(partial["observations"]), last_progress=iso(),
+                                                                  state="Checking prices" if partial["observations"] else "Discovering")
                     except (RuntimeError, subprocess.TimeoutExpired, ValueError):
                         pass
                 status["updated"] = iso()
@@ -184,6 +207,7 @@ def finish_result(future, node, db, config, status):
                      checked=len(result["observations"]), discovered=len(result["discovered"]),
                      errors=result["errors"], blocked_hosts=result["blocked_hosts"],
                      total_checked=state.get("total_checked", 0) + len(result["observations"]))
+        state.pop("error", None)
         paused = state.setdefault("paused_hosts", {})
         for host in result["blocked_hosts"]:
             paused[host] = iso(now() + timedelta(minutes=30))
@@ -204,13 +228,22 @@ def finish_result(future, node, db, config, status):
 
 def cycle(db, config, nodes, status, discover=True):
     started = iso()
-    if discover:
-        jobs = {node["name"]: {"job_id": uuid.uuid4().hex, "worker": node["name"], "delay": node["delay"], "browser": node.get("browser", "http"),
-                               "sources": node.get("sources", []), "asins": []} for node in nodes}
-        run_batch(db, config, nodes, jobs, status)
+    status["phase"] = "Discovery and price checks" if discover else "Price checks"
     assignments = queues(db, nodes, config.get("fleet_batch_size", 16))
     jobs = {node["name"]: {"job_id": uuid.uuid4().hex, "worker": node["name"], "delay": node["delay"], "browser": node.get("browser", "http"),
-                           "sources": [], "asins": assignments[node["name"]]} for node in nodes}
+                           "sources": list(node.get("sources", [])) if discover else [], "asins": assignments[node["name"]],
+                           "budget_seconds": config.get("fleet_job_budget_seconds", 240)} for node in nodes}
+    if discover:
+        eligible_discovery = [node for node in nodes if node.get("can_verify", True)]
+        for i, url in enumerate(config.get("amazon_discovery_sources", [])):
+            if eligible_discovery:
+                jobs[eligible_discovery[i % len(eligible_discovery)]["name"]]["sources"].append(url)
+        for job in jobs.values():
+            job["sources"] = list(dict.fromkeys(job["sources"]))
+    # Community-only jobs use HTTP, with a shorter deadline, and cannot hold up the price worker.
+    for job in jobs.values():
+        if not job["asins"] and not any(urllib.parse.urlsplit(url).hostname == "www.amazon.com.au" for url in job["sources"]):
+            job["browser"] = "http"
     before = db.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
     run_batch(db, config, nodes, jobs, status)
     # Second sweep: corroborate successful top offers on a different predetermined worker.
@@ -234,8 +267,10 @@ def cycle(db, config, nodes, status, discover=True):
         status["phase"] = "Second sweep of leading offers"
         run_batch(db, config, nodes, second_jobs, status)
     checked = db.execute("SELECT COUNT(*) FROM observations").fetchone()[0] - before
+    job_ids = [x["job_id"] for x in [*jobs.values(), *second_jobs.values()]]
+    attempted = db.execute("SELECT COUNT(*) FROM attempts WHERE job_id IN (" + ",".join("?" for _ in job_ids) + ")", job_ids).fetchone()[0]
     summary = {"started": started, "finished": iso(), "checked": checked,
-               "attempted": sum(len(x["asins"]) for x in jobs.values()), "fleet": True,
+               "assigned": sum(len(x["asins"]) for x in jobs.values()), "attempted": attempted, "fleet": True,
                "errors": [f'{name}: {s.get("error", s["state"])}' for name, s in status["workers"].items()
                           if s["state"] in {"Connection/job failed", "Source access paused"}]}
     db.execute("INSERT INTO runs(started,finished,payload) VALUES(?,?,?)", (started, summary["finished"], json.dumps(summary)))
