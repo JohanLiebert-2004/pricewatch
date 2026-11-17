@@ -84,3 +84,7 @@ products and applying schema/views. Run it outside a transaction: it installs
 pg_trgm and builds title/SKU partial GIN indexes concurrently for the public
 substring search. The existing GTIN index serves barcode equality searches.
 Verify index validity and an actual same-origin search after the build.
+
+## Amazon deals
+
+The Amazon tracker is integrated in `amazon_watch/` and its public page is `web/amazon.html`. It provides the compact item/price/discount table, total and filtered counts, price bounds and sorting. The existing Linux/Oracle workers feed the same history; only an allowlisted public snapshot is published. See [Amazon integration](amazon_watch/INTEGRATION.md) for runtime configuration and deployment.

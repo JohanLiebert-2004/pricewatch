@@ -1,0 +1,18 @@
+{
+  "amazon_seeds": [
+    "https://www.amazon.com.au/gp/goldbox",
+    "https://www.amazon.com.au/blackfriday"
+  ],
+  "community_feed": "https://www.ozbargain.com.au/deals/amazon.com.au/feed",
+  "watch_asins": [],
+  "max_products_per_scan": 30,
+  "request_delay_seconds": 3,
+  "scan_interval_seconds": 300,
+  "historical_drop_percent": 60,
+  "minimum_saving_aud": 30,
+  "history_minimum_hours": 24,
+  "history_minimum_samples": 3,
+  "short_lived_hours": 6,
+  "freshness_minutes": 15,
+  "fleet_batch_size": 16
+}

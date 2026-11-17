@@ -1,5 +1,15 @@
 # Pricewatch — shared agent state
 
+## 17 November 2026 — Amazon tracker integration
+
+- Owner: Codex. Status: Done.
+- Combined the Amazon tracker into amazon_watch/ and deployed /amazon.html with the requested item/price/discount table, totals, price bounds and discount/high-low sorting. Desktop and mobile navigation, sitemap and service-worker version updated additively.
+- Original standalone launchers forward to the canonical package; the existing private SQLite history, fleet inventory and logs remain outside Git. Windows still coordinates; Linux Firefox checks Perth 6000 prices; Oracle nodes collect community leads only. Bounded Oracle Firefox probes failed; no independent-machine double check is claimed.
+- An allowlisted, same-origin amazon-deals.json snapshot is atomically published through existing strict-host-key SSH. Infrastructure diagnostics, keys, job IDs and wrong-region observations are excluded. Community quotes stay separate; stale prices are hidden after 15 minutes.
+- Fixed per-source cooldowns so an OzBargain refusal cannot pause Amazon, and made postcode entry independent of the transient WebDriver input state. Refusals remain paused per host with no identity changes or CAPTCHA bypass.
+- Deployed atomic release amazon-20261117T043159Z based on the exact prior public release; retained rollback targets. Existing TLS, database and collectors preserved. Automatic publication verified with eight freshly observed AU prices on the public feed.
+- Verified: 112 repository unittests, 20 collector/integration tests, Python compilation, JavaScript syntax, scoped diff check, Terraform fmt/validate. Public apex, Amazon page/extensionless route/assets/feed, homepage RPC, existing product/image, robots, sitemaps and www redirect passed. Browser visual QA was unavailable; no visual result is claimed.
+- Source prepared on feature/amazon-deals-20261117 from origin/master and mirrored narrowly into the original checkout without replacing unrelated dirty work. See amazon_watch/INTEGRATION.md. No confirmed pricing error is asserted.
 ## 13 November 2026 — Linux PC collectors and watchdog repair
 
 - Owner: Codex. Status: Done for the missing-runtime repair. Big W and

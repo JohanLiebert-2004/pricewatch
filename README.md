@@ -448,3 +448,7 @@ Do not retry ARM capacity, replace either OCI host, reopen PostgreSQL, or
 restore the retired combined crawler timer. For future work, start with
 `AGENT_STATE.md`, inspect the latest scheduled workflow and freshness rows,
 and remember that pushing `master` does not automatically update OCI.
+
+## Amazon deals
+
+The Amazon tracker is integrated in `amazon_watch/` and its public page is `web/amazon.html`. It provides the compact item/price/discount table, total and filtered counts, price bounds and sorting. The existing Linux/Oracle workers feed the same history; only an allowlisted public snapshot is published. See [Amazon integration](amazon_watch/INTEGRATION.md) for runtime configuration and deployment.
